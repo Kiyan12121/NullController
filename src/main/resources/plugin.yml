@@ -1,0 +1,29 @@
+name: NullController
+version: 3.0.0
+main: com.daboss69yt.nullplugin.NullControllerPlugin
+api-version: '26.3'
+author: daboss69yt
+depend: [Citizens]
+description: Null army controller with an opt-in consent roster.
+
+commands:
+  nullui:
+    description: Open the Null control panel (owner only).
+    usage: /nullui
+    permission: nullcontroller.owner
+  nullcmd:
+    description: Give the Nulls an order (owner only).
+    usage: /nullcmd <see in-game usage>
+    permission: nullcontroller.owner
+  nullagree:
+    description: Accept the Null consent rules.
+    usage: /nullagree accept
+  nullreload:
+    description: Reload the consent roster after editing config.yml (owner only).
+    usage: /nullreload
+    permission: nullcontroller.owner
+
+permissions:
+  nullcontroller.owner:
+    description: Restricted to the server owner.
+    default: false

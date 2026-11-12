@@ -1,0 +1,48 @@
+# Players who have run /nullagree accept. Add or remove UUIDs here,
+# then run /nullreload in game to apply changes.
+consented-players: []
+
+# Army size. Hard ceiling of 200 is enforced in code.
+max-nulls: 20
+
+# Nulls spawned per tick batch, so the server doesn't freeze on big summons.
+spawn-batch: 5
+
+# Citizens skin name for the black Null skin.
+null-skin: NULL
+
+# Distance a Null may drift from its formation slot before being teleported back.
+leash-distance: 15
+
+# Radius Nulls use to find roster players in HUNT mode.
+hunt-range: 100
+
+# Radius Nulls use to find hostile mobs to fight.
+combat-range: 8
+
+# Damage per hit Nulls land on mobs and hunted roster players.
+combat-damage: 8
+
+# Blocks placed per tick while building. Lower it if the server lags.
+build-blocks-per-tick: 4
+
+# Chest where Nulls empty their packs. Set in game: look at a chest, run /nullcmd chest set.
+deposit-chest: ""
+
+# Forge block for FORGE DUTY. Set in game: look at it, run /nullcmd forge set.
+forge-block: ""
+
+# Nether ambush: two hunters for roster players entering the Nether. Toggle with /nullcmd ambush on|off.
+nether-ambush: false
+ambush-minutes: 3
+
+# Invasion: /nullcmd invade <player>
+invasion-size: 6
+invasion-minutes: 10
+
+# Totem of NULL: charges per totem. When they run out, the army disbands.
+totem-charges: 3
+army-cooldown-minutes: 30
+
+# Set automatically by the plugin when a totem is issued or succession happens. Don't edit by hand.
+active-totem-id: ""
