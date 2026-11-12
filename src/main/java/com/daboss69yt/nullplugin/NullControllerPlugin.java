@@ -34,7 +34,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             "hunt", "stay", "goto", "status", "ranks", "mine", "lumber", "farm", "forge", "chest", "patrol",
             "build", "fortify", "cage", "invade", "ambush", "totem", "succession", "event", "help");
     private static final List<String> BUILDS = List.of("citadel", "bridge", "watchtower", "barracks",
-            "forgegate", "spire", "cancel", "undo", "preview");
+            "forgegate", "spire", "city", "cancel", "undo", "preview");
     private static final List<String> EVENTS = List.of("forge", "capital", "end", "clash");
 
     private static final String MENU_TITLE = ChatColor.DARK_PURPLE + "" + ChatColor.BOLD + "The Null: Control";
@@ -151,7 +151,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             case "recall" -> army.recall(owner);
             case "guard" -> army.setMode(NullArmy.Mode.GUARD, owner);
             case "follow" -> army.setMode(NullArmy.Mode.FOLLOW, owner);
-            case "hunt" -> army.setMode(NullArmy.Mode.HUNT, owner);
+            case "hunt" -> handleHunt(owner, args);
             case "stay" -> army.setMode(NullArmy.Mode.STAY, owner);
             case "status" -> army.status(owner);
             case "ranks" -> army.showRanks(owner);
@@ -350,6 +350,17 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         }
     }
 
+    /** /nullcmd hunt [player|any]: hunt one roster player, or whoever on the roster is nearest. */
+    private void handleHunt(Player owner, String[] args) {
+        if (args.length < 2 || args[1].equalsIgnoreCase("any")) {
+            army.setMode(NullArmy.Mode.HUNT, owner);
+            return;
+        }
+        Player target = requireConsentingTarget(owner, args, 1, "hunt");
+        if (target == null) return;
+        army.setHuntTarget(owner, target);
+    }
+
     private void title(Player p, String main, String sub) {
         p.sendTitle(ChatColor.DARK_PURPLE + main, ChatColor.GRAY + sub, 10, 60, 20);
     }
@@ -357,7 +368,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     private void sendHelp(Player owner) {
         owner.sendMessage(ChatColor.DARK_PURPLE + "=== NullController 4.0 ===");
         owner.sendMessage(ChatColor.GRAY + "Army: " + ChatColor.WHITE + "summon [n], dismiss, recall, status, ranks");
-        owner.sendMessage(ChatColor.GRAY + "Modes: " + ChatColor.WHITE + "guard, follow, hunt, stay, goto <x> <y> <z>, mine, lumber, farm, forge, patrol");
+        owner.sendMessage(ChatColor.GRAY + "Modes: " + ChatColor.WHITE + "guard, follow, hunt [player|any], stay, goto <x> <y> <z>, mine, lumber, farm, forge, patrol");
         owner.sendMessage(ChatColor.GRAY + "Builds: " + ChatColor.WHITE + "build <citadel|bridge|watchtower|barracks|forgegate|spire|cancel|undo|preview <type>>, fortify");
         owner.sendMessage(ChatColor.GRAY + "Roster only: " + ChatColor.WHITE + "cage <player>, invade <player>, ambush on|off");
         owner.sendMessage(ChatColor.GRAY + "Totem: " + ChatColor.WHITE + "totem, succession");
@@ -423,6 +434,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         button(inv, 32, Material.LODESTONE, "Build Forge Gate", "Gate around a Forge block", "build", "forgegate");
         button(inv, 33, Material.BEACON, "Build Beacon Spire", "Territory marker spire", "build", "spire");
         button(inv, 34, Material.BARRIER, "Cancel Build", "Stops the current build", "build", "cancel");
+        button(inv, 35, Material.END_STONE_BRICKS, "Build Null Civilisation", "End only: walled city, your Hall, Null quarters", "build", "city");
 
         button(inv, 37, Material.WHEAT, "FARM Mode", "Harvests and replants mature crops", "farm");
         button(inv, 38, Material.IRON_PICKAXE, "Fortify", "Re-places missing blocks from the last build", "fortify");

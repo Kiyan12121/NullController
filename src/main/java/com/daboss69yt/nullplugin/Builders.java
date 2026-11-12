@@ -39,6 +39,10 @@ public final class Builders {
 
     /** Handles /nullcmd build <type>. */
     public void build(Player owner, String type) {
+        if (type.equals("city") && owner.getWorld().getEnvironment() != World.Environment.THE_END) {
+            owner.sendMessage(ChatColor.RED + "The Null Civilisation can only be raised in The End.");
+            return;
+        }
         if (queue.isBusy()) {
             owner.sendMessage(ChatColor.RED + "Already building " + queue.currentName() + ". Use /nullcmd build cancel first.");
             return;
@@ -196,6 +200,7 @@ public final class Builders {
             case "barracks" -> new Plan("Barracks", Structures.barracks(base));
             case "forgegate" -> new Plan("Forge Gate", Structures.forgeGate(base));
             case "spire" -> new Plan("Beacon Spire", Structures.beaconSpire(base));
+            case "city" -> new Plan("Null Civilisation", City.plan(base));
             case "bridge" -> {
                 int[] dir = facingDirection(owner);
                 Location start = base.clone().add(dir[0] * 2, 0, dir[1] * 2);
@@ -207,7 +212,7 @@ public final class Builders {
 
     private void unknown(Player owner, String type) {
         owner.sendMessage(ChatColor.RED + "Unknown build: " + type
-                + ". Options: citadel, bridge, watchtower, barracks, forgegate, spire.");
+                + ". Options: citadel, bridge, watchtower, barracks, forgegate, spire, city.");
     }
 
     private int perTick() {

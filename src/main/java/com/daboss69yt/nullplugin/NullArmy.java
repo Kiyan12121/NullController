@@ -103,6 +103,7 @@ public final class NullArmy {
     private final Map<NPC, Character> promotions = new HashMap<>();
     private final Map<NPC, Integer> forgeCycles = new HashMap<>();
     private long alarmUntil;
+    private UUID huntTarget;
     private long nextAlarm;
 
     private boolean swinging;
@@ -187,6 +188,7 @@ public final class NullArmy {
         }
         this.mode = newMode;
         cageGuard = null;
+        huntTarget = null;
         resetWork();
         applyGear(newMode);
         owner.sendMessage(ChatColor.DARK_PURPLE + "Army mode: " + newMode.name());
@@ -649,6 +651,22 @@ public final class NullArmy {
     /** Only roster players are ever chosen as targets. */
     private void huntNearby(NPC npc, Player owner, int index, double leash, double range) {
         Location here = npc.getStoredLocation();
+        Player chosen = huntTarget == null ? null : Bukkit.getPlayer(huntTarget);
+        if (chosen != null && !consent.canTarget(chosen)) {
+            huntTarget = null;
+            chosen = null;
+        }
+        if (chosen != null) {
+            Location tl = chosen.getLocation();
+            if (here == null || !sameWorld(here, tl) || here.distance(tl) > TELEPORT_OVER) {
+                teleport(npc, tl);
+            } else if (here.distance(tl) <= ATTACK_REACH) {
+                attack(npc, chosen);
+            } else {
+                npc.getNavigator().setTarget(chosen, true);
+            }
+            return;
+        }
         Player best = null;
         double bestDist = range;
         double bestScore = Double.MAX_VALUE;
@@ -757,6 +775,16 @@ public final class NullArmy {
                 }
             }.runTaskLater(plugin, 2L);
         }
+    }
+
+    /** Sends the whole army after one roster player until the order is changed. */
+    public void setHuntTarget(Player owner, Player target) {
+        huntTarget = target.getUniqueId();
+        mode = Mode.HUNT;
+        cageGuard = null;
+        resetWork();
+        applyGear(Mode.HUNT);
+        owner.sendMessage(ChatColor.DARK_PURPLE + "The army is hunting " + target.getName() + ". Roster only.");
     }
 
     /** Sets a cage to guard from outside. Switches the army to GUARD. */
