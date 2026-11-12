@@ -58,7 +58,7 @@ public final class Builders {
             plugin.getConfig().set("city-centre", c.getWorld().getName() + "," + c.getBlockX() + "," + c.getBlockY() + "," + c.getBlockZ());
             plugin.saveConfig();
         }
-        startBuild(owner, plan.name(), plan.placements(), true);
+        startBuild(msg -> owner.sendMessage(msg), plan.name(), plan.placements(), true);
     }
 
     /** Shows a particle outline of the footprint for five seconds before anything is built. */
@@ -147,7 +147,7 @@ public final class Builders {
     }
 
     public void startBuild(Player owner, String name, List<BuildQueue.Placement> placements) {
-        startBuild(owner, name, placements, true);
+        startBuild(msg -> owner.sendMessage(msg), name, placements, true);
     }
 
     private void startBuild(Consumer<String> say, String name, List<BuildQueue.Placement> placements, boolean remember) {
@@ -180,7 +180,7 @@ public final class Builders {
             owner.sendMessage(ChatColor.DARK_PURPLE + "The " + lastName + " is intact.");
             return;
         }
-        startBuild(owner, "Fortify " + lastName, missing, false);
+        startBuild(msg -> owner.sendMessage(msg), "Fortify " + lastName, missing, false);
     }
 
     /** Called by the timer. Repairs quietly, and only when idle and something is missing. */
@@ -188,7 +188,7 @@ public final class Builders {
         if (queue.isBusy() || lastPlacements.isEmpty()) return;
         List<BuildQueue.Placement> missing = missingBlocks();
         if (missing.isEmpty()) return;
-        startBuild(owner, "Auto-repair " + lastName, missing, false);
+        startBuild(msg -> owner.sendMessage(msg), "Auto-repair " + lastName, missing, false);
     }
 
     private List<BuildQueue.Placement> missingBlocks() {
