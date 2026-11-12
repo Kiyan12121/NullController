@@ -1165,7 +1165,7 @@ public final class NullArmy {
             NPC npc = nulls.get(i);
             if (!npc.isSpawned() || arriving.contains(npc) || hunters.containsKey(npc)) continue;
             if (engageMobs(npc)) continue;
-            ringAround(npc, anchor, i, 8);
+            ringAround(npc, anchor, i, 8 + (i % 3) * 25); // spread out in three rings: the whole End
         }
     }
 

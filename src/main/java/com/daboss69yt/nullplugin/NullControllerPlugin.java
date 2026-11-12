@@ -37,7 +37,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             "hunt", "stay", "goto", "status", "ranks", "mine", "lumber", "farm", "forge", "chest", "patrol",
             "build", "fortify", "cage", "invade", "ambush", "totem", "succession", "event", "remote", "help");
     private static final List<String> BUILDS = List.of("citadel", "bridge", "watchtower", "barracks",
-            "forgegate", "spire", "city", "collector", "smelter", "door", "melonfarm", "cancel", "undo", "preview");
+            "forgegate", "spire", "city", "metropolis", "collector", "smelter", "door", "melonfarm", "cancel", "undo", "preview");
     private static final List<String> EVENTS = List.of("forge", "capital", "end", "clash");
     private static final String REMOTE_NAME = ChatColor.DARK_PURPLE + "Null Remote";
 
@@ -366,9 +366,10 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         if (p.length != 4) return;
         World w = Bukkit.getWorld(p[0]);
         if (w == null) return;
+        int r = getConfig().getInt("sweep-radius", 120);
         try {
             Location c = new Location(w, Integer.parseInt(p[1]) + 0.5, Integer.parseInt(p[2]), Integer.parseInt(p[3]) + 0.5);
-            for (org.bukkit.entity.Entity e : w.getNearbyEntities(c, 40, 80, 40)) {
+            for (org.bukkit.entity.Entity e : w.getNearbyEntities(c, r, 80, r)) {
                 if (e instanceof org.bukkit.entity.Enderman) {
                     e.remove();
                 } else if (e instanceof org.bukkit.entity.Item item

@@ -39,7 +39,7 @@ public final class Builders {
 
     /** Handles /nullcmd build <type>. */
     public void build(Player owner, String type) {
-        if (type.equals("city") && owner.getWorld().getEnvironment() != World.Environment.THE_END) {
+        if ((type.equals("city") || type.equals("metropolis")) && owner.getWorld().getEnvironment() != World.Environment.THE_END) {
             owner.sendMessage(ChatColor.RED + "The Null Civilisation can only be raised in The End.");
             return;
         }
@@ -52,7 +52,7 @@ public final class Builders {
             unknown(owner, type);
             return;
         }
-        if (type.equals("city")) {
+        if (type.equals("city") || type.equals("metropolis")) {
             Location c = owner.getLocation();
             plugin.getConfig().set("city-centre", c.getWorld().getName() + "," + c.getBlockX() + "," + c.getBlockY() + "," + c.getBlockZ());
             plugin.saveConfig();
@@ -206,6 +206,7 @@ public final class Builders {
             case "forgegate" -> new Plan("Forge Gate", Structures.forgeGate(base));
             case "spire" -> new Plan("Beacon Spire", Structures.beaconSpire(base));
             case "city" -> new Plan("Null Civilisation", City.plan(base));
+            case "metropolis" -> new Plan("Metropolis", Metropolis.plan(base));
             case "collector" -> new Plan("Item Line", Machines.itemLine(base));
             case "smelter" -> new Plan("Auto-Smelter Bank", Machines.smelterBank(base));
             case "door" -> new Plan("Iron Door Gate", Machines.ironDoor(base));
@@ -221,13 +222,16 @@ public final class Builders {
 
     private void unknown(Player owner, String type) {
         owner.sendMessage(ChatColor.RED + "Unknown build: " + type
-                + ". Options: citadel, bridge, watchtower, barracks, forgegate, spire, city, collector, smelter, door, melonfarm.");
+                + ". Options: citadel, bridge, watchtower, barracks, forgegate, spire, city, metropolis, collector, smelter, door, melonfarm.");
     }
 
     /** The Civilisation gets a faster budget so it finishes in minutes, not hours. */
     private int buildRate(String name) {
         if (name.equals("Null Civilisation")) {
             return Math.max(perTick(), plugin.getConfig().getInt("city-blocks-per-tick", 12));
+        }
+        if (name.equals("Metropolis")) {
+            return Math.max(perTick(), plugin.getConfig().getInt("metropolis-blocks-per-tick", 40));
         }
         return perTick();
     }

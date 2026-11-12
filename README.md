@@ -1,4 +1,9 @@
-# NullController 4.3
+# NullController 4.4
+
+## The Metropolis (4.4)
+- `/nullcmd build metropolis` (End only): a grid of 25 districts, about 170,000 blocks across roughly 180 blocks. Each district has four glass skyscrapers of random height, joined by purpur streets. It's built at `metropolis-blocks-per-tick` (default 40), which takes a few minutes.
+- With you offline, the Nulls spread across the End in three rings, out to about 60 blocks from the city centre. The Enderman and chorus sweep reaches `sweep-radius` (default 120) blocks.
+- Nulls only act in loaded chunks. Far-out Nulls pause until someone is near that part of the End.
 
 ## Always on (4.3)
 - With you offline, every Null that isn't on a hunt guards the Null Civilisation, fighting any hostile mobs that come near.

@@ -61,3 +61,9 @@ city-blocks-per-tick: 12
 
 # Black Null skin, fetched by Citizens from this URL. Leave empty to use null-skin instead.
 null-skin-url: https://raw.githubusercontent.com/Kiyan12121/NullController/main/skins/null-black.png
+
+# Blocks per tick while the Metropolis builds. It is about 170,000 blocks, so the rate is higher.
+metropolis-blocks-per-tick: 40
+
+# How far from the city centre the Enderman and chorus fruit sweep reaches.
+sweep-radius: 120
