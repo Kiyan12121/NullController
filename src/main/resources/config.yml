@@ -107,3 +107,6 @@ prisoner-blocked-commands:
 offline-army: 10
 # Offline defence: a roster player who comes near a Null is hunted by temporary Nulls for this long.
 defence-minutes: 3
+
+# Team: allies the Null weapons (rods, strikes, mob cannon) never hit. Manage with /nullcmd team add|remove|list.
+allies: []

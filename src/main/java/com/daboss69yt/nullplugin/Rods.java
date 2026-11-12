@@ -357,10 +357,11 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
     /** Refuses if a non-roster, non-owner player is within the safe radius of the impact. */
     private boolean safe(Player owner, Location land) {
         for (Player other : Bukkit.getOnlinePlayers()) {
-            if (other.getWorld() == land.getWorld() && !consent.isOwner(other) && !consent.canTarget(other)
+            if (other.getWorld() == land.getWorld() && !consent.canTarget(other)
                     && other.getLocation().distance(land) <= TNT_SAFE_RADIUS) {
                 owner.sendMessage(ChatColor.RED + "Refused. " + other.getName()
-                        + " is not on the roster and is too close to the impact.");
+                        + (consent.isTeam(other) ? " is on the team" : " is not on the roster")
+                        + " and is too close to the impact.");
                 return false;
             }
         }

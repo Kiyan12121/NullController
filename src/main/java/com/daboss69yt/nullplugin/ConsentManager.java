@@ -17,9 +17,12 @@ public final class ConsentManager {
 
     public static final String OWNER_NAME = "daboss69yt";
     private static final String CONFIG_KEY = "consented-players";
+    private static final String ALLY_KEY = "allies";
 
     private final NullControllerPlugin plugin;
     private final Set<UUID> consented = ConcurrentHashMap.newKeySet();
+    /** The team: allies the Null weapons must never hit. The owner is always on the team too. */
+    private final Set<UUID> allies = ConcurrentHashMap.newKeySet();
 
     public ConsentManager(NullControllerPlugin plugin) {
         this.plugin = plugin;
@@ -42,6 +45,42 @@ public final class ConsentManager {
         }
         consented.clear();
         consented.addAll(fresh);
+
+        allies.clear();
+        for (String entry : cfg.getStringList(ALLY_KEY)) {
+            try {
+                allies.add(UUID.fromString(entry.trim()));
+            } catch (IllegalArgumentException ex) {
+                plugin.getLogger().warning("Skipping invalid UUID in team: " + entry);
+            }
+        }
+    }
+
+    /** Team means the owner or an ally. Null weapons never hit a team member. */
+    public boolean isTeam(Player player) {
+        return isOwner(player) || allies.contains(player.getUniqueId());
+    }
+
+    public Set<UUID> allies() {
+        return Set.copyOf(allies);
+    }
+
+    public boolean addAlly(UUID id) {
+        if (!allies.add(id)) return false;
+        persistAllies();
+        return true;
+    }
+
+    public boolean removeAlly(UUID id) {
+        if (!allies.remove(id)) return false;
+        persistAllies();
+        return true;
+    }
+
+    private void persistAllies() {
+        List<String> list = allies.stream().map(UUID::toString).sorted().toList();
+        plugin.getConfig().set(ALLY_KEY, list);
+        plugin.saveConfig();
     }
 
     public boolean isOwner(Player player) {

@@ -35,13 +35,14 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 public final class NullControllerPlugin extends JavaPlugin implements Listener, TabCompleter {
     private Rods rods;
 
     private static final List<String> SUBCOMMANDS = List.of("summon", "dismiss", "recall", "guard", "follow",
             "hunt", "stay", "goto", "status", "ranks", "mine", "lumber", "farm", "forge", "chest", "patrol",
-            "build", "fortify", "cage", "invade", "ambush", "totem", "succession", "event", "remote", "help");
+            "build", "fortify", "cage", "invade", "ambush", "totem", "succession", "event", "remote", "team", "help");
     private static final List<String> BUILDS = List.of("citadel", "bridge", "watchtower", "barracks",
             "forgegate", "spire", "city", "metropolis", "collector", "smelter", "door", "melonfarm", "cancel", "undo", "preview");
     private static final List<String> EVENTS = List.of("forge", "capital", "end", "clash");
@@ -235,6 +236,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
                     else sender.sendMessage(army.mobCannon(target, count));
                 }
             }
+            case "team" -> teamOrder(sender, args);
             case "explore" -> offlineMode(sender, NullArmy.Mode.EXPLORE);
             case "nether" -> offlineMode(sender, NullArmy.Mode.NETHER);
             case "spy" -> {
@@ -274,7 +276,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     }
 
     private static final String OFFLINE_HELP = ChatColor.GRAY + "Owner is offline. Console orders: "
-            + "summon [n], build <kind> (Nether only), strike <player> (the Breach), mobcannon <player> [n], dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle";
+            + "summon [n], build <kind> (Nether only), strike <player> (the Breach), mobcannon <player> [n], team list|add|remove <player>, dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle";
 
     private void offlineMode(CommandSender sender, NullArmy.Mode mode) {
         sender.sendMessage(army.setModeOffline(mode)
@@ -324,6 +326,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             case "cage" -> handleCage(owner, args);
             case "invade" -> handleInvade(owner, args);
             case "ambush" -> handleAmbush(owner, args);
+            case "team" -> teamOrder(owner, args);
             case "totem" -> totems.giveTotem(owner);
             case "cmd" -> owner.performCommand(String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length)));
             case "succession" -> totems.succession(owner);
@@ -452,6 +455,37 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             return null;
         }
         return target;
+    }
+
+    /** team list | add <player> | remove <player>. Team members are never hit by Null weapons. */
+    private void teamOrder(CommandSender sender, String[] args) {
+        String sub = args.length > 1 ? args[1].toLowerCase() : "list";
+        if (sub.equals("list")) {
+            List<String> names = new java.util.ArrayList<>();
+            for (UUID id : consent.allies()) {
+                var off = Bukkit.getOfflinePlayer(id);
+                names.add(off.getName() != null ? off.getName() : id.toString());
+            }
+            sender.sendMessage(ChatColor.GRAY + "Team: " + ChatColor.WHITE + ConsentManager.OWNER_NAME
+                    + " (owner)" + (names.isEmpty() ? "" : ", " + String.join(", ", names)));
+            return;
+        }
+        if ((sub.equals("add") || sub.equals("remove")) && args.length > 2) {
+            String name = args[2];
+            Player online = Bukkit.getPlayerExact(name);
+            var off = Bukkit.getOfflinePlayer(name);
+            if (online == null && !off.hasPlayedBefore()) {
+                sender.sendMessage(ChatColor.RED + "Unknown player. They need to have joined the server once.");
+                return;
+            }
+            UUID id = online != null ? online.getUniqueId() : off.getUniqueId();
+            boolean changed = sub.equals("add") ? consent.addAlly(id) : consent.removeAlly(id);
+            sender.sendMessage(changed
+                    ? ChatColor.DARK_PURPLE + name + (sub.equals("add") ? " joined the team." : " left the team.")
+                    : ChatColor.GRAY + "No change.");
+            return;
+        }
+        sender.sendMessage(ChatColor.GRAY + "Usage: team list | team add <player> | team remove <player>");
     }
 
     private void handleAmbush(Player owner, String[] args) {
