@@ -1,6 +1,14 @@
-# NullController 3.5
+# NullController 4.0
 
 Owner-only control. Players are only ever targeted after they run `/nullagree accept`.
+
+## What's new in 4.0
+- `/nullcmd help` lists every order. `/nullcmd ranks` shows each Null's rank, health and state. Tab completion works for commands, build types and events.
+- Forge Awakening: a Null that holds at the Forge for 60 seconds rises one rank (D to I, then I to A). You get a chat message when it happens.
+- Alarm: when 5 or more hostile mobs crowd within 16 blocks of you (`alarm-threshold`), you get an ALARM title, and the army's reach doubles for 30 seconds.
+- PvP: hunters pick the roster player who is near and weak, not just the nearest one.
+- Lore title cards on each event and on the Bedrock Cage.
+- The `/nullui` panel gained Ranks and Help buttons.
 
 ## Army control
 - Summon, dismiss, recall: `/nullcmd summon <n>`, `/nullcmd dismiss`, `/nullcmd recall`.
@@ -49,6 +57,7 @@ Owner-only control. Players are only ever targeted after they run `/nullagree ac
 - Nether ambush triggers on any entry into the Nether, not only through a portal.
 
 ## Known gaps
+- Succession by naming a Commander, and a night watch rotation, are not in yet.
 - Skin: the black skin PNG is in `skins/`, but Citizens can't load a skin from a URL through its public API from this plugin. Set `null-skin` in config.yml to a real Minecraft username whose skin is black, and Citizens fetches it by name. The default `NULL` is not a real account, so Nulls show as Steve until you change it.
 - Packs are held in memory. Anything in a pack is lost on restart. Deposited loot is safe.
 - Only the lowest log of a tree is replanted. Big 2x2 trees such as dark oak won't regrow from one sapling.
