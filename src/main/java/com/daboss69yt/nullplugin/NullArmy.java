@@ -12,6 +12,7 @@ import org.bukkit.Particle;
 import org.bukkit.Tag;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.block.Container;
 import org.bukkit.block.data.Ageable;
 import org.bukkit.enchantments.Enchantment;
@@ -63,6 +64,9 @@ public final class NullArmy {
     private static final Set<Material> FARM_CROPS = Set.of(
             Material.WHEAT, Material.CARROTS, Material.POTATOES, Material.BEETROOTS, Material.NETHER_WART);
 
+    private static final Set<Material> REPLANT_GROUND = Set.of(
+            Material.DIRT, Material.GRASS_BLOCK, Material.PODZOL, Material.COARSE_DIRT);
+
     private record Scored(Block block, int priority, double distSq) {}
 
     /** A Null on a timed hunt against one roster player (used by invasions and Nether ambushes). */
@@ -93,6 +97,8 @@ public final class NullArmy {
     private final Map<NPC, Location> wanderGoals = new HashMap<>();
     private final Map<NPC, Integer> wanderUntil = new HashMap<>();
     private NPC leader;
+    private final Map<NPC, Character> ranks = new HashMap<>();
+    private Location cageGuard;
 
     private boolean swinging;
     private BukkitRunnable swingTask;
@@ -175,6 +181,7 @@ public final class NullArmy {
             return false;
         }
         this.mode = newMode;
+        cageGuard = null;
         resetWork();
         applyGear(newMode);
         owner.sendMessage(ChatColor.DARK_PURPLE + "Army mode: " + newMode.name());
@@ -260,6 +267,11 @@ public final class NullArmy {
             owner.sendMessage(ChatColor.GRAY + "Blocks queued: " + ChatColor.WHITE + workTargets.size()
                     + ChatColor.GRAY + ", Nulls working: " + ChatColor.WHITE + claimed.size());
         }
+        Map<Character, Integer> counts = new HashMap<>();
+        for (char c : ranks.values()) counts.merge(c, 1, Integer::sum);
+        owner.sendMessage(ChatColor.GRAY + "Ranks: " + ChatColor.WHITE + "R" + counts.getOrDefault('R', 0)
+                + " A" + counts.getOrDefault('A', 0) + " I" + counts.getOrDefault('I', 0)
+                + " D" + counts.getOrDefault('D', 0));
         owner.sendMessage(ChatColor.GRAY + "Nulls emptying packs: " + ChatColor.WHITE + depositing.size());
         owner.sendMessage(ChatColor.GRAY + "Hunters on timers: " + ChatColor.WHITE + hunters.size());
         owner.sendMessage(ChatColor.GRAY + "Deposit chest: " + ChatColor.WHITE
@@ -289,6 +301,7 @@ public final class NullArmy {
         npc.spawn(loc);
         nulls.add(npc);
         if (leader == null) leader = npc;
+        recomputeRanks();
         packs.put(npc, Bukkit.createInventory(null, PACK_SIZE, "Null Pack"));
         return npc;
     }
@@ -369,9 +382,11 @@ public final class NullArmy {
         hunters.remove(npc);
         wanderGoals.remove(npc);
         wanderUntil.remove(npc);
+        ranks.remove(npc);
         if (npc == leader) {
             leader = nulls.isEmpty() ? null : nulls.get(0);
         }
+        recomputeRanks();
     }
 
     private void removeAll() {
@@ -393,6 +408,27 @@ public final class NullArmy {
             sb.append(NAME_CHARS.charAt(rng.nextInt(NAME_CHARS.length())));
         }
         return sb.toString();
+    }
+
+    /** Commander ranks by seniority: R is the leader, A and I are officers, D are the rest. */
+    private void recomputeRanks() {
+        ranks.clear();
+        for (int i = 0; i < nulls.size(); i++) {
+            char rank = i == 0 ? 'R' : i <= 2 ? 'A' : i <= 6 ? 'I' : 'D';
+            ranks.put(nulls.get(i), rank);
+        }
+    }
+
+    /** Rank scales command radius and combat strength: R 1.5, A 1.25, I 1.0, D 0.75. */
+    private double rankScale(NPC npc) {
+        Character rank = ranks.get(npc);
+        if (rank == null) return 1.0;
+        return switch (rank) {
+            case 'R' -> 1.5;
+            case 'A' -> 1.25;
+            case 'I' -> 1.0;
+            default -> 0.75;
+        };
     }
 
     private double roamRadius() {
@@ -476,8 +512,16 @@ public final class NullArmy {
                 continue;
             }
             int index = nulls.indexOf(npc);
+            if (cycle % 4 == 0 && (mode == Mode.GUARD || mode == Mode.PATROL)) {
+                swing(npc); // arms moving on watch
+            }
             switch (mode) {
-                case GUARD, FOLLOW -> {
+                case GUARD -> {
+                    if (engageMobs(npc)) continue;
+                    if (cageGuard != null) guardPoint(npc, index);
+                    else followOwner(npc, owner, index, leash);
+                }
+                case FOLLOW -> {
                     if (!engageMobs(npc)) followOwner(npc, owner, index, leash);
                 }
                 case GOTO -> travel(npc, gotoTarget);
@@ -523,7 +567,7 @@ public final class NullArmy {
         Location goal = wanderGoals.get(npc);
         Integer until = wanderUntil.get(npc);
         if (goal == null || until == null || cycle >= until || here.distance(goal) <= REACH) {
-            goal = randomPointNear(anchor, roamRadius());
+            goal = randomPointNear(anchor, roamRadius() * rankScale(npc));
             wanderGoals.put(npc, goal);
             wanderUntil.put(npc, cycle + ROAM_CYCLES);
             npc.getNavigator().setTarget(goal);
@@ -616,9 +660,45 @@ public final class NullArmy {
         Integer last = lastAttack.get(npc);
         if (last != null && cycle - last < ATTACK_COOLDOWN_CYCLES) return;
         lastAttack.put(npc, cycle);
-        double damage = plugin.getConfig().getDouble("combat-damage", 8);
+        double damage = plugin.getConfig().getDouble("combat-damage", 8) * rankScale(npc);
         target.damage(damage, npc.getEntity());
         swing(npc);
+    }
+
+    /** Holds a ring just outside the cage so the Nulls seal it from the outside. */
+    private void guardPoint(NPC npc, int index) {
+        double angle = (2 * Math.PI / Math.max(1, nulls.size())) * index;
+        Location spot = cageGuard.clone().add(Math.cos(angle) * 6.5, 0, Math.sin(angle) * 6.5);
+        Location here = npc.getStoredLocation();
+        if (here == null || !sameWorld(here, spot) || here.distance(spot) > TELEPORT_OVER) {
+            teleport(npc, spot);
+        } else if (here.distance(spot) > REACH) {
+            npc.getNavigator().setTarget(spot);
+        }
+    }
+
+    /** Called by the plugin when a roster player uses an ender pearl. Hunters on that player snap to the landing spot. */
+    public void followPearl(Player player, Location landing) {
+        if (!consent.canTarget(player) || landing == null) return;
+        Location dest = landing.clone();
+        for (Map.Entry<NPC, Hunt> entry : hunters.entrySet()) {
+            if (!entry.getValue().target().equals(player.getUniqueId())) continue;
+            NPC npc = entry.getKey();
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    if (npc.isSpawned()) teleport(npc, dest);
+                }
+            }.runTaskLater(plugin, 2L);
+        }
+    }
+
+    /** Sets a cage to guard from outside. Switches the army to GUARD. */
+    public void guardCage(Location center) {
+        cageGuard = center.clone();
+        mode = Mode.GUARD;
+        resetWork();
+        applyGear(Mode.GUARD);
     }
 
     private void forgeTick(NPC npc, Player owner, int index, double leash) {
@@ -814,7 +894,14 @@ public final class NullArmy {
                 block.setBlockData(ageable, false);
             }
         } else {
+            Material logType = block.getType();
+            Block below = block.getRelative(BlockFace.DOWN);
+            boolean replant = kind == WorkKind.LUMBER
+                    && !Tag.LOGS.isTagged(below.getType())
+                    && REPLANT_GROUND.contains(below.getType());
+            Material sapling = replant ? Material.matchMaterial(logType.name().replace("_LOG", "_SAPLING")) : null;
             block.setType(Material.AIR, false);
+            if (sapling != null) block.setType(sapling, false);
         }
         Inventory pack = packs.get(npc);
         if (pack != null && !drops.isEmpty()) {

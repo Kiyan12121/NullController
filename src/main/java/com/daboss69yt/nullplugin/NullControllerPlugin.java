@@ -15,6 +15,7 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
@@ -243,6 +244,14 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener {
         Player target = requireConsentingTarget(owner, args, 1, "cage");
         if (target == null) return;
         builders.startBuild(owner, "Bedrock Cage", Structures.cage(target.getLocation()));
+        army.guardCage(target.getLocation());
+    }
+
+    /** Roster players' ender pearls pull their hunters after them. */
+    @EventHandler
+    public void onRosterPearl(PlayerTeleportEvent event) {
+        if (event.getCause() != PlayerTeleportEvent.TeleportCause.ENDER_PEARL) return;
+        army.followPearl(event.getPlayer(), event.getTo());
     }
 
     /** Invasion: a timed hunt on one roster player, from about 40 blocks away. */

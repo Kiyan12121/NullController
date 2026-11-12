@@ -1,26 +1,33 @@
-# NullController 3.4
+# NullController 3.5
 
-Version 3.4 covers everything on the list. Owner-only control; players only get targeted after `/nullagree accept`.
+Owner-only control. Players are only ever targeted after they run `/nullagree accept`.
 
 ## Army control
-- Summon, dismiss, recall (`/nullcmd summon <n>`, `/nullcmd dismiss`, `/nullcmd recall`)
-- Modes: GUARD, FOLLOW, HUNT (roster only), STAY, GOTO (any coordinates), AUTO-MINE, LUMBERJACK, FARM, PATROL, FORGE DUTY
-- Combat: Nulls fight hostile mobs within 8 blocks. In HUNT mode they also attack roster players.
+- Summon, dismiss, recall: `/nullcmd summon <n>`, `/nullcmd dismiss`, `/nullcmd recall`.
+- Modes: GUARD, FOLLOW, HUNT (roster only), STAY, GOTO (any coordinates), MINE, LUMBER, FARM, PATROL, FORGE.
+- Roaming: Nulls drift around the leader (or you) instead of stacking on you. They only teleport if they fall more than 64 blocks behind.
+- Leader and ranks: the first Null is R (leader). A and I are officers, the rest are D. Rank scales command radius and strength (R 1.5x, A 1.25x, I 1.0x, D 0.75x). `/nullcmd status` shows the counts.
+- Combat: Nulls fight hostile mobs within 8 blocks, focusing the weakest in range. A Null under 6 HP falls back to the group until it heals.
+- Guard duty and patrols: idle Nulls on GUARD or PATROL keep swinging their arms.
 
 ## Work
-- AUTO-MINE, LUMBERJACK, FARM: each Null carries a 9-slot pack. When it's full, the Null walks to the deposit chest (`/nullcmd chest set` while looking at a chest) and empties it.
+- MINE, LUMBER, FARM: each Null carries a 9-slot pack. When it's full, the Null walks to the deposit chest (`/nullcmd chest set` while looking at a chest) and empties it.
 - FARM replants crops as it harvests.
-- Fortify (`/nullcmd fortify`) re-places any missing blocks from the last completed build.
+- LUMBER replants the sapling when a tree's trunk base is cut, if the ground below is dirt or grass. No sapling is used up.
 - Forge duty: `/nullcmd forge set` while looking at the forge block, then `/nullcmd forge`.
 
 ## Builders
 - Void Citadel, Bridge, Watchtower, Barracks, Forge Gate, Beacon Spire: `/nullcmd build <type>`.
-- Bedrock Cage (roster players only): `/nullcmd cage <player>`. Builds a sealed 5x5x5 cage around them.
+- Preview: `/nullcmd build preview <type>` shows the footprint with white particles for 5 seconds before anything is placed.
+- Undo: `/nullcmd build undo` removes the last finished build.
+- Fortify: `/nullcmd fortify` re-places missing blocks from the last build. Auto-repair also does this every 3 minutes when idle.
+- Bedrock Cage (roster players only): `/nullcmd cage <player>`. Builds a sealed 5x5x5 cage, then the Nulls guard it from a ring outside. Running `/nullcmd guard` releases the cage guard.
 
 ## Consent-gated
 - Bedrock Cage, Invasion, Nether ambush, and HUNT only target players on the roster.
-- Invasion: `/nullcmd invade <player>` sends a timed group from about 40 blocks away. They leave when the timer runs out.
+- Invasion: `/nullcmd invade <player>` sends a timed group from about 40 blocks away.
 - Nether ambush: `/nullcmd ambush on|off`. Two hunters appear when a roster player enters the Nether.
+- Ender pearls: when a roster player uses an ender pearl, any hunters on them teleport to the landing spot.
 - Revoking: remove the UUID from `consented-players` and run `/nullreload`. Hunters stop on their next tick.
 
 ## Totem of NULL
@@ -34,21 +41,21 @@ Version 3.4 covers everything on the list. Owner-only control; players only get 
 - `/nullcmd event end`: squad of 5 and a barracks. Only works in The End. No lightning.
 - `/nullcmd event clash`: squad of 8 that engages mobs. Nulls don't fight each other.
 
-## Decisions I made that you can change
+## Decisions you can change
 - Totem: 3 charges, 30-minute army cooldown after it breaks, pulse radius 8.
-- Succession: minting a new totem voids the old ones. Naming a Commander as successor isn't in yet, because Commanders aren't a separate NPC type yet.
-- Forge Awakening: no Commander rises from the Forge. It's a squad at the Forge.
-- Faction Clash: Nulls don't fight each other.
-- Nether ambush: triggers on any entry into the Nether, not only through a portal.
+- Ranks: R is the leader, A is the next two, I is the next four, D is everyone else. Change the cut-offs in `NullArmy.recomputeRanks`.
+- Ender pearls: only hunters follow a pearl. Idle Nulls don't.
+- Sapling replanting is free. It doesn't use anything from the pack.
+- Nether ambush triggers on any entry into the Nether, not only through a portal.
 
 ## Known gaps
+- Skin: the black skin PNG is in `skins/`, but Citizens can't load a skin from a URL through its public API from this plugin. Set `null-skin` in config.yml to a real Minecraft username whose skin is black, and Citizens fetches it by name. The default `NULL` is not a real account, so Nulls show as Steve until you change it.
 - Packs are held in memory. Anything in a pack is lost on restart. Deposited loot is safe.
-- Sapling replanting for LUMBERJACK isn't in.
+- Only the lowest log of a tree is replanted. Big 2x2 trees such as dark oak won't regrow from one sapling.
 - Nulls use Citizens navigation, so very long walks rely on teleports.
-- Nothing here has been compiled. If the Actions build goes red, send me the log.
 
 ## Build and install
-1. Upload this folder to GitHub. The Actions tab builds `NullController-3.0.0.jar` (the artifact is named `NullController`).
+1. Push this folder to GitHub. The Actions tab builds `NullController-3.5.0.jar` (the artifact is named `NullController`).
 2. Upload the jar and the Citizens jar to `/plugins` on Falixnode, then restart.
 3. Set `null-skin` in config.yml to the skin you want.
 4. Give the server 3 GB of RAM or more.
