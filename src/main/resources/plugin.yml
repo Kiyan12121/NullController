@@ -26,4 +26,4 @@ commands:
 permissions:
   nullcontroller.owner:
     description: Restricted to the server owner.
-    default: false
+    default: true
