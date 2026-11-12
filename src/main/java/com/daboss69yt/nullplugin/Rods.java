@@ -25,25 +25,50 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 
-import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Random;
 
 /**
- * Owner-only rods, cast like fishing rods:
- * Ambush Rod: portals open around the roster player nearest the hook and Nulls step out.
- * Stasis Rod: a hooked roster player is pulled to the Nether base and frozen there.
- * TNT Rod: a landing spot gets a portal flash and four TNT drop out of the sky onto it.
- * Every rod refuses to act if a non-roster player is close, and only the owner can use them.
+ * Owner-only rods, cast like fishing rods. Every rod that hurts a player only ever picks a roster
+ * player, and every rod that drops something on the ground refuses if a non-roster player is close.
+ *
+ *  Ambush    portals open around the roster player and Nulls step out
+ *  Stasis    a hooked roster player is pulled to the Nether base and frozen
+ *  TNT       four TNT drop from the sky onto the landing spot
+ *  Summon    the whole army walks to the hook and guards it
+ *  Lightning a bolt strikes the roster player nearest the hook
+ *  Launch    the nearest roster player is thrown into the air
+ *  Wither    the nearest roster player gets wither, slowness and blindness
+ *  Gravity   roster players within eight blocks of the hook are pulled in
+ *  Orbital   eight lightning bolts walk over the landing spot
+ *  Nuke      three big explosions on the landing spot
  */
 public final class Rods implements Listener, CommandExecutor, TabCompleter {
 
     static final String AMBUSH = ChatColor.DARK_RED + "Ambush Rod";
     static final String STASIS = ChatColor.AQUA + "Stasis Rod";
     static final String TNT = ChatColor.GOLD + "TNT Rod";
+    static final String SUMMON = ChatColor.GREEN + "Summon Rod";
+    static final String LIGHTNING = ChatColor.YELLOW + "Lightning Rod";
+    static final String LAUNCH = ChatColor.LIGHT_PURPLE + "Launch Rod";
+    static final String WITHER = ChatColor.DARK_GRAY + "Wither Rod";
+    static final String GRAVITY = ChatColor.DARK_AQUA + "Gravity Rod";
+    static final String ORBITAL = ChatColor.BLUE + "Orbital Rod";
+    static final String NUKE = ChatColor.RED + "Nuke Rod";
+
     private static final double TNT_SAFE_RADIUS = 12;
-    private static final List<String> KINDS = List.of("ambush", "stasis", "tnt", "base");
+    private static final Map<String, String> NAME_BY_KIND = Map.ofEntries(
+            Map.entry("ambush", AMBUSH), Map.entry("stasis", STASIS), Map.entry("tnt", TNT),
+            Map.entry("summon", SUMMON), Map.entry("lightning", LIGHTNING), Map.entry("launch", LAUNCH),
+            Map.entry("wither", WITHER), Map.entry("gravity", GRAVITY), Map.entry("orbital", ORBITAL),
+            Map.entry("nuke", NUKE));
+    private static final Map<String, String> KIND_BY_NAME = new HashMap<>();
+    static {
+        NAME_BY_KIND.forEach((k, v) -> KIND_BY_NAME.put(v, k));
+    }
 
     private final NullControllerPlugin plugin;
     private final ConsentManager consent;
@@ -65,35 +90,57 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
             return true;
         }
         if (args.length == 0) {
-            owner.sendMessage(ChatColor.GRAY + "Usage: /nullrod ambush | stasis | tnt | base set");
+            owner.sendMessage(ChatColor.GRAY + "Usage: /nullrod <" + String.join(" | ", NAME_BY_KIND.keySet()) + "> | base set");
             return true;
         }
-        switch (args[0].toLowerCase(Locale.ROOT)) {
-            case "ambush" -> give(owner, AMBUSH, "Portals open around a roster player. Nulls step out.");
-            case "stasis" -> give(owner, STASIS, "Hook a roster player: they are pulled to the Nether base and frozen.");
-            case "tnt" -> give(owner, TNT, "Land the hook: portal flash, then TNT drops from the sky.");
-            case "base" -> {
-                if (args.length >= 2 && args[1].equalsIgnoreCase("set")) {
-                    var l = owner.getLocation();
-                    plugin.getConfig().set("nether-base", l.getWorld().getName() + "," + l.getBlockX() + ","
-                            + l.getBlockY() + "," + l.getBlockZ());
-                    plugin.saveConfig();
-                    owner.sendMessage(ChatColor.DARK_PURPLE + "Nether base set at " + l.getBlockX() + ", "
-                            + l.getBlockY() + ", " + l.getBlockZ() + ".");
-                } else {
-                    owner.sendMessage(ChatColor.GRAY + "Usage: /nullrod base set");
-                }
+        String kind = args[0].toLowerCase(Locale.ROOT);
+        if (kind.equals("base")) {
+            if (args.length >= 2 && args[1].equalsIgnoreCase("set")) {
+                var l = owner.getLocation();
+                plugin.getConfig().set("nether-base", l.getWorld().getName() + "," + l.getBlockX() + ","
+                        + l.getBlockY() + "," + l.getBlockZ());
+                plugin.saveConfig();
+                owner.sendMessage(ChatColor.DARK_PURPLE + "Nether base set at " + l.getBlockX() + ", "
+                        + l.getBlockY() + ", " + l.getBlockZ() + ".");
+            } else {
+                owner.sendMessage(ChatColor.GRAY + "Usage: /nullrod base set");
             }
-            default -> owner.sendMessage(ChatColor.GRAY + "Usage: /nullrod ambush | stasis | tnt | base set");
+            return true;
         }
+        String name = NAME_BY_KIND.get(kind);
+        if (name == null) {
+            owner.sendMessage(ChatColor.RED + "Unknown rod: " + args[0]);
+            return true;
+        }
+        give(owner, name, lore(kind));
         return true;
     }
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        if (args.length == 1) return KINDS.stream().filter(k -> k.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
+        if (args.length == 1) {
+            List<String> all = new java.util.ArrayList<>(NAME_BY_KIND.keySet());
+            all.add("base");
+            return all.stream().filter(k -> k.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
+        }
         if (args.length == 2 && args[0].equalsIgnoreCase("base")) return List.of("set");
         return List.of();
+    }
+
+    private static String lore(String kind) {
+        return switch (kind) {
+            case "ambush" -> "Portals open around a roster player. Nulls step out.";
+            case "stasis" -> "Hook a roster player: they are pulled to the Nether base and frozen.";
+            case "tnt" -> "Land the hook: portal flash, then TNT drops from the sky.";
+            case "summon" -> "Land the hook: the whole army walks there and guards it.";
+            case "lightning" -> "Land near a roster player: a bolt strikes them.";
+            case "launch" -> "Hook near a roster player: they are thrown into the air.";
+            case "wither" -> "Land near a roster player: wither, slowness and blindness.";
+            case "gravity" -> "Land the hook: roster players within 8 blocks are pulled in.";
+            case "orbital" -> "Land the hook: eight lightning bolts walk over the spot.";
+            case "nuke" -> "Land the hook: three big explosions on the spot.";
+            default -> "";
+        };
     }
 
     private void give(Player owner, String name, String lore) {
@@ -118,15 +165,29 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
         ItemStack held = p.getInventory().getItemInMainHand();
         ItemMeta meta = held.getItemMeta();
         if (held.getType() != Material.FISHING_ROD || meta == null || meta.getDisplayName() == null) return;
-        String name = meta.getDisplayName();
+        String kind = KIND_BY_NAME.get(meta.getDisplayName());
+        if (kind == null) return;
 
-        if (name.equals(AMBUSH)) ambush(p, event);
-        else if (name.equals(STASIS)) stasis(p, event);
-        else if (name.equals(TNT)) tnt(p, event);
+        Location hook = event.getHook().getLocation();
+        switch (kind) {
+            case "ambush" -> ambush(p, hook);
+            case "stasis" -> stasis(p, event);
+            case "tnt" -> tnt(p, hook);
+            case "summon" -> {
+                army.goTo(hook, p);
+                p.sendMessage(ChatColor.DARK_PURPLE + "The army is walking to " + coords(hook) + ".");
+            }
+            case "lightning" -> strikeRoster(p, hook, 6, false);
+            case "launch" -> strikeRoster(p, hook, 6, true);
+            case "wither" -> wither(p, hook);
+            case "gravity" -> gravity(p, hook);
+            case "orbital" -> orbital(p, hook);
+            case "nuke" -> nuke(p, hook);
+            default -> { }
+        }
     }
 
-    private void ambush(Player owner, PlayerFishEvent event) {
-        Location hook = event.getHook().getLocation();
+    private void ambush(Player owner, Location hook) {
         Player target = nearestRoster(hook, 6);
         if (target == null) {
             owner.sendMessage(ChatColor.GRAY + "No roster player near the hook.");
@@ -159,18 +220,9 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
         owner.sendMessage(ChatColor.DARK_PURPLE + target.getName() + " is pulled to the base and frozen.");
     }
 
-    private void tnt(Player owner, PlayerFishEvent event) {
-        Location land = event.getHook().getLocation();
+    private void tnt(Player owner, Location land) {
         World w = land.getWorld();
-        if (w == null) return;
-        for (Player other : Bukkit.getOnlinePlayers()) {
-            if (other.getWorld().equals(w) && !consent.isOwner(other) && !consent.canTarget(other)
-                    && other.getLocation().distance(land) <= TNT_SAFE_RADIUS) {
-                owner.sendMessage(ChatColor.RED + "Refused. " + other.getName()
-                        + " is not on the roster and is too close to the impact.");
-                return;
-            }
-        }
+        if (w == null || !safe(owner, land)) return;
         portalFlash(land);
         Location base = configLoc("nether-base");
         if (base != null) portalFlash(base);
@@ -179,8 +231,96 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
             Entity e = w.spawnEntity(drop, EntityType.TNT);
             if (e instanceof TNTPrimed t) t.setFuseTicks(60);
         }
-        owner.sendMessage(ChatColor.DARK_PURPLE + "TNT dropping at " + land.getBlockX() + ", "
-                + land.getBlockY() + ", " + land.getBlockZ() + ".");
+        owner.sendMessage(ChatColor.DARK_PURPLE + "TNT dropping at " + coords(land) + ".");
+    }
+
+    /** Hits the roster player nearest the hook with lightning, or throws them up if launch is set. */
+    private void strikeRoster(Player owner, Location hook, double radius, boolean launch) {
+        Player target = nearestRoster(hook, radius);
+        if (target == null) {
+            owner.sendMessage(ChatColor.GRAY + "No roster player near the hook.");
+            return;
+        }
+        if (launch) {
+            target.setVelocity(new Vector(0, 1.8, 0));
+            owner.sendMessage(ChatColor.DARK_PURPLE + target.getName() + " is thrown.");
+        } else {
+            target.getWorld().strikeLightning(target.getLocation());
+            owner.sendMessage(ChatColor.DARK_PURPLE + "Lightning on " + target.getName() + ".");
+        }
+    }
+
+    private void wither(Player owner, Location hook) {
+        Player target = nearestRoster(hook, 6);
+        if (target == null) {
+            owner.sendMessage(ChatColor.GRAY + "No roster player near the hook.");
+            return;
+        }
+        target.addPotionEffect(new PotionEffect(PotionEffectType.WITHER, 100, 1, false, true));
+        target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 100, 2, false, true));
+        target.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 60, 0, false, true));
+        owner.sendMessage(ChatColor.DARK_PURPLE + "Wither on " + target.getName() + ".");
+    }
+
+    private void gravity(Player owner, Location hook) {
+        int pulled = 0;
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            if (!consent.canTarget(p) || p.getWorld() != hook.getWorld()) continue;
+            if (p.getLocation().distance(hook) > 8) continue;
+            p.setVelocity(hook.toVector().subtract(p.getLocation().toVector()).normalize().multiply(1.0));
+            pulled++;
+        }
+        owner.sendMessage(ChatColor.DARK_PURPLE + "Gravity pulled " + pulled + " roster player(s).");
+    }
+
+    private void orbital(Player owner, Location land) {
+        World w = land.getWorld();
+        if (w == null || !safe(owner, land)) return;
+        new BukkitRunnable() {
+            int n = 0;
+
+            @Override
+            public void run() {
+                if (n++ >= 8) {
+                    cancel();
+                    return;
+                }
+                w.strikeLightning(land.clone().add(rng.nextInt(13) - 6, 0, rng.nextInt(13) - 6));
+            }
+        }.runTaskTimer(plugin, 0L, 15L);
+        owner.sendMessage(ChatColor.DARK_PURPLE + "Orbital strike on " + coords(land) + ".");
+    }
+
+    private void nuke(Player owner, Location land) {
+        World w = land.getWorld();
+        if (w == null || !safe(owner, land)) return;
+        new BukkitRunnable() {
+            int n = 0;
+
+            @Override
+            public void run() {
+                if (n++ >= 3) {
+                    cancel();
+                    return;
+                }
+                portalFlash(land);
+                w.createExplosion(land, 6f, false, true);
+            }
+        }.runTaskTimer(plugin, 0L, 20L);
+        owner.sendMessage(ChatColor.DARK_PURPLE + "Nuke on " + coords(land) + ".");
+    }
+
+    /** Refuses if a non-roster, non-owner player is within the safe radius of the impact. */
+    private boolean safe(Player owner, Location land) {
+        for (Player other : Bukkit.getOnlinePlayers()) {
+            if (other.getWorld() == land.getWorld() && !consent.isOwner(other) && !consent.canTarget(other)
+                    && other.getLocation().distance(land) <= TNT_SAFE_RADIUS) {
+                owner.sendMessage(ChatColor.RED + "Refused. " + other.getName()
+                        + " is not on the roster and is too close to the impact.");
+                return false;
+            }
+        }
+        return true;
     }
 
     private void portalFlash(Location loc) {
@@ -202,6 +342,10 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
             }
         }
         return best;
+    }
+
+    private static String coords(Location l) {
+        return l.getBlockX() + ", " + l.getBlockY() + ", " + l.getBlockZ();
     }
 
     private Location configLoc(String key) {

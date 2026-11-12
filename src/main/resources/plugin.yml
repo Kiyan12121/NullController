@@ -26,6 +26,10 @@ commands:
     description: Owner rods: ambush, stasis, TNT, and the Nether base (owner only).
     usage: /nullrod ambush | stasis | tnt | base set
     permission: nullcontroller.owner
+  nullbase:
+    description: Nether base machines: turret, trap, alarm, drill, debris drill (owner only).
+    usage: /nullbase build|clear <turret|trap|alarm|drill|debrisdrill> | status
+    permission: nullcontroller.owner
   nullupdate:
     description: Check GitHub for a newer NullController and stage it for the next restart (owner only).
     usage: /nullupdate

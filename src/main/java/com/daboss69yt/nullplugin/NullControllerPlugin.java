@@ -79,6 +79,10 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         getServer().getPluginManager().registerEvents(rods, this);
         getCommand("nullrod").setExecutor(rods);
         getCommand("nullrod").setTabCompleter(rods);
+        Base base = new Base(this, consent);
+        base.start();
+        getCommand("nullbase").setExecutor(base);
+        getCommand("nullbase").setTabCompleter(base);
         getServer().getPluginManager().registerEvents(netherLaw, this);
         getCommand("nullnether").setExecutor(netherLaw);
         getCommand("nullnether").setTabCompleter(netherLaw);
