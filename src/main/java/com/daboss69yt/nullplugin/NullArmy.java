@@ -261,6 +261,30 @@ public final class NullArmy {
         return true;
     }
 
+    /** Ambush: portals open around one roster player, and Nulls step out of them after a moment. */
+    public void ambush(Player owner, Player target, int count, int minutes) {
+        if (nulls.size() + count > armyCap()) {
+            if (owner != null) owner.sendMessage(ChatColor.RED + "Not enough room under the army cap (" + armyCap() + ").");
+            return;
+        }
+        long expires = System.currentTimeMillis() + minutes * 60_000L;
+        for (int i = 0; i < count; i++) {
+            Location spot = cornerSpot(target.getLocation());
+            World w = spot.getWorld();
+            if (w == null) continue;
+            w.spawnParticle(Particle.PORTAL, spot.clone().add(0, 1, 0), 120, 0.6, 1.0, 0.6, 0.5);
+            w.playSound(spot, Sound.BLOCK_PORTAL_TRAVEL, 0.8f, 1.2f);
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    NPC npc = createNull(spot, gearForMode(Mode.HUNT), false);
+                    hunters.put(npc, new Hunt(target.getUniqueId(), expires));
+                    w.spawnParticle(Particle.PORTAL, spot.clone().add(0, 1, 0), 60, 0.4, 1.0, 0.4, 0.3);
+                }
+            }.runTaskLater(plugin, 30L);
+        }
+    }
+
     /** Totem of NULL ran out of charges: the army disbands and can't be resummoned for a while. */
     public void breakArmy(Player owner) {
         int minutes = plugin.getConfig().getInt("army-cooldown-minutes", 30);

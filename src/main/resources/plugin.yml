@@ -22,6 +22,10 @@ commands:
     description: Nether law: strikes, prisoners and the prison (owner only).
     usage: /nullnether status | prison set | arrest|release|clear <player>
     permission: nullcontroller.owner
+  nullrod:
+    description: Owner rods: ambush, stasis, TNT, and the Nether base (owner only).
+    usage: /nullrod ambush | stasis | tnt | base set
+    permission: nullcontroller.owner
   nullupdate:
     description: Check GitHub for a newer NullController and stage it for the next restart (owner only).
     usage: /nullupdate

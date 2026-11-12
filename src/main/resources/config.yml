@@ -71,6 +71,9 @@ sweep-radius: 120
 # Auto-update: checks the latest GitHub release every six hours and stages a newer jar for the next restart.
 auto-update: true
 update-repo: Kiyan12121/NullController
+# Nether base: where stasis pulls roster players. Set in game with /nullrod base set.
+nether-base: ""
+
 # Read-only GitHub token, needed only while the repo is private. Leave empty for a public repo.
 update-token: ""
 

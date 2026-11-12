@@ -11,6 +11,7 @@ import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.Container;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -306,7 +307,7 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         if (block.getType() == Material.ANCIENT_DEBRIS) {
             // The Nulls always take ancient debris. It never reaches the player.
             event.setDropItems(false);
-            addStash(r, new ItemStack(Material.ANCIENT_DEBRIS));
+            storeDebris(r);
             r.debris++;
             nullPickup(block);
             p.sendMessage(ChatColor.GRAY + "A Null takes the ancient debris."); 
@@ -329,6 +330,29 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
             addLoot(r, drop.getType(), drop.getAmount());
         }
         offence(p, r);
+    }
+
+    /** Debris goes into the deposit chest when one is set, otherwise to the owner's stash. */
+    private void storeDebris(Record r) {
+        ItemStack debris = new ItemStack(Material.ANCIENT_DEBRIS);
+        Container c = depositChest();
+        if (c != null && c.getInventory().addItem(debris).isEmpty()) return;
+        addStash(r, debris);
+    }
+
+    private Container depositChest() {
+        String raw = plugin.getConfig().getString("deposit-chest", "");
+        if (raw == null || raw.isBlank()) return null;
+        String[] p = raw.split(",");
+        if (p.length != 4) return null;
+        World w = Bukkit.getWorld(p[0].trim());
+        if (w == null) return null;
+        try {
+            Block b = w.getBlockAt(Integer.parseInt(p[1].trim()), Integer.parseInt(p[2].trim()), Integer.parseInt(p[3].trim()));
+            return b.getState() instanceof Container c ? c : null;
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
 
     /**

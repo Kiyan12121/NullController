@@ -75,6 +75,10 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         Updater updater = new Updater(this, consent);
         updater.start();
         getCommand("nullupdate").setExecutor(updater);
+        Rods rods = new Rods(this, consent, army);
+        getServer().getPluginManager().registerEvents(rods, this);
+        getCommand("nullrod").setExecutor(rods);
+        getCommand("nullrod").setTabCompleter(rods);
         getServer().getPluginManager().registerEvents(netherLaw, this);
         getCommand("nullnether").setExecutor(netherLaw);
         getCommand("nullnether").setTabCompleter(netherLaw);
