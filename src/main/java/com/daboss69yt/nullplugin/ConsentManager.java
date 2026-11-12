@@ -89,7 +89,7 @@ public final class ConsentManager {
 
     /** The only gate for hunting, caging, ambushing, or any other player-targeting action. */
     public boolean canTarget(Player target) {
-        if (isOwner(target)) return false;
+        if (isTeam(target)) return false; // the owner and allies are never targeted, even if on the roster
         return consented.contains(target.getUniqueId());
     }
 
