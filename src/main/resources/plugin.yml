@@ -1,53 +1,53 @@
 name: NullController
-version: 5.2.0
+version: 5.3.0
 main: com.daboss69yt.nullplugin.NullControllerPlugin
 api-version: '26.3'
 author: daboss69yt
 depend: [Citizens]
-description: Null army controller with an opt-in consent roster.
+description: "Null army controller with an opt-in consent roster."
 
 commands:
   nullui:
-    description: Open the Null control panel (owner only).
-    usage: /nullui
+    description: "Open the Null control panel (owner only)."
+    usage: "/nullui"
     permission: nullcontroller.owner
   nullcmd:
-    description: Give the Nulls an order (owner only).
-    usage: /nullcmd <see in-game usage>
+    description: "Give the Nulls an order (owner only)."
+    usage: "/nullcmd <see in-game usage>"
     permission: nullcontroller.owner
-  bottestverify:
-    description: Accept the Null consent rules.
-    usage: /bottestverify
   nullnether:
-    description: Nether law: strikes, prisoners and the prison (owner only).
-    usage: /nullnether status | prison set | arrest|release|clear <player>
+    description: "Nether law: strikes, prisoners and the prison (owner only)."
+    usage: "/nullnether status | prison set | arrest|release|clear|collect <player>"
     permission: nullcontroller.owner
   nullrod:
-    description: Owner rods: ambush, stasis, TNT, and the Nether base (owner only).
-    usage: /nullrod ambush | stasis | tnt | base set
+    description: "Owner rods: ambush, stasis, TNT, summon, lightning and more (owner only)."
+    usage: "/nullrod <kind> | mob <TYPE> | base set"
     permission: nullcontroller.owner
   nullbase:
-    description: Nether base machines: turret, trap, alarm, drill, debris drill (owner only).
-    usage: /nullbase build|clear <turret|trap|alarm|drill|debrisdrill> | status
+    description: "Nether base machines: turret, trap, alarm, drill, debris drill, crafting line (owner only)."
+    usage: "/nullbase build|clear <kind> | status"
     permission: nullcontroller.owner
   nullalerts:
-    description: The last 30 alarms, escapes and finds (owner only).
-    usage: /nullalerts
+    description: "The last 30 alarms, escapes and finds (owner only)."
+    usage: "/nullalerts"
     permission: nullcontroller.owner
   nullspy:
-    description: Spy on a roster player: a hidden Null reports where they are and what they're doing. /nullspy stop recalls all (owner only).
-    usage: /nullspy <player> | stop
+    description: "Spy on a roster player: a hidden Null reports where they are (owner only)."
+    usage: "/nullspy <player> | stop"
     permission: nullcontroller.owner
   nullupdate:
-    description: Check GitHub for a newer NullController and stage it for the next restart (owner only).
-    usage: /nullupdate
+    description: "Check GitHub for a newer NullController and stage it for the next restart (owner only)."
+    usage: "/nullupdate"
     permission: nullcontroller.owner
+  bottestverify:
+    description: "Accept the Null consent rules."
+    usage: "/bottestverify"
   nullreload:
-    description: Reload the consent roster after editing config.yml (owner only).
-    usage: /nullreload
+    description: "Reload the consent roster after editing config.yml (owner only)."
+    usage: "/nullreload"
     permission: nullcontroller.owner
 
 permissions:
   nullcontroller.owner:
-    description: Restricted to the server owner.
+    description: "Restricted to the server owner."
     default: true
