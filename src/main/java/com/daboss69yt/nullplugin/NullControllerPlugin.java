@@ -193,6 +193,13 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             return true;
         }
         switch (args[0].toLowerCase()) {
+            case "summon" -> {
+                int requested = args.length > 1 ? parseInt(args[1], 5) : 5;
+                int queued = army.summonOffline(requested);
+                sender.sendMessage(queued < 0 ? "The army is regrouping. Try again shortly."
+                        : queued == 0 ? "Army cap reached. Raise max-nulls in config.yml."
+                        : "Summoning " + queued + " Nulls at the army's position.");
+            }
             case "dismiss" -> sender.sendMessage("Dismissed " + army.dismissOffline() + " Nulls.");
             case "guard" -> offlineMode(sender, NullArmy.Mode.GUARD);
             case "stay" -> offlineMode(sender, NullArmy.Mode.STAY);
@@ -218,7 +225,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     }
 
     private static final String OFFLINE_HELP = ChatColor.GRAY + "Owner is offline. Console orders: "
-            + "dismiss, guard, stay, mine, lumber, farm, status, ambush on|off|toggle";
+            + "summon [n], dismiss, guard, stay, mine, lumber, farm, status, ambush on|off|toggle";
 
     private void offlineMode(CommandSender sender, NullArmy.Mode mode) {
         sender.sendMessage(army.setModeOffline(mode)

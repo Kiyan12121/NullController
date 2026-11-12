@@ -199,6 +199,39 @@ public final class NullArmy {
         return "Nulls: " + nulls.size() + "/" + armyCap() + "  Mode: " + mode.name();
     }
 
+    /**
+     * Console-only summon with the owner offline. Spawns at the army's own spot, or at the
+     * world spawn if no Nulls exist yet. Returns the count queued, 0 if the cap is reached,
+     * or -1 while the army is regrouping.
+     */
+    public int summonOffline(int requested) {
+        if (System.currentTimeMillis() < cooldownUntil) return -1;
+        int toSpawn = Math.min(requested, armyCap() - nulls.size());
+        if (toSpawn <= 0) return 0;
+        Location anchor = offlineAnchor();
+        int batch = Math.max(1, plugin.getConfig().getInt("spawn-batch", 5));
+        new BukkitRunnable() {
+            int spawned = 0;
+
+            @Override
+            public void run() {
+                for (int i = 0; i < batch && spawned < toSpawn; i++, spawned++) {
+                    createNull(formationPointAt(anchor, nulls.size()), gearForMode(mode), true);
+                }
+                if (spawned >= toSpawn) cancel();
+            }
+        }.runTaskTimer(plugin, 0L, 2L);
+        return toSpawn;
+    }
+
+    private Location offlineAnchor() {
+        for (NPC npc : nulls) {
+            Location stored = npc.getStoredLocation();
+            if (stored != null) return stored.clone();
+        }
+        return Bukkit.getWorlds().get(0).getSpawnLocation();
+    }
+
     public void dismissAll(Player owner) {
         int count = nulls.size();
         removeAll();
@@ -601,9 +634,13 @@ public final class NullArmy {
     }
 
     private Location formationPoint(Player owner, int index) {
+        return formationPointAt(owner.getLocation(), index);
+    }
+
+    private Location formationPointAt(Location anchor, int index) {
         double angle = (2 * Math.PI / 8.0) * index;
         double radius = 3 + (index / 8) * 1.5;
-        return owner.getLocation().clone().add(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+        return anchor.clone().add(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
     }
 
     // ---------- Arm swinging ----------
