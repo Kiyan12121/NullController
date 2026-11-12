@@ -32,8 +32,8 @@ deposit-chest: ""
 # Forge block for FORGE DUTY. Set in game: look at it, run /nullcmd forge set.
 forge-block: ""
 
-# End ambush: two hunters for roster players entering The End. Toggle with /nullcmd ambush on|off.
-end-ambush: false
+# Nether ambush: two hunters for roster players entering the Nether. Toggle with /nullcmd ambush on|off.
+nether-ambush: false
 ambush-minutes: 3
 
 # Invasion: /nullcmd invade <player>
