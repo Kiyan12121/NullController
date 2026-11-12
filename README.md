@@ -1,5 +1,9 @@
 # NullController 4.4
 
+## One leader (4.4.1)
+- The army has exactly one leader, named `_______`. It's the only Null with the R rank.
+- If the leader falls, the title passes to the next Null in line. Hunters on a timer can't take it.
+
 ## The Metropolis (4.4)
 - `/nullcmd build metropolis` (End only): a grid of 25 districts, about 170,000 blocks across roughly 180 blocks. Each district has four glass skyscrapers of random height, joined by purpur streets. It's built at `metropolis-blocks-per-tick` (default 40), which takes a few minutes.
 - With you offline, the Nulls spread across the End in three rings, out to about 60 blocks from the city centre. The Enderman and chorus sweep reaches `sweep-radius` (default 120) blocks.

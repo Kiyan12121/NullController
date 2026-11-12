@@ -52,6 +52,8 @@ public final class NullArmy {
     enum WorkKind { MINE, LUMBER, FARM }
 
     static final int HARD_CAP = 200;
+    /** The one leader of the army. It keeps this name, and it passes to the next Null if the leader falls. */
+    static final String LEADER_NAME = "_______";
     private static final int PACK_SIZE = 9;
     private static final String NAME_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     private static final double TELEPORT_OVER = 64.0;
@@ -253,7 +255,7 @@ public final class NullArmy {
         long expires = System.currentTimeMillis() + minutes * 60_000L;
         for (int i = 0; i < count; i++) {
             Location loc = center.clone().add(rng.nextInt(5) - 2, 0, rng.nextInt(5) - 2);
-            NPC npc = createNull(loc, gearForMode(Mode.HUNT));
+            NPC npc = createNull(loc, gearForMode(Mode.HUNT), false);
             hunters.put(npc, new Hunt(target.getUniqueId(), expires));
         }
         return true;
@@ -304,11 +306,12 @@ public final class NullArmy {
     }
 
     private void spawnOne(Player owner) {
-        createNull(formationPoint(owner, nulls.size()), gearForMode(mode));
+        createNull(formationPoint(owner, nulls.size()), gearForMode(mode), true);
     }
 
-    private NPC createNull(Location loc, ItemStack gear) {
-        NPC npc = CitizensAPI.getNPCRegistry().createNPC(EntityType.PLAYER, randomName());
+    private NPC createNull(Location loc, ItemStack gear, boolean claimLeader) {
+        boolean becomesLeader = claimLeader && leader == null;
+        NPC npc = CitizensAPI.getNPCRegistry().createNPC(EntityType.PLAYER, becomesLeader ? LEADER_NAME : randomName());
         npc.setProtected(false); // Citizens NPCs are invulnerable by default; Nulls must be hittable
         npc.getOrAddTrait(GameModeTrait.class).setGameMode(GameMode.SURVIVAL); // creative players can't be hurt
         setHeldItem(npc, gear);
@@ -316,7 +319,7 @@ public final class NullArmy {
         npc.spawn(loc);
         applySkin(npc);
         nulls.add(npc);
-        if (leader == null) leader = npc;
+        if (becomesLeader) leader = npc;
         recomputeRanks();
         packs.put(npc, Bukkit.createInventory(null, PACK_SIZE, "Null Pack"));
         return npc;
@@ -417,6 +420,7 @@ public final class NullArmy {
         forgeCycles.remove(npc);
         if (npc == leader) {
             leader = nulls.isEmpty() ? null : nulls.get(0);
+            if (leader != null) leader.setName(LEADER_NAME); // the title passes on
         }
         recomputeRanks();
     }
@@ -445,11 +449,18 @@ public final class NullArmy {
     /** Commander ranks by seniority: R is the leader, A and I are officers, D are the rest. */
     private void recomputeRanks() {
         ranks.clear();
-        for (int i = 0; i < nulls.size(); i++) {
-            char rank = i == 0 ? 'R' : i <= 2 ? 'A' : i <= 6 ? 'I' : 'D';
-            Character promoted = promotions.get(nulls.get(i));
+        int officer = 0;
+        for (NPC npc : nulls) {
+            char rank;
+            if (npc == leader) {
+                rank = 'R';
+            } else {
+                rank = officer < 2 ? 'A' : officer < 6 ? 'I' : 'D';
+                officer++;
+            }
+            Character promoted = promotions.get(npc);
             if (promoted != null && rankLevel(promoted) > rankLevel(rank)) rank = promoted;
-            ranks.put(nulls.get(i), rank);
+            ranks.put(npc, rank);
         }
     }
 
