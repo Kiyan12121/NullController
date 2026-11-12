@@ -367,6 +367,28 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
         return true;
     }
 
+    /**
+     * The Strike, console-side: four TNT drop from the sky onto the spot. Works with the owner
+     * offline. Refuses if anyone who is not on the roster (the owner included) is too close.
+     */
+    public String strikeAt(Location land) {
+        World w = land.getWorld();
+        if (w == null) return "No world there.";
+        for (Player other : Bukkit.getOnlinePlayers()) {
+            if (other.getWorld() == w && !consent.canTarget(other)
+                    && other.getLocation().distance(land) <= TNT_SAFE_RADIUS) {
+                return "Refused. " + other.getName() + " is not on the roster and is too close to the impact.";
+            }
+        }
+        portalFlash(land);
+        for (int i = 0; i < 4; i++) {
+            Location drop = land.clone().add(rng.nextInt(7) - 3, 25, rng.nextInt(7) - 3);
+            Entity e = w.spawnEntity(drop, EntityType.TNT);
+            if (e instanceof TNTPrimed t) t.setFuseTicks(60);
+        }
+        return "TNT dropping at " + coords(land) + ".";
+    }
+
     private void portalFlash(Location loc) {
         World w = loc.getWorld();
         if (w == null) return;

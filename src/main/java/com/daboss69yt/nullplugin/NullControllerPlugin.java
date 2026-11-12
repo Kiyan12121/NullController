@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 
 public final class NullControllerPlugin extends JavaPlugin implements Listener, TabCompleter {
+    private Rods rods;
 
     private static final List<String> SUBCOMMANDS = List.of("summon", "dismiss", "recall", "guard", "follow",
             "hunt", "stay", "goto", "status", "ranks", "mine", "lumber", "farm", "forge", "chest", "patrol",
@@ -80,7 +81,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         Updater updater = new Updater(this, consent);
         updater.start();
         getCommand("nullupdate").setExecutor(updater);
-        Rods rods = new Rods(this, consent, army);
+        rods = new Rods(this, consent, army);
         getServer().getPluginManager().registerEvents(rods, this);
         getCommand("nullrod").setExecutor(rods);
         getCommand("nullrod").setTabCompleter(rods);
@@ -212,6 +213,16 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
                     }
                 }
             }
+            case "strike" -> {
+                if (args.length < 2) {
+                    sender.sendMessage("Usage: strike <roster player>");
+                } else {
+                    Player target = Bukkit.getPlayerExact(args[1]);
+                    if (target == null) sender.sendMessage("That player is not online.");
+                    else if (!consent.canTarget(target)) sender.sendMessage("Roster only. " + target.getName() + " is not on it.");
+                    else sender.sendMessage(rods.strikeAt(target.getLocation()));
+                }
+            }
             case "explore" -> offlineMode(sender, NullArmy.Mode.EXPLORE);
             case "nether" -> offlineMode(sender, NullArmy.Mode.NETHER);
             case "spy" -> {
@@ -251,7 +262,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     }
 
     private static final String OFFLINE_HELP = ChatColor.GRAY + "Owner is offline. Console orders: "
-            + "summon [n], build <kind> (Nether only), dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle";
+            + "summon [n], build <kind> (Nether only), strike <player>, dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle";
 
     private void offlineMode(CommandSender sender, NullArmy.Mode mode) {
         sender.sendMessage(army.setModeOffline(mode)
