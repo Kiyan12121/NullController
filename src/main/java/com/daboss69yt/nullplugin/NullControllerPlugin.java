@@ -42,7 +42,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
 
     private static final List<String> SUBCOMMANDS = List.of("summon", "dismiss", "recall", "guard", "follow",
             "hunt", "stay", "goto", "status", "ranks", "mine", "lumber", "farm", "forge", "chest", "patrol",
-            "build", "fortify", "cage", "invade", "ambush", "totem", "succession", "event", "remote", "team", "help");
+            "build", "fortify", "cage", "invade", "ambush", "totem", "succession", "event", "remote", "team", "orbital", "stabshot", "help");
     private static final List<String> BUILDS = List.of("citadel", "bridge", "watchtower", "barracks",
             "forgegate", "spire", "city", "metropolis", "collector", "smelter", "door", "melonfarm", "cancel", "undo", "preview");
     private static final List<String> EVENTS = List.of("forge", "capital", "end", "clash");
@@ -237,6 +237,8 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
                 }
             }
             case "team" -> teamOrder(sender, args);
+            case "orbital" -> targetedOrder(sender, args, army::orbitalNuke);
+            case "stabshot" -> targetedOrder(sender, args, army::stabShot);
             case "explore" -> offlineMode(sender, NullArmy.Mode.EXPLORE);
             case "nether" -> offlineMode(sender, NullArmy.Mode.NETHER);
             case "spy" -> {
@@ -276,7 +278,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     }
 
     private static final String OFFLINE_HELP = ChatColor.GRAY + "Owner is offline. Console orders: "
-            + "summon [n], build <kind> (Nether only), strike <player> (the Breach), mobcannon <player> [n], team list|add|remove <player>, dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle";
+            + "summon [n], build <kind> (Nether only), strike <player> (the Breach), orbital <player> (Nuke), stabshot <player>, mobcannon <player> [n], team list|add|remove <player>, dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle";
 
     private void offlineMode(CommandSender sender, NullArmy.Mode mode) {
         sender.sendMessage(army.setModeOffline(mode)
@@ -327,6 +329,8 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             case "invade" -> handleInvade(owner, args);
             case "ambush" -> handleAmbush(owner, args);
             case "team" -> teamOrder(owner, args);
+            case "orbital" -> targetedOrder(owner, args, army::orbitalNuke);
+            case "stabshot" -> targetedOrder(owner, args, army::stabShot);
             case "totem" -> totems.giveTotem(owner);
             case "cmd" -> owner.performCommand(String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length)));
             case "succession" -> totems.succession(owner);
@@ -455,6 +459,18 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             return null;
         }
         return target;
+    }
+
+    /** Runs a strike on a roster player named in args[1]. Works for the owner online or the console. */
+    private void targetedOrder(CommandSender sender, String[] args, java.util.function.Function<Player, String> action) {
+        if (args.length < 2) {
+            sender.sendMessage(ChatColor.GRAY + "Usage: " + args[0] + " <roster player>");
+            return;
+        }
+        Player target = Bukkit.getPlayerExact(args[1]);
+        if (target == null) sender.sendMessage(ChatColor.RED + "That player is not online.");
+        else if (!consent.canTarget(target)) sender.sendMessage(ChatColor.RED + "Roster only. " + target.getName() + " is not on it.");
+        else sender.sendMessage(action.apply(target));
     }
 
     /** team list | add <player> | remove <player>. Team members are never hit by Null weapons. */
