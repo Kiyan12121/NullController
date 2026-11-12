@@ -22,6 +22,7 @@ import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.TNTPrimed;
 import org.bukkit.entity.minecart.ExplosiveMinecart;
 import org.bukkit.entity.Monster;
 import org.bukkit.util.Vector;
