@@ -1,5 +1,6 @@
 package com.daboss69yt.nullplugin;
 
+import java.util.function.Consumer;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -149,9 +150,9 @@ public final class Builders {
         startBuild(owner, name, placements, true);
     }
 
-    private void startBuild(Player owner, String name, List<BuildQueue.Placement> placements, boolean remember) {
+    private void startBuild(Consumer<String> say, String name, List<BuildQueue.Placement> placements, boolean remember) {
         if (queue.isBusy()) {
-            owner.sendMessage(ChatColor.RED + "Already building " + queue.currentName() + ". Use /nullcmd build cancel first.");
+            say.accept(ChatColor.RED + "Already building " + queue.currentName() + ". Use /nullcmd build cancel first.");
             return;
         }
         army.startSwinging();
@@ -161,10 +162,10 @@ public final class Builders {
                 lastName = name;
                 lastPlacements = placements;
             }
-            owner.sendMessage(ChatColor.DARK_PURPLE + name + " complete.");
+            say.accept(ChatColor.DARK_PURPLE + name + " complete.");
         });
         if (started) {
-            owner.sendMessage(ChatColor.DARK_PURPLE + "Building " + name + " (" + placements.size() + " blocks).");
+            say.accept(ChatColor.DARK_PURPLE + "Building " + name + " (" + placements.size() + " blocks).");
         }
     }
 
@@ -199,6 +200,11 @@ public final class Builders {
     private Plan planFor(Player owner, String type) {
         Location base = owner.getLocation().clone();
         base.setY(Math.floor(base.getY()) - 1);
+        return planAt(base, facingDirection(owner), type);
+    }
+
+    /** Plans a build at base, facing the direction dir. Used by players and by the offline console. */
+    private Plan planAt(Location base, int[] dir, String type) {
         return switch (type) {
             case "citadel" -> new Plan("Void Citadel", Structures.voidCitadel(base));
             case "watchtower" -> new Plan("Watchtower", Structures.watchtower(base));
@@ -212,12 +218,35 @@ public final class Builders {
             case "door" -> new Plan("Iron Door Gate", Machines.ironDoor(base));
             case "melonfarm" -> new Plan("Melon Farm", Machines.melonFarm(base));
             case "bridge" -> {
-                int[] dir = facingDirection(owner);
                 Location start = base.clone().add(dir[0] * 2, 0, dir[1] * 2);
                 yield new Plan("Bridge", Structures.bridge(start, dir[0], dir[1], BRIDGE_LENGTH));
             }
             default -> null;
         };
+    }
+
+    /**
+     * Owner offline: builds at the given site, facing +X. Civilisation builds need the owner
+     * in The End, so they stay in game. Returns false if the build did not start.
+     */
+    public boolean buildOffline(Location site, String type, Consumer<String> say) {
+        if (queue.isBusy()) {
+            say.accept("Already building " + queue.currentName() + ".");
+            return false;
+        }
+        if (type.equals("city") || type.equals("metropolis")) {
+            say.accept("The Civilisation builds are set in game only.");
+            return false;
+        }
+        Location base = site.clone();
+        base.setY(Math.floor(base.getY()) - 1);
+        Plan plan = planAt(base, new int[]{1, 0}, type);
+        if (plan == null) {
+            say.accept("Unknown build: " + type + ". Options: citadel, bridge, watchtower, barracks, forgegate, spire, collector, smelter, door, melonfarm.");
+            return false;
+        }
+        startBuild(say, plan.name(), plan.placements(), true);
+        return true;
     }
 
     private void unknown(Player owner, String type) {

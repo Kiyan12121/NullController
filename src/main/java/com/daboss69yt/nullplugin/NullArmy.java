@@ -128,6 +128,7 @@ public final class NullArmy {
     private Location netherPortal;
     private Location netherSpot;
     private static final double DEFENCE_RANGE = 24.0;
+    private long nextReplenish;
     private long nextAlarm;
 
     private boolean swinging;
@@ -694,6 +695,7 @@ public final class NullArmy {
             tickSpies();
             tickOffline();
             tickDefence();
+            replenishOffline();
             return;
         }
         cycle++;
@@ -1683,6 +1685,20 @@ public final class NullArmy {
             hunters.put(npc, new Hunt(p.getUniqueId(), expires));
             plugin.alert("Defence: " + p.getName() + " came near the Nulls. A Null is hunting them for " + minutes + " min.");
         }
+    }
+
+    /** Where offline builds go: the deposit chest or the city centre, or null if neither is set. */
+    public Location offlineSite() {
+        return offlineCentre();
+    }
+
+    /** Owner offline: the Nulls summon replacements themselves, up to offline-army, so losses don't stick. */
+    private void replenishOffline() {
+        if (nulls.isEmpty() || System.currentTimeMillis() < nextReplenish) return;
+        nextReplenish = System.currentTimeMillis() + 60_000L;
+        int target = Math.min(plugin.getConfig().getInt("offline-army", 10), armyCap());
+        int missing = target - nulls.size();
+        if (missing > 0) summonOffline(missing);
     }
 
     private boolean alreadyHunting(Player p) {

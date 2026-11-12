@@ -102,3 +102,8 @@ prisoner-blocked-commands:
   - back
   - ec
   - enderchest
+
+# Offline: when you're away, the Nulls summon replacements themselves until this many are out.
+offline-army: 10
+# Offline defence: a roster player who comes near a Null is hunted by temporary Nulls for this long.
+defence-minutes: 3

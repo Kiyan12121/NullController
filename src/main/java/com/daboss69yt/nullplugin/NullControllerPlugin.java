@@ -200,6 +200,18 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
                         : queued == 0 ? "Army cap reached. Raise max-nulls in config.yml."
                         : "Summoning " + queued + " Nulls at the army's position.");
             }
+            case "build" -> {
+                if (args.length < 2) {
+                    sender.sendMessage("Usage: build <citadel|bridge|watchtower|barracks|forgegate|spire|collector|smelter|door|melonfarm>");
+                } else {
+                    Location site = army.offlineSite();
+                    if (site == null) {
+                        sender.sendMessage("Set a deposit chest or the city centre first, so the Nulls know where to build.");
+                    } else {
+                        builders.buildOffline(site, args[1].toLowerCase(), msg -> sender.sendMessage(msg));
+                    }
+                }
+            }
             case "explore" -> offlineMode(sender, NullArmy.Mode.EXPLORE);
             case "nether" -> offlineMode(sender, NullArmy.Mode.NETHER);
             case "spy" -> {
@@ -239,7 +251,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     }
 
     private static final String OFFLINE_HELP = ChatColor.GRAY + "Owner is offline. Console orders: "
-            + "summon [n], dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle";
+            + "summon [n], build <kind>, dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle";
 
     private void offlineMode(CommandSender sender, NullArmy.Mode mode) {
         sender.sendMessage(army.setModeOffline(mode)
