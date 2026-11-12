@@ -206,7 +206,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
                 } else {
                     Location site = army.offlineSite();
                     if (site == null) {
-                        sender.sendMessage("Set a deposit chest or the city centre first, so the Nulls know where to build.");
+                        sender.sendMessage("Run /nullcmd nether first. The Nulls build in the Nether only.");
                     } else {
                         builders.buildOffline(site, args[1].toLowerCase(), msg -> sender.sendMessage(msg));
                     }
@@ -251,7 +251,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     }
 
     private static final String OFFLINE_HELP = ChatColor.GRAY + "Owner is offline. Console orders: "
-            + "summon [n], build <kind>, dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle";
+            + "summon [n], build <kind> (Nether only), dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle";
 
     private void offlineMode(CommandSender sender, NullArmy.Mode mode) {
         sender.sendMessage(army.setModeOffline(mode)

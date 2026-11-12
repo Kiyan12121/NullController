@@ -238,6 +238,10 @@ public final class Builders {
             say.accept("The Civilisation builds are set in game only.");
             return false;
         }
+        if (site.getWorld() == null || site.getWorld().getEnvironment() != World.Environment.NETHER) {
+            say.accept("Offline builds happen in the Nether only.");
+            return false;
+        }
         Location base = site.clone();
         base.setY(Math.floor(base.getY()) - 1);
         Plan plan = planAt(base, new int[]{1, 0}, type);

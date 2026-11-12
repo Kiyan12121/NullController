@@ -1687,9 +1687,9 @@ public final class NullArmy {
         }
     }
 
-    /** Where offline builds go: the deposit chest or the city centre, or null if neither is set. */
+    /** Where offline builds go: the Nether landing spot, since the Nulls build in the Nether only. Null until a Nether run has started. */
     public Location offlineSite() {
-        return offlineCentre();
+        return netherSpot == null ? null : netherSpot.clone();
     }
 
     /** Owner offline: the Nulls summon replacements themselves, up to offline-army, so losses don't stick. */
