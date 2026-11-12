@@ -316,8 +316,8 @@ public final class NullArmy {
         return switch (k) {
             case MINE -> {
                 ItemStack pick = new ItemStack(Material.NETHERITE_PICKAXE);
-                pick.addUnsafeEnchantment(Enchantment.LOOT_BONUS_BLOCKS, 3);
-                pick.addUnsafeEnchantment(Enchantment.DIG_SPEED, 5);
+                pick.addUnsafeEnchantment(Enchantment.FORTUNE, 3);
+                pick.addUnsafeEnchantment(Enchantment.EFFICIENCY, 5);
                 yield pick;
             }
             case LUMBER -> new ItemStack(Material.NETHERITE_AXE);
@@ -495,7 +495,7 @@ public final class NullArmy {
             if (bestDist <= ATTACK_REACH) {
                 attack(npc, best);
             } else {
-                npc.getNavigator().setTarget(best);
+                npc.getNavigator().setTarget(best, true);
             }
         } else {
             followOwner(npc, owner, index, leash);
@@ -539,7 +539,7 @@ public final class NullArmy {
         if (bestDist <= ATTACK_REACH) {
             attack(npc, best);
         } else {
-            npc.getNavigator().setTarget(best);
+            npc.getNavigator().setTarget(best, true);
         }
         return true;
     }
