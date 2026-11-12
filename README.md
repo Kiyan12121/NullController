@@ -1,4 +1,10 @@
-# NullController 4.4
+# NullController 5.0
+
+## The Metropolis, rebuilt (5.0)
+- A six-by-six grid of districts, about 250 blocks across, which is bigger than most End islands.
+- Each district has a central tower core, 48 high, with a staircase and six furnished floors: beds, chests, bookshelves, a dining table with chairs, carpet and hanging lanterns. It also has four furnished corner towers.
+- Each district has its own facade (purpur, quartz, End stone or blackstone walls with matching glass). Streets have lamp poles at the crossings.
+- It's roughly half a million blocks. Build it with `metropolis-blocks-per-tick` at 80 or higher, and expect the server to load a lot of chunks while it does.
 
 ## One leader (4.4.1)
 - The army has exactly one leader, named `_______`. It's the only Null with the R rank.
