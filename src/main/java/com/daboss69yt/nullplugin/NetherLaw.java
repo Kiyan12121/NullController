@@ -1,9 +1,14 @@
 package com.daboss69yt.nullplugin;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Particle;
+import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.command.Command;
@@ -16,14 +21,22 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.inventory.InventoryOpenEvent;
+import org.bukkit.event.inventory.InventoryType;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerPickupItemEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
+import org.bukkit.util.Vector;
+import org.bukkit.command.Command;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,28 +46,33 @@ import java.util.UUID;
 
 /**
  * The Nether is owned. Roster players who take loot out of it get, in order:
- * strike 1 a warning, strike 2 told to come to the owner, strike 3 hunted down (and everything they took
- * from the Nether drops on death), strike 4 arrested and put to work in the prison. Escapees are hunted.
- * Only roster players are ever touched. Works while the owner is offline.
+ * strike 1 a warning on screen, strike 2 an escort trail back to the owner, strike 3 hunted down
+ * (everything taken from the Nether drops on death), strike 4 arrested: the Nulls take the whole
+ * inventory and armour, and the prisoner mines in the prison for the rest of the time. Ancient debris
+ * is always taken by the Nulls. Escape is leaving the Nether or the prison radius. Roster only.
  */
 public final class NetherLaw implements Listener, CommandExecutor, TabCompleter {
 
-    private static final List<String> SUBS = List.of("status", "prison", "arrest", "release", "clear");
+    private static final List<String> SUBS = List.of("status", "prison", "arrest", "release", "clear", "collect");
     private static final List<String> DEFAULT_BLOCKED = List.of(
             "home", "homes", "sethome", "tp", "tpa", "tpahere", "tpaccept", "tpo", "tpohere",
             "spawn", "warp", "back", "ec", "enderchest");
+    private static final List<InventoryType> CONTAINERS =
+            List.of(InventoryType.CHEST, InventoryType.BARREL, InventoryType.SHULKER_BOX);
 
     /** Per-player state. Only ever held for roster players. */
     static final class Record {
         String name = "";
         int strikes;
         boolean prisoner;
+        boolean stripped;
         long lastStrike;
         long lastRation;
         long lastEscape;
         int debris;
         int mined;
         final Map<String, Integer> ledger = new LinkedHashMap<>(); // loot taken from the Nether, by material
+        final List<ItemStack> stash = new ArrayList<>();           // taken by the Nulls, collected by the owner
     }
 
     private final NullControllerPlugin plugin;
@@ -62,6 +80,8 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
     private final NullArmy army;
     private final File file;
     private final Map<UUID, Record> records = new HashMap<>();
+    private final Map<UUID, Map<Material, Integer>> snapshots = new HashMap<>();
+    private final Map<UUID, BukkitTask> escorts = new HashMap<>();
 
     public NetherLaw(NullControllerPlugin plugin, ConsentManager consent, NullArmy army) {
         this.plugin = plugin;
@@ -72,7 +92,7 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         load();
     }
 
-    /** Starts the prison watch: rations, escape checks. Runs every two seconds. */
+    /** Starts the prison watch: rations and escape checks. */
     public void start() {
         new BukkitRunnable() {
             @Override
@@ -105,9 +125,9 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         return raw.isEmpty() ? DEFAULT_BLOCKED : raw;
     }
 
-    /** The prison centre set with /nullnether prison set, or null if none yet. */
-    private Location prisonCentre() {
-        String raw = plugin.getConfig().getString("prison", "");
+    /** A "world,x,y,z" location from config, or null if unset or unreadable. */
+    private Location configLoc(String key) {
+        String raw = plugin.getConfig().getString(key, "");
         if (raw == null || raw.isBlank()) return null;
         String[] p = raw.split(",");
         if (p.length != 4) return null;
@@ -121,7 +141,7 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
     }
 
     private boolean inPrison(Location loc) {
-        Location centre = prisonCentre();
+        Location centre = configLoc("prison");
         if (centre == null || loc.getWorld() == null || !loc.getWorld().equals(centre.getWorld())) return false;
         return loc.distance(centre) <= prisonRadius();
     }
@@ -147,6 +167,7 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
                 Record r = record(id, s.getString("name", ""));
                 r.strikes = s.getInt("strikes");
                 r.prisoner = s.getBoolean("prisoner");
+                r.stripped = s.getBoolean("stripped");
                 r.lastStrike = s.getLong("last-strike");
                 r.lastRation = s.getLong("last-ration");
                 r.lastEscape = s.getLong("last-escape");
@@ -154,6 +175,8 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
                 r.mined = s.getInt("mined");
                 var led = s.getConfigurationSection("ledger");
                 if (led != null) for (String m : led.getKeys(false)) r.ledger.put(m, led.getInt(m));
+                List<?> raw = s.getList("stash");
+                if (raw != null) for (Object o : raw) if (o instanceof ItemStack is) r.stash.add(is);
             } catch (IllegalArgumentException ignored) {
                 // skip malformed keys
             }
@@ -168,6 +191,7 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
             yml.set(base + ".name", r.name);
             yml.set(base + ".strikes", r.strikes);
             yml.set(base + ".prisoner", r.prisoner);
+            yml.set(base + ".stripped", r.stripped);
             yml.set(base + ".last-strike", r.lastStrike);
             yml.set(base + ".last-ration", r.lastRation);
             yml.set(base + ".last-escape", r.lastEscape);
@@ -176,8 +200,10 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
             for (Map.Entry<String, Integer> l : r.ledger.entrySet()) {
                 yml.set(base + ".ledger." + l.getKey(), l.getValue());
             }
+            yml.set(base + ".stash", r.stash);
         }
         try {
+            plugin.getDataFolder().mkdirs();
             yml.save(file);
         } catch (Exception ex) {
             plugin.getLogger().warning("Could not save nether.yml: " + ex.getMessage());
@@ -191,7 +217,18 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         r.ledger.merge(m.name(), amount, Integer::sum);
     }
 
-    /** Gives the ledger back out as stacks no bigger than a full stack. */
+    private void addStash(Record r, ItemStack s) {
+        ItemStack add = s.clone();
+        for (ItemStack ex : r.stash) {
+            if (ex.isSimilar(add) && ex.getAmount() + add.getAmount() <= ex.getMaxStackSize()) {
+                ex.setAmount(ex.getAmount() + add.getAmount());
+                return;
+            }
+        }
+        r.stash.add(add);
+    }
+
+    /** The ledger as stacks no bigger than a full stack. */
     private List<ItemStack> ledgerStacks(Record r) {
         List<ItemStack> out = new ArrayList<>();
         for (Map.Entry<String, Integer> e : r.ledger.entrySet()) {
@@ -211,6 +248,14 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         return consent.canTarget(p);
     }
 
+    private static Map<Material, Integer> count(Player p) {
+        Map<Material, Integer> m = new HashMap<>();
+        for (ItemStack s : p.getInventory().getContents()) {
+            if (s != null && !s.getType().isAir()) m.merge(s.getType(), s.getAmount(), Integer::sum);
+        }
+        return m;
+    }
+
     @EventHandler(ignoreCancelled = true)
     public void onPickup(PlayerPickupItemEvent event) {
         Player p = event.getPlayer();
@@ -223,6 +268,34 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         offence(p, r);
     }
 
+    /** Chests, barrels and shulker boxes in the Nether: whatever a roster player gains while one is open is loot. */
+    @EventHandler(ignoreCancelled = true)
+    public void onOpen(InventoryOpenEvent event) {
+        if (!(event.getPlayer() instanceof Player p)) return;
+        if (!isOffender(p) || p.getWorld().getEnvironment() != World.Environment.NETHER) return;
+        if (!CONTAINERS.contains(event.getInventory().getType())) return;
+        if (record(p.getUniqueId(), p.getName()).prisoner) return;
+        snapshots.put(p.getUniqueId(), count(p));
+    }
+
+    @EventHandler
+    public void onClose(InventoryCloseEvent event) {
+        if (!(event.getPlayer() instanceof Player p)) return;
+        Map<Material, Integer> before = snapshots.remove(p.getUniqueId());
+        if (before == null || !isOffender(p)) return;
+        Record r = record(p.getUniqueId(), p.getName());
+        Map<Material, Integer> after = count(p);
+        boolean gained = false;
+        for (Map.Entry<Material, Integer> e : after.entrySet()) {
+            int gain = e.getValue() - before.getOrDefault(e.getKey(), 0);
+            if (gain > 0) {
+                addLoot(r, e.getKey(), gain);
+                gained = true;
+            }
+        }
+        if (gained) offence(p, r);
+    }
+
     @EventHandler(ignoreCancelled = true)
     public void onBreak(BlockBreakEvent event) {
         Player p = event.getPlayer();
@@ -230,15 +303,24 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         Record r = record(p.getUniqueId(), p.getName());
         Block block = event.getBlock();
 
+        if (block.getType() == Material.ANCIENT_DEBRIS) {
+            // The Nulls always take ancient debris. It never reaches the player.
+            event.setDropItems(false);
+            addStash(r, new ItemStack(Material.ANCIENT_DEBRIS));
+            r.debris++;
+            p.sendMessage(ChatColor.GRAY + "A Null takes the ancient debris.");
+            notifyOwner(ChatColor.DARK_PURPLE + "[Nether] " + p.getName() + " dug up ancient debris ("
+                    + r.debris + " total). Stashed for you.");
+            if (!r.prisoner && p.getWorld().getEnvironment() == World.Environment.NETHER) offence(p, r);
+            save();
+            return;
+        }
+
         if (r.prisoner) {
-            if (!inPrison(block.getLocation())) return;
-            r.mined++;
-            if (block.getType() == Material.ANCIENT_DEBRIS) {
-                r.debris++;
-                notifyOwner(ChatColor.DARK_PURPLE + "[Prison] " + p.getName() + " found ancient debris ("
-                        + r.debris + " total).");
+            if (inPrison(block.getLocation())) {
+                r.mined++;
+                if (r.mined % 25 == 0) save();
             }
-            if (r.mined % 25 == 0) save();
             return;
         }
         if (p.getWorld().getEnvironment() != World.Environment.NETHER) return;
@@ -254,7 +336,7 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         Record r = records.get(p.getUniqueId());
         if (r == null || r.ledger.isEmpty()) return;
         // Without keep-inventory the whole inventory is already in the drops. With it, the loot
-        // is pulled out of the inventory and added to the drops, so every bit of it still falls.
+        // comes out of the inventory and goes into the drops, so every bit of it still falls.
         if (event.getKeepInventory()) {
             for (ItemStack s : ledgerStacks(r)) {
                 p.getInventory().removeItem(s.clone());
@@ -263,6 +345,35 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         }
         r.ledger.clear();
         save();
+    }
+
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        snapshots.remove(event.getPlayer().getUniqueId());
+        BukkitTask t = escorts.remove(event.getPlayer().getUniqueId());
+        if (t != null) t.cancel();
+    }
+
+    @EventHandler
+    public void onJoin(PlayerJoinEvent event) {
+        Player p = event.getPlayer();
+        Record r = records.get(p.getUniqueId());
+        if (r == null || !r.prisoner || r.stripped) return;
+        // Arrested while offline: the Nulls take the gear as soon as the prisoner logs in.
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (p.isOnline() && !r.stripped) {
+                strip(p, r);
+                warn(p, ChatColor.DARK_RED + "PRISONER", "Go to the prison and mine.");
+            }
+        }, 20L);
+    }
+
+    @EventHandler
+    public void onWorldChange(PlayerChangedWorldEvent event) {
+        Player p = event.getPlayer();
+        Record r = records.get(p.getUniqueId());
+        if (r == null || !r.prisoner || configLoc("prison") == null) return;
+        if (!inPrison(p.getLocation())) escape(p, r);
     }
 
     // ---------- Strikes ----------
@@ -276,42 +387,132 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         notifyOwner(ChatColor.DARK_PURPLE + "[Nether] " + p.getName() + " took loot. Strike " + r.strikes + ".");
 
         switch (r.strikes) {
-            case 1 -> p.sendMessage(ChatColor.RED + "This Nether is owned. Put back what you took. Warning 1 of 3.");
-            case 2 -> p.sendMessage(ChatColor.RED + "Come to me. The Commander is at " + commanderCoords() + ".");
+            case 1 -> warn(p, ChatColor.RED + "WARNING 1 OF 3",
+                    "This Nether is owned. Put back what you took.");
+            case 2 -> {
+                warn(p, ChatColor.RED + "COME TO ME", "Follow the red trail to the Commander.");
+                escort(p, commanderTarget());
+            }
             case 3 -> {
-                p.sendMessage(ChatColor.DARK_RED + "The Nulls are coming for you. Everything you took will drop.");
+                warn(p, ChatColor.DARK_RED + "THE NULLS ARE COMING", "Everything you took will drop.");
                 army.spawnHunters(owner(), p, p.getLocation(), 3, (int) huntMinutes());
             }
             default -> arrest(p, r);
         }
     }
 
-    /** Arrests a roster player. p may be null when the player is offline (owner command). */
+    /** Shows a title, plays the warning sound and writes the same line to chat. */
+    private void warn(Player p, String title, String subtitle) {
+        p.sendTitle(title, ChatColor.GRAY + subtitle, 10, 70, 20);
+        p.playSound(p.getLocation(), Sound.ENTITY_ENDER_DRAGON_GROWL, 0.6f, 1.2f);
+        p.sendMessage(title + ChatColor.GRAY + " " + subtitle);
+    }
+
+    /**
+     * Strike 2: a red particle trail runs from the player towards the Commander, with the distance
+     * shown on the action bar. It ends when they're within six blocks, or after three minutes.
+     */
+    private void escort(Player p, Location target) {
+        BukkitTask old = escorts.remove(p.getUniqueId());
+        if (old != null) old.cancel();
+        if (target == null) {
+            p.sendMessage(ChatColor.RED + "The Commander's location is unknown. Find the Commander.");
+            return;
+        }
+        final int[] elapsed = {0};
+        BukkitTask task = new BukkitRunnable() {
+            @Override
+            public void run() {
+                elapsed[0] += 10;
+                if (!p.isOnline()) {
+                    escorts.remove(p.getUniqueId());
+                    cancel();
+                    return;
+                }
+                if (elapsed[0] > 3600) {
+                    p.sendMessage(ChatColor.RED + "You did not come to me.");
+                    escorts.remove(p.getUniqueId());
+                    cancel();
+                    return;
+                }
+                Location here = p.getLocation();
+                if (here.getWorld() == null || !here.getWorld().equals(target.getWorld())) {
+                    p.sendActionBar(Component.text("Wrong world. Come to me.", NamedTextColor.RED));
+                    return;
+                }
+                double dist = here.distance(target);
+                if (dist <= 6) {
+                    p.sendActionBar(Component.text("Good. Stay close.", NamedTextColor.GREEN));
+                    escorts.remove(p.getUniqueId());
+                    cancel();
+                    return;
+                }
+                p.sendActionBar(Component.text("Come to me: " + (int) dist + " blocks", NamedTextColor.RED));
+                Vector dir = target.toVector().subtract(here.toVector()).normalize();
+                for (int i = 1; i <= 15; i++) {
+                    Location dot = here.clone().add(dir.clone().multiply(i * 2.0)).add(0, 1, 0);
+                    if (dot.distance(here) > dist) break;
+                    here.getWorld().spawnParticle(Particle.DUST, dot, 3, 0.1, 0.1, 0.1, 0,
+                            new Particle.DustOptions(Color.RED, 1.2f));
+                }
+            }
+        }.runTaskTimer(plugin, 0L, 10L);
+        escorts.put(p.getUniqueId(), task);
+    }
+
+    /** The Commander: the owner if they're online, otherwise the city centre, otherwise the prison. */
+    private Location commanderTarget() {
+        Player o = owner();
+        if (o != null) return o.getLocation();
+        Location city = configLoc("city-centre");
+        return city != null ? city : configLoc("prison");
+    }
+
+    /** Strips the prisoner: everything including armour goes to the stash, and a wooden pickaxe is issued. */
+    private void strip(Player p, Record r) {
+        for (ItemStack s : p.getInventory().getContents()) {
+            if (s != null && !s.getType().isAir()) addStash(r, s);
+        }
+        p.getInventory().clear();
+        p.getInventory().addItem(new ItemStack(Material.WOODEN_PICKAXE));
+        r.ledger.clear();
+        r.stripped = true;
+        save();
+    }
+
     private void arrest(Player p, Record r) {
-        Location prison = prisonCentre();
+        Location prison = configLoc("prison");
         if (prison == null) {
-            notifyOwner(ChatColor.RED + "[Nether] No prison set. Use /nullnether prison set.");
+            notifyOwner(ChatColor.RED + "[Nether] No prison set. Use /nullnether prison set in the Nether.");
             if (p != null) {
-                p.sendMessage(ChatColor.DARK_RED + "The prison is not built yet. The Nulls are coming instead.");
+                warn(p, ChatColor.DARK_RED + "NO PRISON YET", "The Nulls are coming instead.");
                 army.spawnHunters(owner(), p, p.getLocation(), 3, (int) huntMinutes());
             }
             return;
         }
         r.prisoner = true;
-        // Confiscated loot goes to the prison floor for the owner to collect.
-        for (ItemStack s : ledgerStacks(r)) {
-            prison.getWorld().dropItemNaturally(prison, s);
-        }
-        r.ledger.clear();
+        r.stripped = false;
         save();
         if (p != null) {
-            p.sendMessage(ChatColor.DARK_RED + "You are a prisoner. Report to the prison at "
-                    + coords(prison) + " and mine. Everything you find is logged.");
+            strip(p, r);
+            warn(p, ChatColor.DARK_RED + "PRISONER", "Go to the prison at " + coords(prison) + " and mine.");
         }
-        notifyOwner(ChatColor.DARK_PURPLE + "[Prison] " + p.getName() + " is now a prisoner.");
+        notifyOwner(ChatColor.DARK_PURPLE + "[Prison] " + (p == null ? "A roster player" : p.getName())
+                + " is now a prisoner. Gear stashed.");
     }
 
-    /** Owner command: arrest, release, clear. Every roster player's state lives in nether.yml. */
+    private void escape(Player p, Record r) {
+        long now = System.currentTimeMillis();
+        if (now - r.lastEscape < 60_000L) return;
+        r.lastEscape = now;
+        warn(p, ChatColor.DARK_RED + "ESCAPE", "The Nulls are on you.");
+        notifyOwner(ChatColor.DARK_RED + "[Prison] " + p.getName() + " escaped. Hunters sent.");
+        army.spawnHunters(owner(), p, p.getLocation(), 3, (int) huntMinutes());
+        save();
+    }
+
+    // ---------- Commands ----------
+
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player owner) || !consent.isOwner(owner)) {
@@ -327,12 +528,13 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
                     plugin.getConfig().set("prison", l.getWorld().getName() + "," + l.getBlockX() + ","
                             + l.getBlockY() + "," + l.getBlockZ());
                     plugin.saveConfig();
-                    owner.sendMessage(ChatColor.DARK_PURPLE + "Prison set at " + coords(l) + ".");
+                    owner.sendMessage(ChatColor.DARK_PURPLE + "Prison set at " + coords(l) + " in "
+                            + l.getWorld().getName() + ".");
                 } else {
                     owner.sendMessage(ChatColor.GRAY + "Usage: /nullnether prison set");
                 }
             }
-            case "arrest", "release", "clear" -> {
+            case "arrest", "release", "clear", "collect" -> {
                 if (args.length < 2) {
                     owner.sendMessage(ChatColor.GRAY + "Usage: /nullnether " + sub + " <player>");
                     return true;
@@ -343,29 +545,53 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
                     return true;
                 }
                 Record r = record(id, args[1]);
-                if (sub.equals("arrest")) {
-                    arrest(Bukkit.getPlayer(id), r);
-                    owner.sendMessage(ChatColor.DARK_PURPLE + args[1] + " arrested.");
-                } else if (sub.equals("release")) {
-                    r.prisoner = false;
-                    r.strikes = 0;
-                    save();
-                    owner.sendMessage(ChatColor.DARK_PURPLE + args[1] + " released. Clean slate.");
-                } else {
-                    r.strikes = 0;
-                    r.ledger.clear();
-                    save();
-                    owner.sendMessage(ChatColor.DARK_PURPLE + args[1] + " cleared.");
+                switch (sub) {
+                    case "arrest" -> {
+                        arrest(Bukkit.getPlayer(id), r);
+                        owner.sendMessage(ChatColor.DARK_PURPLE + args[1] + " arrested.");
+                    }
+                    case "release" -> {
+                        r.prisoner = false;
+                        r.strikes = 0;
+                        save();
+                        owner.sendMessage(ChatColor.DARK_PURPLE + args[1] + " released. Clean slate. Gear is still stashed.");
+                    }
+                    case "collect" -> collect(owner, r, args[1]);
+                    default -> {
+                        r.strikes = 0;
+                        r.ledger.clear();
+                        save();
+                        owner.sendMessage(ChatColor.DARK_PURPLE + args[1] + " cleared.");
+                    }
                 }
             }
-            default -> owner.sendMessage(ChatColor.GRAY + "Usage: /nullnether status | prison set | arrest|release|clear <player>");
+            default -> owner.sendMessage(ChatColor.GRAY + "Usage: /nullnether status | prison set | arrest|release|clear|collect <player>");
         }
         return true;
     }
 
+    /** Hands the stash to the owner. Anything that doesn't fit drops at the owner's feet. */
+    private void collect(Player owner, Record r, String name) {
+        if (r.stash.isEmpty()) {
+            owner.sendMessage(ChatColor.GRAY + "Nothing stashed for " + name + ".");
+            return;
+        }
+        int items = 0;
+        for (ItemStack s : r.stash) {
+            items += s.getAmount();
+            for (ItemStack left : owner.getInventory().addItem(s.clone()).values()) {
+                owner.getWorld().dropItemNaturally(owner.getLocation(), left);
+            }
+        }
+        r.stash.clear();
+        save();
+        owner.sendMessage(ChatColor.DARK_PURPLE + "Collected " + items + " items from " + name + ".");
+    }
+
     private void status(Player owner) {
         owner.sendMessage(ChatColor.DARK_PURPLE + "--- Nether law ---");
-        owner.sendMessage(ChatColor.GRAY + "Prison: " + (prisonCentre() == null ? "not set" : coords(prisonCentre())));
+        Location prison = configLoc("prison");
+        owner.sendMessage(ChatColor.GRAY + "Prison: " + (prison == null ? "not set" : coords(prison)));
         if (records.isEmpty()) {
             owner.sendMessage(ChatColor.GRAY + "No roster player has been logged yet.");
             return;
@@ -377,6 +603,7 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
                     + ChatColor.GRAY + " strikes " + r.strikes
                     + (r.prisoner ? ChatColor.DARK_RED + " PRISONER" : "")
                     + ChatColor.GRAY + " loot held " + loot
+                    + " stashed " + r.stash.size() + " stacks"
                     + (r.prisoner ? " mined " + r.mined + " debris " + r.debris : ""));
         }
     }
@@ -384,8 +611,7 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) return SUBS.stream().filter(s -> s.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
-        if (args.length == 2 && (args[0].equalsIgnoreCase("arrest") || args[0].equalsIgnoreCase("release")
-                || args[0].equalsIgnoreCase("clear"))) {
+        if (args.length == 2 && !args[0].equalsIgnoreCase("prison") && !args[0].equalsIgnoreCase("status")) {
             return Bukkit.getOnlinePlayers().stream().map(Player::getName).toList();
         }
         return List.of();
@@ -405,13 +631,12 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         }
     }
 
-    /** Rations every few minutes, and hunts any prisoner who has left the prison. */
+    /** Rations every few minutes, and escape checks for prisoners who are online. */
     private void watchPrisoners() {
-        Location prison = prisonCentre();
         long now = System.currentTimeMillis();
         for (Map.Entry<UUID, Record> e : records.entrySet()) {
             Record r = e.getValue();
-            if (!r.prisoner) continue;
+            if (!r.prisoner || !r.stripped) continue;
             Player p = Bukkit.getPlayer(e.getKey());
             if (p == null) continue;
 
@@ -419,22 +644,13 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
                 r.lastRation = now;
                 p.setFoodLevel(20);
                 p.setSaturation(6f);
-                for (ItemStack leftover : p.getInventory().addItem(new ItemStack(Material.BREAD, 4)).values()) {
-                    p.getWorld().dropItemNaturally(p.getLocation(), leftover);
+                for (ItemStack left : p.getInventory().addItem(new ItemStack(Material.BREAD, 4)).values()) {
+                    p.getWorld().dropItemNaturally(p.getLocation(), left);
                 }
                 p.sendMessage(ChatColor.GRAY + "Rations issued.");
                 save();
             }
-
-            if (prison == null) continue;
-            boolean outside = !inPrison(p.getLocation());
-            if (outside && now - r.lastEscape >= 60_000L) {
-                r.lastEscape = now;
-                p.sendMessage(ChatColor.DARK_RED + "You left the prison. The Nulls are on you.");
-                notifyOwner(ChatColor.DARK_RED + "[Prison] " + p.getName() + " escaped. Hunters sent.");
-                army.spawnHunters(owner(), p, p.getLocation(), 3, (int) huntMinutes());
-                save();
-            }
+            if (configLoc("prison") != null && !inPrison(p.getLocation())) escape(p, r);
         }
     }
 
@@ -448,13 +664,6 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         Player o = owner();
         if (o != null) o.sendMessage(message);
         plugin.getLogger().info(ChatColor.stripColor(message));
-    }
-
-    private String commanderCoords() {
-        Player o = owner();
-        if (o != null) return coords(o.getLocation());
-        Location c = prisonCentre();
-        return c == null ? "unknown" : coords(c);
     }
 
     private static String coords(Location l) {

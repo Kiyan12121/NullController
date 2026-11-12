@@ -80,7 +80,7 @@ public final class City {
         return alongX || alongZ;
     }
 
-    /** Round platform: purpur rim, white ringed road, lit purple spokes, End stone elsewhere. */
+    /** Round platform: purpur rim, white ringed road, lit purple spokes, Nether brick elsewhere. */
     private void platform() {
         int r2 = PLATFORM_R * PLATFORM_R;
         for (int x = -PLATFORM_R; x <= PLATFORM_R; x++) {
@@ -89,13 +89,13 @@ public final class City {
                 if (d2 > r2) continue;
                 Material m;
                 if (d2 >= (PLATFORM_R - 1) * (PLATFORM_R - 1)) {
-                    m = Material.PURPUR_PILLAR;
+                    m = Material.CHISELED_NETHER_BRICKS;
                 } else if (d2 >= RING_IN * RING_IN && d2 <= RING_OUT * RING_OUT) {
-                    m = Material.WHITE_CONCRETE;
+                    m = Material.GILDED_BLACKSTONE;
                 } else if (onSpoke(x, z)) {
-                    m = (Math.abs(x) + Math.abs(z)) % 6 == 0 ? Material.SEA_LANTERN : Material.PURPLE_CONCRETE;
+                    m = (Math.abs(x) + Math.abs(z)) % 6 == 0 ? Material.SHROOMLIGHT : Material.PURPLE_CONCRETE;
                 } else {
-                    m = Material.END_STONE_BRICKS;
+                    m = Material.POLISHED_BLACKSTONE_BRICKS;
                 }
                 put(x, 0, z, m);
             }
@@ -111,11 +111,11 @@ public final class City {
                     if (!wall) continue;
                     boolean gate = Math.abs(x) <= 1 && y <= 3 && Math.abs(z) == CASTLE;
                     if (gate) continue;
-                    put(x, y, z, Material.END_STONE_BRICKS);
+                    put(x, y, z, Material.POLISHED_BLACKSTONE_BRICKS);
                 }
             }
         }
-        fill(-CASTLE, CASTLE_H, -CASTLE, CASTLE, CASTLE_H, CASTLE, Material.PURPUR_BLOCK);
+        fill(-CASTLE, CASTLE_H, -CASTLE, CASTLE, CASTLE_H, CASTLE, Material.NETHER_BRICKS);
         furnishHall();
     }
 
@@ -123,7 +123,7 @@ public final class City {
         // Carpet leads to the throne at the north end.
         for (int x = -2; x <= 2; x++)
             for (int z = -6; z <= -4; z++)
-                put(x, 1, z, Material.PURPLE_CARPET);
+                put(x, 1, z, Material.RED_CARPET);
         // Throne with gold flanks.
         put(0, 1, -7, Material.POLISHED_BLACKSTONE_BRICKS);
         put(0, 2, -8, Material.CHISELED_POLISHED_BLACKSTONE);
@@ -151,7 +151,7 @@ public final class City {
         // Sea lanterns on the ceiling.
         for (int x = -6; x <= 6; x += 6)
             for (int z = -6; z <= 6; z += 6)
-                put(x, CASTLE_H - 1, z, Material.SEA_LANTERN);
+                put(x, CASTLE_H - 1, z, Material.SHROOMLIGHT);
     }
 
     /** Four corner keeps, each a hollow tower with a solid cap. */
@@ -162,12 +162,12 @@ public final class City {
                     for (int x = sx - 1; x <= sx + 1; x++) {
                         for (int z = sz - 1; z <= sz + 1; z++) {
                             if (Math.abs(x - sx) == 1 || Math.abs(z - sz) == 1) {
-                                put(x, y, z, Material.END_STONE_BRICKS);
+                                put(x, y, z, Material.POLISHED_BLACKSTONE_BRICKS);
                             }
                         }
                     }
                 }
-                fill(sx - 1, KEEP_H + 1, sz - 1, sx + 1, KEEP_H + 1, sz + 1, Material.PURPUR_PILLAR);
+                fill(sx - 1, KEEP_H + 1, sz - 1, sx + 1, KEEP_H + 1, sz + 1, Material.CHISELED_NETHER_BRICKS);
             }
         }
     }
@@ -175,7 +175,7 @@ public final class City {
     /** The spire rising from the castle roof, with an End Rod on top. */
     private void spire() {
         fill(-1, CASTLE_H + 1, -1, 1, SPIRE_H, 1, Material.OBSIDIAN);
-        put(0, SPIRE_H + 1, 0, Material.END_ROD);
+        put(0, SPIRE_H + 1, 0, Material.SOUL_LANTERN);
     }
 
     /** Eight glass skyscrapers in a ring, with floors every six levels. */
@@ -190,14 +190,14 @@ public final class City {
                     for (int z = cz - 2; z <= cz + 1; z++) {
                         boolean edge = x == cx - 2 || x == cx + 1 || z == cz - 2 || z == cz + 1;
                         if (edge) {
-                            put(x, y, z, Material.PURPLE_STAINED_GLASS);
+                            put(x, y, z, Material.RED_STAINED_GLASS);
                         } else if (y % 6 == 0) {
-                            put(x, y, z, Material.WHITE_CONCRETE);
+                            put(x, y, z, Material.GILDED_BLACKSTONE);
                         }
                     }
                 }
             }
-            fill(cx - 2, height + 1, cz - 2, cx + 1, height + 1, cz + 1, Material.WHITE_CONCRETE);
+            fill(cx - 2, height + 1, cz - 2, cx + 1, height + 1, cz + 1, Material.GILDED_BLACKSTONE);
         }
     }
 
@@ -212,11 +212,11 @@ public final class City {
                             boolean wall = Math.abs(x - hx) == 2 || Math.abs(z - hz) == 2;
                             if (!wall) continue;
                             if (x == doorX && z == hz && y <= 2) continue;
-                            put(x, y, z, Material.END_STONE_BRICKS);
+                            put(x, y, z, Material.POLISHED_BLACKSTONE_BRICKS);
                         }
                     }
                 }
-                fill(hx - 2, 5, hz - 2, hx + 2, 5, hz + 2, Material.PURPUR_BLOCK);
+                fill(hx - 2, 5, hz - 2, hx + 2, 5, hz + 2, Material.NETHER_BRICKS);
                 put(hx, 1, hz, Material.CRAFTING_TABLE);
                 put(hx - 1, 1, hz - 1, Material.CHEST);
                 put(hx + 1, 1, hz + 1, Material.BARREL);
@@ -233,7 +233,7 @@ public final class City {
             for (int y = 1; y <= DOME_R; y++) {
                 for (int z = -DOME_R; z <= DOME_R; z++) {
                     int d2 = x * x + y * y + z * z;
-                    if (d2 <= outer && d2 >= inner) put(x, y, z, Material.WHITE_STAINED_GLASS);
+                    if (d2 <= outer && d2 >= inner) put(x, y, z, Material.TINTED_GLASS);
                 }
             }
         }

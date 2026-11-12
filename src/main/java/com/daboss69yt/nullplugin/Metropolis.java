@@ -31,24 +31,24 @@ public final class Metropolis {
     private static final int TOWER = 6;
 
     private static final String[] WALLS = {
-            "minecraft:purpur_block",
-            "minecraft:quartz_block",
-            "minecraft:end_stone_bricks",
+            "minecraft:nether_bricks",
+            "minecraft:basalt",
+            "minecraft:red_nether_bricks",
             "minecraft:polished_blackstone_bricks"
     };
     private static final String[] GLASS = {
-            "minecraft:purple_stained_glass",
-            "minecraft:light_blue_stained_glass",
-            "minecraft:white_stained_glass",
-            "minecraft:magenta_stained_glass"
+            "minecraft:red_stained_glass",
+            "minecraft:orange_stained_glass",
+            "minecraft:black_stained_glass",
+            "minecraft:tinted_glass"
     };
-    private static final String YARD_BLOCK = "minecraft:end_stone_bricks";
-    private static final String FLOOR_BLOCK = "minecraft:smooth_quartz";
-    private static final String TRIM = "minecraft:white_concrete";
-    private static final String STREET = "minecraft:purpur_block";
-    private static final String LAMP = "minecraft:sea_lantern";
-    private static final String POLE = "minecraft:purpur_pillar";
-    private static final String ROD = "minecraft:end_rod";
+    private static final String YARD_BLOCK = "minecraft:blackstone";
+    private static final String FLOOR_BLOCK = "minecraft:polished_basalt";
+    private static final String TRIM = "minecraft:gilded_blackstone";
+    private static final String STREET = "minecraft:nether_bricks";
+    private static final String LAMP = "minecraft:shroomlight";
+    private static final String POLE = "minecraft:chiseled_nether_bricks";
+    private static final String ROD = "minecraft:soul_lantern";
 
     private final World world;
     private final int bx, by, bz;
@@ -196,7 +196,7 @@ public final class Metropolis {
             put(x, y, z0 + 9, "minecraft:oak_stairs[facing=north]");
         }
         for (int x = x0 + 6; x <= x0 + 9; x++) {
-            put(x, y, z0 + 13, "minecraft:purple_carpet");
+            put(x, y, z0 + 13, "minecraft:red_carpet");
         }
         int ceiling = f + FLOOR_H - 1;
         put(x0 + 6, ceiling, z0 + 6, "minecraft:lantern[hanging=true]");
