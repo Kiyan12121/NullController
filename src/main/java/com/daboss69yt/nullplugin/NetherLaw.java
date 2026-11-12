@@ -308,7 +308,8 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
             event.setDropItems(false);
             addStash(r, new ItemStack(Material.ANCIENT_DEBRIS));
             r.debris++;
-            p.sendMessage(ChatColor.GRAY + "A Null takes the ancient debris.");
+            nullPickup(block);
+            p.sendMessage(ChatColor.GRAY + "A Null takes the ancient debris."); 
             notifyOwner(ChatColor.DARK_PURPLE + "[Nether] " + p.getName() + " dug up ancient debris ("
                     + r.debris + " total). Stashed for you.");
             if (!r.prisoner && p.getWorld().getEnvironment() == World.Environment.NETHER) offence(p, r);
@@ -328,6 +329,23 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
             addLoot(r, drop.getType(), drop.getAmount());
         }
         offence(p, r);
+    }
+
+    /**
+     * The debris drops where it was dug, with a pickup delay long enough that no player can grab it.
+     * A Null then collects it: the item vanishes with a pickup flash and sound.
+     */
+    private void nullPickup(Block block) {
+        org.bukkit.Location spot = block.getLocation().add(0.5, 0.5, 0.5);
+        org.bukkit.entity.Item item = block.getWorld().dropItem(spot, new ItemStack(Material.ANCIENT_DEBRIS));
+        item.setPickupDelay(Integer.MAX_VALUE);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (item.isValid()) {
+                item.remove();
+                spot.getWorld().spawnParticle(Particle.ENCHANT, spot, 30, 0.4, 0.4, 0.4, 0.5);
+                spot.getWorld().playSound(spot, Sound.ENTITY_ITEM_PICKUP, 1f, 0.8f);
+            }
+        }, 30L);
     }
 
     @EventHandler
@@ -474,7 +492,7 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
             if (s != null && !s.getType().isAir()) addStash(r, s);
         }
         p.getInventory().clear();
-        p.getInventory().addItem(new ItemStack(Material.WOODEN_PICKAXE));
+        p.getInventory().addItem(new ItemStack(Material.DIAMOND_PICKAXE)); // the lowest tool that mines ancient debris
         r.ledger.clear();
         r.stripped = true;
         save();

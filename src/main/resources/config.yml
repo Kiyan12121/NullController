@@ -71,6 +71,8 @@ sweep-radius: 120
 # Auto-update: checks the latest GitHub release every six hours and stages a newer jar for the next restart.
 auto-update: true
 update-repo: Kiyan12121/NullController
+# Read-only GitHub token, needed only while the repo is private. Leave empty for a public repo.
+update-token: ""
 
 # Nether law. The Nether is owned. Roster players only. Strikes reset after a visit's warning cooldown.
 nether-warning-minutes: 10

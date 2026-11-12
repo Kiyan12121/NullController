@@ -46,7 +46,7 @@ public final class Updater implements CommandExecutor {
     public void check(boolean manual) {
         try {
             String repo = plugin.getConfig().getString("update-repo", "Kiyan12121/NullController");
-            String json = get("https://api.github.com/repos/" + repo + "/releases/latest");
+            String json = get("https://api.github.com/repos/" + repo + "/releases/latest", token());
             Matcher tag = TAG.matcher(json);
             Matcher jar = JAR.matcher(json);
             if (!tag.find() || !jar.find()) {
@@ -63,7 +63,7 @@ public final class Updater implements CommandExecutor {
             File dir = new File(plugin.getDataFolder().getParentFile(), "update");
             dir.mkdirs();
             File part = new File(dir, "NullController.jar.part");
-            download(jar.group(1), part);
+            download(jar.group(1), part, token());
             if (!isNullControllerJar(part)) {
                 Files.deleteIfExists(part.toPath());
                 say(manual, ChatColor.RED + "Update " + remote + " was rejected: not a NullController jar.");
@@ -103,12 +103,22 @@ public final class Updater implements CommandExecutor {
         });
     }
 
-    private static String get(String url) throws Exception {
+    /** Read-only token for a private repo. Empty for a public one. */
+    private String token() {
+        return plugin.getConfig().getString("update-token", "");
+    }
+
+    private static void auth(HttpURLConnection c, String token) {
+        if (token != null && !token.isBlank()) c.setRequestProperty("Authorization", "Bearer " + token.trim());
+    }
+
+    private static String get(String url, String token) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         c.setConnectTimeout(15_000);
         c.setReadTimeout(15_000);
         c.setRequestProperty("User-Agent", "NullController-Updater");
         c.setRequestProperty("Accept", "application/vnd.github+json");
+        auth(c, token);
         try (InputStream in = c.getInputStream()) {
             return new String(in.readAllBytes(), StandardCharsets.UTF_8);
         } finally {
@@ -116,12 +126,13 @@ public final class Updater implements CommandExecutor {
         }
     }
 
-    private static void download(String url, File target) throws Exception {
+    private static void download(String url, File target, String token) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         c.setConnectTimeout(15_000);
         c.setReadTimeout(60_000);
         c.setInstanceFollowRedirects(true);
         c.setRequestProperty("User-Agent", "NullController-Updater");
+        auth(c, token);
         try (InputStream in = c.getInputStream()) {
             Files.copy(in, target.toPath(), StandardCopyOption.REPLACE_EXISTING);
         } finally {
