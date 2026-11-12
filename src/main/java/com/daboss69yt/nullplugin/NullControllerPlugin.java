@@ -2,6 +2,7 @@ package com.daboss69yt.nullplugin;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import net.citizensnpcs.api.event.NPCDeathEvent;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -223,6 +224,17 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
                     else sender.sendMessage(army.strike(target));
                 }
             }
+            case "mobcannon" -> {
+                if (args.length < 2) {
+                    sender.sendMessage("Usage: mobcannon <roster player> [count]");
+                } else {
+                    Player target = Bukkit.getPlayerExact(args[1]);
+                    int count = args.length > 2 ? parseInt(args[2], 30) : 30;
+                    if (target == null) sender.sendMessage("That player is not online.");
+                    else if (!consent.canTarget(target)) sender.sendMessage("Roster only. " + target.getName() + " is not on it.");
+                    else sender.sendMessage(army.mobCannon(target, count));
+                }
+            }
             case "explore" -> offlineMode(sender, NullArmy.Mode.EXPLORE);
             case "nether" -> offlineMode(sender, NullArmy.Mode.NETHER);
             case "spy" -> {
@@ -262,7 +274,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     }
 
     private static final String OFFLINE_HELP = ChatColor.GRAY + "Owner is offline. Console orders: "
-            + "summon [n], build <kind> (Nether only), strike <player> (the Breach), dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle";
+            + "summon [n], build <kind> (Nether only), strike <player> (the Breach), mobcannon <player> [n], dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle";
 
     private void offlineMode(CommandSender sender, NullArmy.Mode mode) {
         sender.sendMessage(army.setModeOffline(mode)
@@ -790,6 +802,13 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         int minutes = getConfig().getInt("ambush-minutes", 3);
         army.spawnHunters(owner, p, p.getLocation(), 2, minutes);
         owner.sendMessage(ChatColor.DARK_PURPLE + "Nether ambush sent after " + p.getName() + ".");
+    }
+
+    // ---------- Totem revival ----------
+
+    @EventHandler
+    public void onNullDeath(NPCDeathEvent event) {
+        if (army.owns(event.getNPC())) army.scheduleRevival(event.getNPC());
     }
 
     // ---------- Totem right-click ----------

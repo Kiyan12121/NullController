@@ -129,8 +129,10 @@ public final class NullArmy {
     private Location netherPortal;
     private Location netherSpot;
     private static final double DEFENCE_RANGE = 24.0;
-    private static final double STRIKE_SAFE_RADIUS = 8.0;
+    private static final double STRIKE_SAFE_RADIUS = 22.0;
     private static final int STRIKE_SQUAD = 4;
+    private static final int BREACH_PORTALS = 20;
+    private static final double BREACH_RADIUS = 16.0;
     private long nextReplenish;
     private long nextAlarm;
 
@@ -1719,7 +1721,12 @@ public final class NullArmy {
         int bx = tl.getBlockX();
         int bz = tl.getBlockZ();
         int skyY = Math.min(tl.getBlockY() + 24, 300);
-        int[][] portalAt = {{0, 0}, {6, 0}, {-6, 0}};
+        int[][] portalAt = new int[BREACH_PORTALS][2];
+        for (int i = 0; i < BREACH_PORTALS; i++) {
+            double a = 2 * Math.PI * i / BREACH_PORTALS;
+            portalAt[i][0] = (int) Math.round(Math.cos(a) * BREACH_RADIUS);
+            portalAt[i][1] = (int) Math.round(Math.sin(a) * BREACH_RADIUS);
+        }
         Location roof = new Location(nether, Math.floorDiv(bx, 8) + 0.5, 124, Math.floorDiv(bz, 8) + 0.5);
 
         // Stage 1: the squad crosses the Nether roof above the target.
@@ -1745,7 +1752,7 @@ public final class NullArmy {
         // Stage 3: TNT minecarts drop through all three portals.
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             for (int[] p : portalAt) {
-                for (int k = 0; k < 2; k++) {
+                for (int k = 0; k < 1; k++) {
                     Location drop = new Location(over, bx + p[0] + 1.0 + wander.nextInt(3) - 1, skyY,
                             bz + p[1] + 0.5);
                     Entity e = over.spawnEntity(drop, EntityType.TNT_MINECART);
@@ -1754,6 +1761,52 @@ public final class NullArmy {
             }
         }, 60L);
         return "The Strike is coming down on " + target.getName() + ".";
+    }
+
+    /** Mob Cannon: a swarm of hostile mobs drops in a ring around the target. Roster only; the owner is never targeted. */
+    public String mobCannon(Player target, int count) {
+        World w = target.getWorld();
+        if (w.getEnvironment() != World.Environment.NORMAL) return "The Mob Cannon fires in the overworld only.";
+        Location tl = target.getLocation();
+        String near = unsafeNear(w, tl);
+        if (near != null) return "Refused. " + near + " is not on the roster and is too close to the impact.";
+        EntityType[] kinds = {EntityType.ZOMBIE, EntityType.SKELETON, EntityType.SPIDER};
+        int n = Math.max(1, Math.min(count, 60));
+        for (int i = 0; i < n; i++) {
+            double a = 2 * Math.PI * i / n;
+            double r = 12 + wander.nextInt(4);
+            int x = tl.getBlockX() + (int) Math.round(Math.cos(a) * r);
+            int z = tl.getBlockZ() + (int) Math.round(Math.sin(a) * r);
+            Location at = new Location(w, x + 0.5, w.getHighestBlockYAt(x, z) + 1, z + 0.5);
+            w.spawnEntity(at, kinds[wander.nextInt(kinds.length)]);
+        }
+        plugin.alert("Mob Cannon fired " + n + " mobs at " + target.getName() + ".");
+        return "The Mob Cannon fired " + n + " mobs at " + target.getName() + ".";
+    }
+
+    /** The name of a non-roster player (the owner included) too close to the spot, or null if it's clear. */
+    private String unsafeNear(World w, Location at) {
+        for (Player other : Bukkit.getOnlinePlayers()) {
+            if (other.getWorld() == w && !consent.canTarget(other) && other.getLocation().distance(at) <= STRIKE_SAFE_RADIUS) {
+                return other.getName();
+            }
+        }
+        return null;
+    }
+
+    /** True for any Null in the army (including ones that are down), so a death can be handled. */
+    public boolean owns(NPC npc) {
+        return nulls.contains(npc) && !hunters.containsKey(npc) && !spies.containsKey(npc);
+    }
+
+    /** Totem revival: a fallen Null respawns at the world spawn after revive-seconds, if it's still in the army. */
+    public void scheduleRevival(NPC npc) {
+        long delay = plugin.getConfig().getLong("revive-seconds", 30) * 20L;
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (!owns(npc) || npc.isSpawned()) return;
+            npc.spawn(Bukkit.getWorlds().get(0).getSpawnLocation());
+            plugin.alert("A Null has been revived at spawn.");
+        }, delay);
     }
 
     /** A 4 by 5 obsidian frame in the sky. The interior is left open, so the portal is an opening. */
