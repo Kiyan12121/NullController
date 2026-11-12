@@ -43,7 +43,7 @@ Owner-only control. Players are only ever targeted after they run `/nullagree ac
 ## Consent-gated
 - Bedrock Cage, Invasion, End ambush, and HUNT only target players on the roster.
 - Invasion: `/nullcmd invade <player>` sends a timed group from about 40 blocks away.
-- End ambush: `/nullcmd ambush on|off`. Two hunters appear when a roster player enters the Nether.
+- End ambush: `/nullcmd ambush on|off`. Two hunters appear when a roster player enters The End.
 - Ender pearls: when a roster player uses an ender pearl, any hunters on them teleport to the landing spot.
 - Revoking: remove the UUID from `consented-players` and run `/nullreload`. Hunters stop on their next tick.
 
