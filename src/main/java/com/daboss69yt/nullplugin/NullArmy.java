@@ -23,6 +23,8 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Monster;
+import java.util.EnumSet;
+import java.util.Set;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.potion.PotionEffect;
@@ -778,6 +780,12 @@ public final class NullArmy {
     }
 
     /** Finds the nearest hostile mob and fights it. Returns false if there's nothing to fight. */
+    /** Nether mobs that leave Nulls and the owner alone. Nulls don't fight them, and they don't fight back. */
+    public static final Set<EntityType> NETHER_PEACE = EnumSet.of(
+            EntityType.PIGLIN, EntityType.PIGLIN_BRUTE, EntityType.ZOMBIFIED_PIGLIN, EntityType.HOGLIN,
+            EntityType.ZOGLIN, EntityType.STRIDER, EntityType.BLAZE, EntityType.GHAST,
+            EntityType.MAGMA_CUBE, EntityType.WITHER_SKELETON);
+
     private boolean engageMobs(NPC npc) {
         Location here = npc.getStoredLocation();
         if (here == null || here.getWorld() == null) return false;
@@ -788,6 +796,7 @@ public final class NullArmy {
         int bestRank = Integer.MAX_VALUE;
         for (Entity e : here.getWorld().getNearbyEntities(here, range, range, range)) {
             if (!(e instanceof Monster m)) continue;
+            if (NETHER_PEACE.contains(m.getType())) continue;
             double d = here.distance(m.getLocation());
             if (d > range) continue;
             int rank = threatRank(m);

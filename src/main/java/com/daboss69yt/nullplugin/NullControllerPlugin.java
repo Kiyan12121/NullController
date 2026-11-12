@@ -15,6 +15,9 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
+import org.bukkit.entity.Entity;
+import net.citizensnpcs.api.CitizensAPI;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerFishEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
@@ -593,6 +596,19 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         if (action != null) {
             dispatch(p, action);
         }
+    }
+
+    // ---------- Nether peace ----------
+
+    /** Nether mobs never target the owner or the Nulls. */
+    @EventHandler
+    public void onNetherAggro(EntityTargetLivingEntityEvent event) {
+        if (!NullArmy.NETHER_PEACE.contains(event.getEntity().getType())) return;
+        Entity target = event.getTarget();
+        if (target == null) return;
+        boolean protectedTarget = (target instanceof Player p && consent.isOwner(p))
+                || CitizensAPI.getNPCRegistry().isNPC(target);
+        if (protectedTarget) event.setCancelled(true);
     }
 
     // ---------- End ambush ----------
