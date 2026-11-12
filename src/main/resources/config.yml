@@ -55,3 +55,6 @@ auto-fortify-minutes: 3
 
 # Alarm: this many hostile mobs within 16 blocks of you rallies the army for 30 seconds.
 alarm-threshold: 5
+
+# Blocks per tick while the Null Civilisation is building. It is larger than other builds.
+city-blocks-per-tick: 12

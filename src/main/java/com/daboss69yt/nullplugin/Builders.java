@@ -52,6 +52,11 @@ public final class Builders {
             unknown(owner, type);
             return;
         }
+        if (type.equals("city")) {
+            Location c = owner.getLocation();
+            plugin.getConfig().set("city-centre", c.getWorld().getName() + "," + c.getBlockX() + "," + c.getBlockY() + "," + c.getBlockZ());
+            plugin.saveConfig();
+        }
         startBuild(owner, plan.name(), plan.placements(), true);
     }
 
@@ -150,7 +155,7 @@ public final class Builders {
             return;
         }
         army.startSwinging();
-        boolean started = queue.start(name, placements, perTick(), () -> {
+        boolean started = queue.start(name, placements, buildRate(name), () -> {
             army.stopSwinging();
             if (remember) {
                 lastName = name;
@@ -213,6 +218,14 @@ public final class Builders {
     private void unknown(Player owner, String type) {
         owner.sendMessage(ChatColor.RED + "Unknown build: " + type
                 + ". Options: citadel, bridge, watchtower, barracks, forgegate, spire, city.");
+    }
+
+    /** The Civilisation gets a faster budget so it finishes in minutes, not hours. */
+    private int buildRate(String name) {
+        if (name.equals("Null Civilisation")) {
+            return Math.max(perTick(), plugin.getConfig().getInt("city-blocks-per-tick", 12));
+        }
+        return perTick();
     }
 
     private int perTick() {

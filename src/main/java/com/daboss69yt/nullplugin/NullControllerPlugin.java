@@ -67,6 +67,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         totems = new TotemManager(this, consent, army);
         getServer().getPluginManager().registerEvents(this, this);
         getCommand("nullcmd").setTabCompleter(this);
+        getServer().getScheduler().runTaskTimer(this, this::sweepCity, 100L, 40L);
         getLogger().info("NullController 3.0.0 online. Consent roster loaded.");
     }
 
@@ -359,6 +360,29 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         Player target = requireConsentingTarget(owner, args, 1, "hunt");
         if (target == null) return;
         army.setHuntTarget(owner, target);
+    }
+
+    /** Keeps Endermen and dropped chorus fruit out of the Civilisation's area. */
+    private void sweepCity() {
+        String raw = getConfig().getString("city-centre", "");
+        if (raw == null || raw.isBlank()) return;
+        String[] p = raw.split(",");
+        if (p.length != 4) return;
+        World w = Bukkit.getWorld(p[0]);
+        if (w == null) return;
+        try {
+            Location c = new Location(w, Integer.parseInt(p[1]) + 0.5, Integer.parseInt(p[2]), Integer.parseInt(p[3]) + 0.5);
+            for (org.bukkit.entity.Entity e : w.getNearbyEntities(c, 40, 80, 40)) {
+                if (e instanceof org.bukkit.entity.Enderman) {
+                    e.remove();
+                } else if (e instanceof org.bukkit.entity.Item item
+                        && item.getItemStack().getType() == Material.CHORUS_FRUIT) {
+                    item.remove();
+                }
+            }
+        } catch (NumberFormatException ex) {
+            getLogger().warning("city-centre in config.yml is not valid; clear it to stop the sweep.");
+        }
     }
 
     private void title(Player p, String main, String sub) {
