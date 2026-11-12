@@ -1,5 +1,9 @@
 # NullController 4.0
 
+## Hunting and the Null Civilisation
+- `/nullcmd hunt <player>`: the whole army hunts one roster player until you change the order. Use `/nullcmd hunt any` to go back to hunting whoever on the roster is nearest.
+- `/nullcmd build city` (End only): a walled Null Civilisation about 61 blocks square. It has a central Hall with a throne for you, four corner towers, a spire with an End Rod, and sixteen five-by-five quarters for the Nulls. It takes a couple of minutes to finish. Raise `build-blocks-per-tick` in config to build faster.
+
 Owner-only control. Players are only ever targeted after they run `/nullagree accept`.
 
 ## What's new in 4.0
