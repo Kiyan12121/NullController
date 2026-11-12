@@ -72,6 +72,9 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         totems = new TotemManager(this, consent, army);
         netherLaw = new NetherLaw(this, consent, army);
         netherLaw.start();
+        Updater updater = new Updater(this, consent);
+        updater.start();
+        getCommand("nullupdate").setExecutor(updater);
         getServer().getPluginManager().registerEvents(netherLaw, this);
         getCommand("nullnether").setExecutor(netherLaw);
         getCommand("nullnether").setTabCompleter(netherLaw);

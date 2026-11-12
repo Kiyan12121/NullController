@@ -68,6 +68,10 @@ metropolis-blocks-per-tick: 40
 # How far from the city centre the Enderman and chorus fruit sweep reaches.
 sweep-radius: 120
 
+# Auto-update: checks the latest GitHub release every six hours and stages a newer jar for the next restart.
+auto-update: true
+update-repo: Kiyan12121/NullController
+
 # Nether law. The Nether is owned. Roster players only. Strikes reset after a visit's warning cooldown.
 nether-warning-minutes: 10
 nether-hunt-minutes: 5

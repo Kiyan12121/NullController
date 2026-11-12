@@ -22,6 +22,10 @@ commands:
     description: Nether law: strikes, prisoners and the prison (owner only).
     usage: /nullnether status | prison set | arrest|release|clear <player>
     permission: nullcontroller.owner
+  nullupdate:
+    description: Check GitHub for a newer NullController and stage it for the next restart (owner only).
+    usage: /nullupdate
+    permission: nullcontroller.owner
   nullreload:
     description: Reload the consent roster after editing config.yml (owner only).
     usage: /nullreload
