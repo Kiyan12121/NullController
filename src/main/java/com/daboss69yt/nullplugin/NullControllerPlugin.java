@@ -96,7 +96,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         }
         if (args.length == 0 || !args[0].equalsIgnoreCase("accept")) {
             player.sendMessage(ChatColor.DARK_PURPLE + "=== The Null: Consent Rules ===");
-            player.sendMessage(ChatColor.GRAY + "By agreeing, you allow The Null to hunt you, ambush you at Nether portals,"
+            player.sendMessage(ChatColor.GRAY + "By agreeing, you allow The Null to hunt you, ambush you when you enter The End,"
                     + " and cage you during events.");
             player.sendMessage(ChatColor.GRAY + "Lightning in the End is not part of this agreement.");
             player.sendMessage(ChatColor.GRAY + "To revoke, message the owner. Type " + ChatColor.WHITE
@@ -299,21 +299,21 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
 
     private void handleAmbush(Player owner, String[] args) {
         String sub = args.length > 1 ? args[1].toLowerCase() : "status";
-        boolean current = getConfig().getBoolean("nether-ambush", false);
+        boolean current = getConfig().getBoolean("end-ambush", false);
         boolean next;
         switch (sub) {
             case "on" -> next = true;
             case "off" -> next = false;
             case "toggle" -> next = !current;
             default -> {
-                owner.sendMessage(ChatColor.GRAY + "Nether ambush is " + (current ? "ON" : "OFF")
+                owner.sendMessage(ChatColor.GRAY + "End ambush is " + (current ? "ON" : "OFF")
                         + ". Use /nullcmd ambush <on|off>.");
                 return;
             }
         }
-        getConfig().set("nether-ambush", next);
+        getConfig().set("end-ambush", next);
         saveConfig();
-        owner.sendMessage(ChatColor.DARK_PURPLE + "Nether ambush " + (next ? "enabled" : "disabled") + ".");
+        owner.sendMessage(ChatColor.DARK_PURPLE + "End ambush " + (next ? "enabled" : "disabled") + ".");
     }
 
     /** Lore events. Each one summons a squad and sets it up for the scene. There's no lightning in any of them. */
@@ -463,7 +463,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         button(inv, 37, Material.WHEAT, "FARM Mode", "Harvests and replants mature crops", "farm");
         button(inv, 38, Material.IRON_PICKAXE, "Fortify", "Re-places missing blocks from the last build", "fortify");
         button(inv, 39, Material.LODESTONE, "FORGE DUTY", "Hold near the Forge (set with /nullcmd forge set)", "forge");
-        button(inv, 40, Material.RED_NETHER_BRICKS, "Nether Ambush: toggle", "Two hunters for roster players entering the Nether", "ambush", "toggle");
+        button(inv, 40, Material.RED_NETHER_BRICKS, "End Ambush: toggle", "Two hunters for roster players entering The End", "ambush", "toggle");
         button(inv, 41, Material.TOTEM_OF_UNDYING, "Get Totem of NULL", "Issues your active totem", "totem");
         button(inv, 42, Material.NETHER_STAR, "Succession", "Mints a new totem and voids the old ones", "succession");
         button(inv, 43, Material.SPYGLASS, "Ranks", "Every Null's rank, health and state", "ranks");
@@ -504,21 +504,21 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         }
     }
 
-    // ---------- Nether ambush ----------
+    // ---------- End ambush ----------
 
-    /** When a roster player arrives in the Nether, two hunters appear for them if the ambush is on. */
+    /** When a roster player arrives in The End, two hunters appear for them if the ambush is on. */
     @EventHandler
     public void onWorldChange(PlayerChangedWorldEvent event) {
-        if (!getConfig().getBoolean("nether-ambush", false)) return;
+        if (!getConfig().getBoolean("end-ambush", false)) return;
         Player p = event.getPlayer();
         if (!consent.canTarget(p)) return;
-        if (p.getWorld().getEnvironment() != World.Environment.NETHER) return;
+        if (p.getWorld().getEnvironment() != World.Environment.THE_END) return;
 
         Player owner = Bukkit.getPlayerExact(ConsentManager.OWNER_NAME);
         if (owner == null) return;
         int minutes = getConfig().getInt("ambush-minutes", 3);
         army.spawnHunters(owner, p, p.getLocation(), 2, minutes);
-        owner.sendMessage(ChatColor.DARK_PURPLE + "Nether ambush sent after " + p.getName() + ".");
+        owner.sendMessage(ChatColor.DARK_PURPLE + "End ambush sent after " + p.getName() + ".");
     }
 
     // ---------- Totem right-click ----------

@@ -72,7 +72,7 @@ public final class NullArmy {
 
     private record Scored(Block block, int priority, double distSq) {}
 
-    /** A Null on a timed hunt against one roster player (used by invasions and Nether ambushes). */
+    /** A Null on a timed hunt against one roster player (used by invasions and End ambushes). */
     private record Hunt(UUID target, long expiresAt) {}
 
     private final NullControllerPlugin plugin;

@@ -41,9 +41,9 @@ Owner-only control. Players are only ever targeted after they run `/nullagree ac
 - Bedrock Cage (roster players only): `/nullcmd cage <player>`. Builds a sealed 5x5x5 cage, then the Nulls guard it from a ring outside. Running `/nullcmd guard` releases the cage guard.
 
 ## Consent-gated
-- Bedrock Cage, Invasion, Nether ambush, and HUNT only target players on the roster.
+- Bedrock Cage, Invasion, End ambush, and HUNT only target players on the roster.
 - Invasion: `/nullcmd invade <player>` sends a timed group from about 40 blocks away.
-- Nether ambush: `/nullcmd ambush on|off`. Two hunters appear when a roster player enters the Nether.
+- End ambush: `/nullcmd ambush on|off`. Two hunters appear when a roster player enters the Nether.
 - Ender pearls: when a roster player uses an ender pearl, any hunters on them teleport to the landing spot.
 - Revoking: remove the UUID from `consented-players` and run `/nullreload`. Hunters stop on their next tick.
 
@@ -63,7 +63,7 @@ Owner-only control. Players are only ever targeted after they run `/nullagree ac
 - Ranks: R is the leader, A is the next two, I is the next four, D is everyone else. Change the cut-offs in `NullArmy.recomputeRanks`.
 - Ender pearls: only hunters follow a pearl. Idle Nulls don't.
 - Sapling replanting is free. It doesn't use anything from the pack.
-- Nether ambush triggers on any entry into the Nether, not only through a portal.
+- End ambush triggers on any entry into The End, not only through the End portal.
 
 ## Known gaps
 - Succession by naming a Commander, and a night watch rotation, are not in yet.
