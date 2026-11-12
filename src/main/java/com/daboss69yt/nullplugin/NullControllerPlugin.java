@@ -15,6 +15,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
 import org.bukkit.entity.Entity;
 import net.citizensnpcs.api.CitizensAPI;
@@ -83,12 +84,13 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         getServer().getPluginManager().registerEvents(rods, this);
         getCommand("nullrod").setExecutor(rods);
         getCommand("nullrod").setTabCompleter(rods);
-        Base base = new Base(this, consent);
+        Base base = new Base(this, consent, army);
         base.start();
         getCommand("nullbase").setExecutor(base);
         getCommand("nullbase").setTabCompleter(base);
         getCommand("nullalerts").setExecutor((sender, cmd, label, args) -> {
-            if (!(sender instanceof Player p) || !consent.isOwner(p)) {
+            Player p = ownerFor(sender);
+            if (p == null || !consent.isOwner(p)) {
                 sender.sendMessage(ChatColor.RED + "Access denied.");
                 return true;
             }
@@ -96,6 +98,28 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
                 if (alerts.isEmpty()) p.sendMessage(ChatColor.GRAY + "No alerts yet.");
                 for (String a : alerts) p.sendMessage(ChatColor.DARK_PURPLE + "- " + a);
             }
+            return true;
+        });
+        getCommand("nullspy").setExecutor((sender, cmd, label, args) -> {
+            Player p = ownerFor(sender);
+            if (p == null || !consent.isOwner(p)) {
+                sender.sendMessage(ChatColor.RED + "Access denied, or the owner is offline.");
+                return true;
+            }
+            if (args.length == 0 || args[0].equalsIgnoreCase("stop")) {
+                army.stopSpies(p);
+                return true;
+            }
+            Player target = Bukkit.getPlayerExact(args[0]);
+            if (target == null) {
+                p.sendMessage(ChatColor.RED + "That player is not online.");
+                return true;
+            }
+            if (!consent.canTarget(target)) {
+                p.sendMessage(ChatColor.RED + "Roster only. " + target.getName() + " is not on it.");
+                return true;
+            }
+            army.spy(p, target);
             return true;
         });
         getServer().getPluginManager().registerEvents(netherLaw, this);
@@ -154,16 +178,20 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             sender.sendMessage(ChatColor.RED + "Access denied.");
             return true;
         }
-        ((Player) sender).openInventory(buildMenu());
+        if (sender instanceof Player pl) {
+            pl.openInventory(buildMenu());
+        } else {
+            sender.sendMessage(ChatColor.GRAY + "The panel opens in game. Run /nullui as the owner.");
+        }
         return true;
     }
 
     private boolean handleCmd(CommandSender sender, String[] args) {
         if (!isOwner(sender)) {
-            sender.sendMessage(ChatColor.RED + "Access denied.");
+            sender.sendMessage(ChatColor.RED + "Access denied, or the owner is offline.");
             return true;
         }
-        Player owner = (Player) sender;
+        Player owner = ownerFor(sender);
         if (args.length == 0) {
             owner.sendMessage(ChatColor.GRAY + "Usage: /nullcmd help  (lists every order)");
             return true;
@@ -529,8 +557,16 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         }
     }
 
+    /** The player behind a command: the sender, or the owner when the console runs it. Null if the owner is offline. */
+    public Player ownerFor(CommandSender sender) {
+        if (sender instanceof Player p) return p;
+        if (sender instanceof ConsoleCommandSender) return Bukkit.getPlayerExact(ConsentManager.OWNER_NAME);
+        return null;
+    }
+
     private boolean isOwner(CommandSender sender) {
-        return sender instanceof Player p && consent.isOwner(p);
+        Player p = ownerFor(sender);
+        return p != null && consent.isOwner(p);
     }
 
     // ---------- GUI ----------

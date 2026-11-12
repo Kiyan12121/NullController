@@ -34,6 +34,10 @@ commands:
     description: The last 30 alarms, escapes and finds (owner only).
     usage: /nullalerts
     permission: nullcontroller.owner
+  nullspy:
+    description: Spy on a roster player: a hidden Null reports where they are and what they're doing. /nullspy stop recalls all (owner only).
+    usage: /nullspy <player> | stop
+    permission: nullcontroller.owner
   nullupdate:
     description: Check GitHub for a newer NullController and stage it for the next restart (owner only).
     usage: /nullupdate

@@ -20,6 +20,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.Locale;
 
@@ -42,22 +44,31 @@ public final class Base implements CommandExecutor, TabCompleter {
     private final ConsentManager consent;
     private boolean alarmOn;
     private boolean trapBusy;
+    private final NullArmy army;
+    private final Map<String, Double> heat = new HashMap<>();
+    private final Map<String, Location> sample = new HashMap<>();
+    private int plannerStep;
 
-    public Base(NullControllerPlugin plugin, ConsentManager consent) {
+    public Base(NullControllerPlugin plugin, ConsentManager consent, NullArmy army) {
         this.plugin = plugin;
         this.consent = consent;
+        this.army = army;
     }
 
     public void start() {
         Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 40L, 40L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::debrisDrill, 200L, 1200L);
+        Bukkit.getScheduler().runTaskTimer(plugin, this::sampleRoster, 60L, 40L);
+        Bukkit.getScheduler().runTaskTimer(plugin, this::learnRoute, 12000L, 12000L);
+        Bukkit.getScheduler().runTaskTimer(plugin, this::planner, 18000L, 18000L);
     }
 
     // ---------- Commands ----------
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (!(sender instanceof Player owner) || !consent.isOwner(owner)) {
+        Player owner = plugin.ownerFor(sender);
+        if (owner == null || !consent.isOwner(owner)) {
             sender.sendMessage(ChatColor.RED + "Access denied.");
             return true;
         }
@@ -326,6 +337,56 @@ public final class Base implements CommandExecutor, TabCompleter {
         int n = Math.min(have, max);
         if (n > 0) c.getInventory().removeItem(new ItemStack(m, n));
         return n;
+    }
+
+    // ---------- Learning and planning ----------
+
+    /** Every two seconds: a roster player near the base adds heat to the 16-block cell they're in. */
+    private void sampleRoster() {
+        Location a = anchor();
+        if (a == null || a.getWorld() == null) return;
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            if (!consent.canTarget(p) || p.getWorld() != a.getWorld()) continue;
+            if (p.getLocation().distance(a) > 300) continue;
+            String key = (p.getLocation().getBlockX() >> 4) + "," + (p.getLocation().getBlockZ() >> 4);
+            heat.merge(key, 1.0, Double::sum);
+            sample.put(key, p.getLocation());
+        }
+    }
+
+    /** Every ten minutes: heat fades, and the six busiest cells become the Nulls' learned patrol route. */
+    private void learnRoute() {
+        heat.replaceAll((k, v) -> v * 0.7);
+        heat.values().removeIf(v -> v < 0.5);
+        sample.keySet().retainAll(heat.keySet());
+        List<String> top = heat.entrySet().stream()
+                .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
+                .limit(6)
+                .map(Map.Entry::getKey)
+                .toList();
+        List<Location> route = new ArrayList<>();
+        for (String k : top) {
+            if (sample.containsKey(k)) route.add(sample.get(k));
+        }
+        if (route.isEmpty()) return;
+        army.setLearnedRoute(route);
+        plugin.alert("Patrol route learned from roster movements: " + route.size() + " points.");
+    }
+
+    /** Every fifteen minutes while you're offline: the Nulls rotate mining, farming and chopping, and guard if a non-roster player is near. */
+    private void planner() {
+        if (Bukkit.getPlayerExact(ConsentManager.OWNER_NAME) != null) return;
+        NullArmy.Mode m = army.currentMode();
+        if (m != NullArmy.Mode.GUARD && m != NullArmy.Mode.MINE && m != NullArmy.Mode.FARM && m != NullArmy.Mode.LUMBER) return;
+        Location a = anchor();
+        if (a != null && intruderNear(a, QUIET_RADIUS)) {
+            army.planMode(NullArmy.Mode.GUARD);
+            return;
+        }
+        NullArmy.Mode[] work = {NullArmy.Mode.MINE, NullArmy.Mode.FARM, NullArmy.Mode.LUMBER};
+        NullArmy.Mode next = work[plannerStep++ % work.length];
+        army.planMode(next);
+        plugin.alert("Owner offline. The Nulls are on " + next.name().toLowerCase(Locale.ROOT) + ".");
     }
 
     // ---------- Helpers ----------

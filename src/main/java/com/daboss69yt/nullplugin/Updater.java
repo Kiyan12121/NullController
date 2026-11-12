@@ -82,7 +82,8 @@ public final class Updater implements CommandExecutor {
     /** /nullupdate: owner only. Checks now. */
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (!(sender instanceof Player p) || !consent.isOwner(p)) {
+        Player p = plugin.ownerFor(sender);
+        if (p == null || !consent.isOwner(p)) {
             sender.sendMessage(ChatColor.RED + "Access denied.");
             return true;
         }

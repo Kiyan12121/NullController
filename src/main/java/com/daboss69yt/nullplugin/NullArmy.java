@@ -93,6 +93,7 @@ public final class NullArmy {
     private long cooldownUntil;
 
     private final Map<NPC, Inventory> packs = new HashMap<>();
+    private final Map<NPC, Long> lastApple = new HashMap<>();
     private final Set<NPC> depositing = new HashSet<>();
 
     private final Deque<Block> workTargets = new ArrayDeque<>();
@@ -116,6 +117,9 @@ public final class NullArmy {
     private UUID huntTarget;
     /** Nulls mid-arrival: they're in the portal effect and skip their normal moves until it lands. */
     private final Set<NPC> arriving = new HashSet<>();
+    private long lastOfflineScan;
+    private record Spy(UUID target, long[] nextReport) {}
+    private final Map<NPC, Spy> spies = new HashMap<>();
     private long nextAlarm;
 
     private boolean swinging;
@@ -348,7 +352,9 @@ public final class NullArmy {
         nulls.add(npc);
         if (becomesLeader) leader = npc;
         recomputeRanks();
-        packs.put(npc, Bukkit.createInventory(null, PACK_SIZE, "Null Pack"));
+        Inventory pack = Bukkit.createInventory(null, PACK_SIZE, "Null Pack");
+        pack.addItem(new ItemStack(Material.GOLDEN_APPLE, 4), new ItemStack(Material.COOKED_BEEF, 16));
+        packs.put(npc, pack);
         return npc;
     }
 
@@ -433,6 +439,7 @@ public final class NullArmy {
         }
         npc.destroy();
         nulls.remove(npc);
+        spies.remove(npc);
         packs.remove(npc);
         depositing.remove(npc);
         claimed.remove(npc);
@@ -614,12 +621,14 @@ public final class NullArmy {
         if (owner == null) {
             expireHunters();
             tickHunters();
-            idleGuard();
+            tickSpies();
+            tickOffline();
             return;
         }
         cycle++;
         expireHunters();
         checkAlarm(owner);
+        tickSpies();
 
         double leash = plugin.getConfig().getDouble("leash-distance", 15);
         double huntRange = plugin.getConfig().getDouble("hunt-range", 100);
@@ -632,6 +641,7 @@ public final class NullArmy {
 
         for (NPC npc : new ArrayList<>(nulls)) {
             if (!npc.isSpawned() || arriving.contains(npc)) continue;
+            if (spies.containsKey(npc)) continue;
             Hunt hunt = hunters.get(npc);
             if (hunt != null) {
                 huntTick(npc, hunt);
@@ -775,6 +785,7 @@ public final class NullArmy {
             appearNear(npc, target);
         } else if (isWounded(npc)) {
             // Retreat: back off ten blocks from the target and heal before going in again.
+            eatApple(npc);
             Vector off = here.toVector().subtract(tl.toVector());
             if (off.lengthSquared() < 0.01) off = new Vector(1, 0, 0);
             npc.getNavigator().setTarget(here.clone().add(off.normalize().multiply(10)));
@@ -839,7 +850,23 @@ public final class NullArmy {
     }
 
     /** Wounded Nulls get regeneration while they fall back to the group. */
+    /** A wounded Null eats a golden apple from its pack: absorption and regeneration. */
+    private void eatApple(NPC npc) {
+        long now = System.currentTimeMillis();
+        if (now - lastApple.getOrDefault(npc, 0L) < 15_000L) return;
+        Inventory pack = packs.get(npc);
+        if (pack == null || !pack.contains(Material.GOLDEN_APPLE)) return;
+        pack.removeItem(new ItemStack(Material.GOLDEN_APPLE, 1));
+        lastApple.put(npc, now);
+        Entity e = npc.getEntity();
+        if (e instanceof LivingEntity living) {
+            living.addPotionEffect(new PotionEffect(PotionEffectType.ABSORPTION, 120, 0, false, true));
+            living.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 100, 2, false, true));
+        }
+    }
+
     private void fieldHeal(NPC npc) {
+        eatApple(npc);
         Entity e = npc.getEntity();
         if (e instanceof LivingEntity living) {
             living.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 60, 1, false, false));
@@ -1057,9 +1084,13 @@ public final class NullArmy {
     }
 
     private void refillTargets(Player owner, WorkKind kind) {
+        refillTargetsAt(owner.getLocation(), kind);
+    }
+
+    private void refillTargetsAt(Location c, WorkKind kind) {
         workTargets.clear();
-        World w = owner.getWorld();
-        Location c = owner.getLocation();
+        World w = c.getWorld();
+        if (w == null) return;
         int cx = c.getBlockX(), cy = c.getBlockY(), cz = c.getBlockZ();
         int minY = Math.max(w.getMinHeight(), cy - WORK_RADIUS);
         int maxY = Math.min(w.getMaxHeight() - 1, cy + WORK_RADIUS);
@@ -1206,6 +1237,176 @@ public final class NullArmy {
         }
     }
 
+    // ---------- Offline work, spies and planning ----------
+
+    /** Where offline work happens: the deposit chest if one is set, otherwise the city centre. */
+    private Location offlineCentre() {
+        Block chest = configuredBlock("deposit-chest");
+        if (chest != null) return chest.getLocation().add(0.5, 1, 0.5);
+        return cityCentre();
+    }
+
+    /** The owner is offline: working Nulls keep mining, chopping or farming around the offline centre. */
+    private void tickOffline() {
+        WorkKind kind = kindOf(mode);
+        Location centre = offlineCentre();
+        if (kind == null || centre == null) {
+            idleGuard();
+            return;
+        }
+        if (workTargets.isEmpty() && System.currentTimeMillis() - lastOfflineScan > 60_000L) {
+            refillTargetsAt(centre, kind);
+            lastOfflineScan = System.currentTimeMillis();
+        }
+        for (NPC npc : new ArrayList<>(nulls)) {
+            if (!npc.isSpawned() || arriving.contains(npc) || hunters.containsKey(npc) || spies.containsKey(npc)) continue;
+            offlineWork(npc, kind, centre);
+        }
+    }
+
+    /** One Null's offline job: break the next target, or empty a full pack into the deposit chest. */
+    private void offlineWork(NPC npc, WorkKind kind, Location centre) {
+        Block chest = configuredBlock("deposit-chest");
+        if (depositing.contains(npc)) {
+            Inventory pack = packs.get(npc);
+            Container c = chest != null && chest.getState() instanceof Container cc ? cc : null;
+            if (pack == null || isEmpty(pack) || c == null) {
+                depositing.remove(npc);
+                return;
+            }
+            Location spot = chest.getLocation().add(0.5, 1, 0.5);
+            Location here = npc.getStoredLocation();
+            if (here == null || !sameWorld(here, spot) || here.distance(spot) > TELEPORT_OVER) {
+                teleport(npc, spot);
+            } else if (here.distance(spot) > REACH) {
+                npc.getNavigator().setTarget(spot);
+            } else {
+                for (int i = 0; i < pack.getSize(); i++) {
+                    ItemStack s = pack.getItem(i);
+                    if (s == null) continue;
+                    var left = c.getInventory().addItem(s.clone());
+                    pack.setItem(i, left.isEmpty() ? null : left.values().iterator().next());
+                }
+                if (isEmpty(pack)) depositing.remove(npc);
+            }
+            return;
+        }
+
+        Block target = claimed.get(npc);
+        if (target == null || priorityOf(target, kind) < 0) {
+            claimed.remove(npc);
+            target = nextTarget(kind);
+            if (target == null) {
+                Location here = npc.getStoredLocation();
+                if (here != null && sameWorld(here, centre) && here.distance(centre) > 8) {
+                    npc.getNavigator().setTarget(centre);
+                }
+                return;
+            }
+            claimed.put(npc, target);
+        }
+        Location spot = target.getLocation().add(0.5, 0, 0.5);
+        Location here = npc.getStoredLocation();
+        if (here == null || !sameWorld(here, spot) || here.distance(spot) > TELEPORT_OVER) {
+            teleport(npc, spot.clone().add(0, 1, 0));
+        } else if (here.distance(spot) > REACH) {
+            npc.getNavigator().setTarget(spot);
+        } else {
+            Inventory pack = packs.get(npc);
+            if (pack != null && !fitsInPack(pack, target, kind)) {
+                workTargets.addFirst(target);
+                claimed.remove(npc);
+                depositing.add(npc);
+                return;
+            }
+            breakTarget(target, npc, kind);
+            swing(npc);
+            claimed.remove(npc);
+        }
+    }
+
+    /** Spy: a hidden Null trails one roster player and reports where they are and what they're doing. */
+    public void spy(Player owner, Player target) {
+        Location loc = cornerSpot(target.getLocation());
+        NPC npc = createNull(loc, gearForMode(Mode.FOLLOW), false);
+        if (npc.getEntity() instanceof LivingEntity living) living.setInvisible(true);
+        spies.put(npc, new Spy(target.getUniqueId(), new long[]{0L}));
+        owner.sendMessage(ChatColor.DARK_PURPLE + "Spy on " + target.getName() + " set. Reports every minute.");
+    }
+
+    /** Recalls every spy. */
+    public void stopSpies(Player owner) {
+        List<NPC> all = new ArrayList<>(spies.keySet());
+        for (NPC npc : all) dropNpc(npc);
+        owner.sendMessage(ChatColor.DARK_PURPLE + "Spies recalled (" + all.size() + ").");
+    }
+
+    private void tickSpies() {
+        long now = System.currentTimeMillis();
+        for (Map.Entry<NPC, Spy> entry : new ArrayList<>(spies.entrySet())) {
+            NPC npc = entry.getKey();
+            Spy spy = entry.getValue();
+            if (!npc.isSpawned()) continue;
+            Player target = Bukkit.getPlayer(spy.target());
+            if (target == null) continue;
+            if (!consent.canTarget(target)) {
+                dropNpc(npc);
+                continue;
+            }
+            Location here = npc.getStoredLocation();
+            Location tl = target.getLocation();
+            if (here == null || !sameWorld(here, tl) || here.distance(tl) > 40) {
+                appearNear(npc, target);
+            } else if (here.distance(tl) > 14) {
+                npc.getNavigator().setTarget(tl);
+            }
+            if (now >= spy.nextReport()[0]) {
+                spy.nextReport()[0] = now + 60_000L;
+                spyReport(target);
+            }
+        }
+    }
+
+    private void spyReport(Player target) {
+        ItemStack hand = target.getInventory().getItemInMainHand();
+        Block looking = target.getTargetBlockExact(5);
+        int hostile = 0;
+        for (Entity e : target.getNearbyEntities(12, 12, 12)) {
+            if (e instanceof Monster) hostile++;
+        }
+        Location l = target.getLocation();
+        String msg = ChatColor.DARK_PURPLE + "[Spy] " + target.getName() + " at " + l.getBlockX() + ", "
+                + l.getBlockY() + ", " + l.getBlockZ() + " in " + l.getWorld().getName()
+                + ". Health " + (int) target.getHealth()
+                + ", holding " + (hand.getType().isAir() ? "nothing" : hand.getType().name().toLowerCase())
+                + ", looking at " + (looking == null ? "air" : looking.getType().name().toLowerCase())
+                + ", " + hostile + " hostile nearby.";
+        Player o = Bukkit.getPlayerExact(ConsentManager.OWNER_NAME);
+        if (o != null) o.sendMessage(msg);
+        plugin.alert(ChatColor.stripColor(msg));
+    }
+
+    /** Replaces the patrol route with points learned from where roster players go. */
+    public void setLearnedRoute(List<Location> points) {
+        patrolRoute.clear();
+        waypointIndex.clear();
+        for (int i = 0; i < Math.min(points.size(), MAX_WAYPOINTS); i++) patrolRoute.add(points.get(i));
+    }
+
+    public Mode currentMode() {
+        return mode;
+    }
+
+    /** Changes the work order without an owner present. Used by the task planner. */
+    public void planMode(Mode m) {
+        if (mode == m) return;
+        mode = m;
+        cageGuard = null;
+        huntTarget = null;
+        resetWork();
+        applyGear(m);
+    }
+
     /** A spot 9 to 13 blocks from the target, out of its line of sight, found on solid ground. */
     private Location cornerSpot(Location around) {
         World w = around.getWorld();
@@ -1256,7 +1457,11 @@ public final class NullArmy {
         if (anchor == null) return;
         for (int i = 0; i < nulls.size(); i++) {
             NPC npc = nulls.get(i);
-            if (!npc.isSpawned() || arriving.contains(npc) || hunters.containsKey(npc)) continue;
+            if (!npc.isSpawned() || arriving.contains(npc) || hunters.containsKey(npc) || spies.containsKey(npc)) continue;
+            // Self-repair: idle Nulls regenerate between jobs.
+            if (npc.getEntity() instanceof LivingEntity idle) {
+                idle.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 60, 0, false, false));
+            }
             if (engageMobs(npc)) continue;
             ringAround(npc, anchor, i, 8 + (i % 3) * 25); // spread out in three rings: the whole End
         }

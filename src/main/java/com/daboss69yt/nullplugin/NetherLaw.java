@@ -557,7 +557,8 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (!(sender instanceof Player owner) || !consent.isOwner(owner)) {
+        Player owner = plugin.ownerFor(sender);
+        if (owner == null || !consent.isOwner(owner)) {
             sender.sendMessage(ChatColor.RED + "Access denied.");
             return true;
         }
