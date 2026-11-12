@@ -22,6 +22,7 @@ import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.minecart.ExplosiveMinecart;
 import org.bukkit.entity.Monster;
 import org.bukkit.util.Vector;
 import java.util.EnumSet;
@@ -128,6 +129,8 @@ public final class NullArmy {
     private Location netherPortal;
     private Location netherSpot;
     private static final double DEFENCE_RANGE = 24.0;
+    private static final double STRIKE_SAFE_RADIUS = 8.0;
+    private static final int STRIKE_SQUAD = 4;
     private long nextReplenish;
     private long nextAlarm;
 
@@ -1684,6 +1687,83 @@ public final class NullArmy {
             NPC npc = createNull(spot, gearForMode(Mode.HUNT), false);
             hunters.put(npc, new Hunt(p.getUniqueId(), expires));
             plugin.alert("Defence: " + p.getName() + " came near the Nulls. A Null is hunting them for " + minutes + " min.");
+        }
+    }
+
+    /**
+     * The Strike: a squad crosses the Nether roof above the target, three sky portals open at the
+     * same moment (a breach), and TNT minecarts drop through them. Roster players only, and the
+     * owner is never targeted. Works with the owner offline. Returns a line for the console.
+     */
+    public String strike(Player target) {
+        World over = target.getWorld();
+        World nether = netherWorld();
+        if (nether == null) return "No Nether world, so the Strike can't travel.";
+        if (over.getEnvironment() != World.Environment.NORMAL) return "The Strike drops on the overworld only.";
+        Location tl = target.getLocation();
+        for (Player other : Bukkit.getOnlinePlayers()) {
+            if (other.getWorld() == over && !consent.canTarget(other)
+                    && other.getLocation().distance(tl) <= STRIKE_SAFE_RADIUS) {
+                return "Refused. " + other.getName() + " is not on the roster and is too close to the impact.";
+            }
+        }
+        List<NPC> squad = new ArrayList<>();
+        for (NPC npc : nulls) {
+            if (npc.isSpawned() && !arriving.contains(npc) && !hunters.containsKey(npc) && !spies.containsKey(npc)) {
+                squad.add(npc);
+                if (squad.size() == STRIKE_SQUAD) break;
+            }
+        }
+        if (squad.isEmpty()) return "No free Nulls for the Strike.";
+
+        int bx = tl.getBlockX();
+        int bz = tl.getBlockZ();
+        int skyY = Math.min(tl.getBlockY() + 24, 300);
+        int[][] portalAt = {{0, 0}, {6, 0}, {-6, 0}};
+        Location roof = new Location(nether, Math.floorDiv(bx, 8) + 0.5, 124, Math.floorDiv(bz, 8) + 0.5);
+
+        // Stage 1: the squad crosses the Nether roof above the target.
+        for (NPC npc : squad) {
+            teleport(npc, roof.clone().add(wander.nextInt(3) - 1, 0, wander.nextInt(3) - 1));
+        }
+        plugin.alert("The Strike: squad crossing the Nether roof above " + target.getName() + ".");
+
+        // Stage 2: three sky portals open at once, and the squad steps out of them together.
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            for (int[] p : portalAt) {
+                buildSkyFrame(over, bx + p[0], skyY, bz + p[1]);
+                Location exit = new Location(over, bx + p[0] + 1.0, skyY + 1, bz + p[1] + 0.5);
+                exit.getWorld().spawnParticle(Particle.PORTAL, exit, 120, 0.6, 1.0, 0.6, 0.5);
+                exit.getWorld().playSound(exit, Sound.BLOCK_PORTAL_TRAVEL, 1f, 1f);
+            }
+            for (int i = 0; i < squad.size(); i++) {
+                int[] p = portalAt[i % portalAt.length];
+                teleport(squad.get(i), new Location(over, bx + p[0] + 1.0, skyY + 1, bz + p[1] + 0.5));
+            }
+        }, 40L);
+
+        // Stage 3: TNT minecarts drop through all three portals.
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            for (int[] p : portalAt) {
+                for (int k = 0; k < 2; k++) {
+                    Location drop = new Location(over, bx + p[0] + 1.0 + wander.nextInt(3) - 1, skyY,
+                            bz + p[1] + 0.5);
+                    Entity e = over.spawnEntity(drop, EntityType.TNT_MINECART);
+                    if (e instanceof ExplosiveMinecart cart) cart.ignite();
+                }
+            }
+        }, 60L);
+        return "The Strike is coming down on " + target.getName() + ".";
+    }
+
+    /** A 4 by 5 obsidian frame in the sky. The interior is left open, so the portal is an opening. */
+    private void buildSkyFrame(World w, int bx, int by, int bz) {
+        for (int dx = 0; dx < 4; dx++) {
+            for (int dy = 0; dy < 5; dy++) {
+                if (dx == 0 || dx == 3 || dy == 0 || dy == 4) {
+                    w.getBlockAt(bx + dx - 1, by + dy, bz).setType(Material.OBSIDIAN);
+                }
+            }
         }
     }
 

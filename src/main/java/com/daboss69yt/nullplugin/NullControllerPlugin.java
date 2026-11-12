@@ -220,7 +220,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
                     Player target = Bukkit.getPlayerExact(args[1]);
                     if (target == null) sender.sendMessage("That player is not online.");
                     else if (!consent.canTarget(target)) sender.sendMessage("Roster only. " + target.getName() + " is not on it.");
-                    else sender.sendMessage(rods.strikeAt(target.getLocation()));
+                    else sender.sendMessage(army.strike(target));
                 }
             }
             case "explore" -> offlineMode(sender, NullArmy.Mode.EXPLORE);
@@ -262,7 +262,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     }
 
     private static final String OFFLINE_HELP = ChatColor.GRAY + "Owner is offline. Console orders: "
-            + "summon [n], build <kind> (Nether only), strike <player>, dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle";
+            + "summon [n], build <kind> (Nether only), strike <player> (the Breach), dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle";
 
     private void offlineMode(CommandSender sender, NullArmy.Mode mode) {
         sender.sendMessage(army.setModeOffline(mode)
