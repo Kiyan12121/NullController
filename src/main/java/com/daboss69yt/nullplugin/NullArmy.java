@@ -1126,7 +1126,7 @@ public final class NullArmy {
 
         Block chestBlock = configuredBlock("deposit-chest");
         if (chestBlock == null) {
-            chestBlock = chests().place(Chests.Kind.DEPOSIT, here != null ? here : owner.getLocation());
+            chestBlock = chests().place(Chests.Kind.DEPOSIT, npc.getStoredLocation() != null ? npc.getStoredLocation() : owner.getLocation());
             if (chestBlock != null) saveBlock("deposit-chest", chestBlock);
         }
         if (chestBlock == null || !(chestBlock.getState() instanceof Container container)) {
