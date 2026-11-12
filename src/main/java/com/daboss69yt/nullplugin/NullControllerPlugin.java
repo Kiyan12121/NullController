@@ -34,6 +34,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -42,7 +43,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
 
     private static final List<String> SUBCOMMANDS = List.of("summon", "dismiss", "recall", "guard", "follow",
             "hunt", "stay", "goto", "status", "ranks", "mine", "lumber", "farm", "forge", "chest", "patrol",
-            "build", "fortify", "cage", "invade", "ambush", "totem", "succession", "event", "remote", "team", "orbital", "stabshot", "help");
+            "build", "fortify", "cage", "invade", "ambush", "totem", "succession", "event", "remote", "team", "orbital", "stabshot", "chests", "help");
     private static final List<String> BUILDS = List.of("citadel", "bridge", "watchtower", "barracks",
             "forgegate", "spire", "city", "metropolis", "collector", "smelter", "door", "melonfarm", "cancel", "undo", "preview");
     private static final List<String> EVENTS = List.of("forge", "capital", "end", "clash");
@@ -278,7 +279,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     }
 
     private static final String OFFLINE_HELP = ChatColor.GRAY + "Owner is offline. Console orders: "
-            + "summon [n], build <kind> (Nether only), strike <player> (the Breach), orbital <player> (Nuke), stabshot <player>, mobcannon <player> [n], team list|add|remove <player>, dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle";
+            + "summon [n], build <kind> (Nether only), chests place <kind> (look at a block), strike <player> (the Breach), orbital <player> (Nuke), stabshot <player>, mobcannon <player> [n], team list|add|remove <player>, dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle";
 
     private void offlineMode(CommandSender sender, NullArmy.Mode mode) {
         sender.sendMessage(army.setModeOffline(mode)
@@ -329,6 +330,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             case "invade" -> handleInvade(owner, args);
             case "ambush" -> handleAmbush(owner, args);
             case "team" -> teamOrder(owner, args);
+            case "chests" -> handleChests(owner, args);
             case "orbital" -> targetedOrder(owner, args, army::orbitalNuke);
             case "stabshot" -> targetedOrder(owner, args, army::stabShot);
             case "totem" -> totems.giveTotem(owner);
@@ -459,6 +461,22 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             return null;
         }
         return target;
+    }
+
+    /** chests place <deposit|supply|stash|loot>: builds a chest on the block you're looking at. */
+    private void handleChests(Player owner, String[] args) {
+        if (args.length < 3 || !args[1].equalsIgnoreCase("place")) {
+            owner.sendMessage(ChatColor.GRAY + "Usage: chests place <deposit|supply|stash|loot>  (look at the block to build on)");
+            return;
+        }
+        Chests.Kind kind;
+        try {
+            kind = Chests.Kind.valueOf(args[2].toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            owner.sendMessage(ChatColor.RED + "Unknown chest kind. Use deposit, supply, stash or loot.");
+            return;
+        }
+        owner.sendMessage(ChatColor.DARK_PURPLE + army.placeChestAimed(owner, kind));
     }
 
     /** Runs a strike on a roster player named in args[1]. Works for the owner online or the console. */

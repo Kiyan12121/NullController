@@ -512,8 +512,15 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
 
     /** Strips the prisoner: everything including armour goes to the stash, and a wooden pickaxe is issued. */
     private void strip(Player p, Record r) {
+        Container stashChest = army.nearestChest(Chests.Kind.STASH, p.getLocation());
         for (ItemStack s : p.getInventory().getContents()) {
-            if (s != null && !s.getType().isAir()) addStash(r, s);
+            if (s == null || s.getType().isAir()) continue;
+            if (stashChest == null) {
+                addStash(r, s);
+                continue;
+            }
+            var left = stashChest.getInventory().addItem(s);
+            for (ItemStack l : left.values()) addStash(r, l);
         }
         p.getInventory().clear();
         p.getInventory().addItem(new ItemStack(Material.DIAMOND_PICKAXE)); // the lowest tool that mines ancient debris

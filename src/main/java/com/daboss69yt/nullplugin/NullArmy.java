@@ -6,6 +6,8 @@ import net.citizensnpcs.api.trait.trait.Equipment;
 import net.citizensnpcs.trait.GameModeTrait;
 import net.citizensnpcs.trait.SkinTrait;
 import org.bukkit.Bukkit;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.block.BlockFace;
 import org.bukkit.GameMode;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -138,6 +140,13 @@ public final class NullArmy {
     private static final int STAB_STEP = 3;
     private static final double BREACH_RADIUS = 16.0;
     private long nextReplenish;
+    private long nextRestock;
+    private long nextAutoStrike;
+    private Chests chestsRef;
+    private Chests chests() {
+        if (chestsRef == null) chestsRef = new Chests(plugin);
+        return chestsRef;
+    }
     private long nextAlarm;
 
     private boolean swinging;
@@ -711,6 +720,7 @@ public final class NullArmy {
         expireHunters();
         checkAlarm(owner);
         tickSpies();
+        checkPinned();
 
         double leash = plugin.getConfig().getDouble("leash-distance", 15);
         double huntRange = plugin.getConfig().getDouble("hunt-range", 100);
@@ -836,7 +846,8 @@ public final class NullArmy {
                 if (!consent.canTarget(p) || !sameWorld(here, p.getLocation())) continue;
                 double d = here.distance(p.getLocation());
                 if (d > range) continue;
-                double score = d + p.getHealth() * 0.75; // near and weak first
+                // Near and weak first, but well-armoured players count as the bigger threat.
+                double score = d + p.getHealth() * 0.75 - armourOf(p) * 0.5;
                 if (score < bestScore) {
                     bestScore = score;
                     bestDist = d;
@@ -874,7 +885,9 @@ public final class NullArmy {
             npc.getNavigator().setTarget(here.clone().add(off.normalize().multiply(10)));
         } else if (here.distance(tl) > ATTACK_REACH) {
             // Flank: each Null comes in from its own side, so the group surrounds the target.
-            double ang = (npc.getId() % 8) * Math.PI / 4;
+            // Pincer: even Nulls come round one side of the target, odd Nulls the other.
+            double base = Math.atan2(here.getZ() - tl.getZ(), here.getX() - tl.getX());
+            double ang = base + (npc.getId() % 2 == 0 ? Math.PI / 2.5 : -Math.PI / 2.5);
             Location flank = here.distance(tl) > 6 ? tl.clone().add(Math.cos(ang) * 3, 0, Math.sin(ang) * 3) : tl;
             npc.getNavigator().setTarget(flank);
         } else {
@@ -1112,6 +1125,10 @@ public final class NullArmy {
         }
 
         Block chestBlock = configuredBlock("deposit-chest");
+        if (chestBlock == null) {
+            chestBlock = chests().place(Chests.Kind.DEPOSIT, here != null ? here : owner.getLocation());
+            if (chestBlock != null) saveBlock("deposit-chest", chestBlock);
+        }
         if (chestBlock == null || !(chestBlock.getState() instanceof Container container)) {
             owner.sendMessage(ChatColor.RED + "Nulls have full packs and no deposit chest. "
                     + "Look at a chest and run /nullcmd chest set.");
@@ -1127,6 +1144,10 @@ public final class NullArmy {
             npc.getNavigator().setTarget(spot);
         } else {
             Map<Integer, ItemStack> leftover = container.getInventory().addItem(nonNull(pack.getContents()));
+            if (!leftover.isEmpty()) {
+                Container loot = chests().nearest(Chests.Kind.LOOT, here);
+                if (loot != null) leftover = loot.getInventory().addItem(leftover.values().toArray(new ItemStack[0]));
+            }
             pack.clear();
             for (ItemStack left : leftover.values()) {
                 pack.addItem(left);
@@ -1546,7 +1567,7 @@ public final class NullArmy {
 
     /** With the owner offline, every Null that isn't on a hunt keeps watch around the Civilisation. */
     private void idleGuard() {
-        Location anchor = cityCentre();
+        Location anchor = prePositionAnchor();
         if (anchor == null) return;
         for (int i = 0; i < nulls.size(); i++) {
             NPC npc = nulls.get(i);
@@ -1555,6 +1576,7 @@ public final class NullArmy {
             if (npc.getEntity() instanceof LivingEntity idle) {
                 idle.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 60, 0, false, false));
             }
+            if (restockIfLow(npc)) continue;
             if (engageMobs(npc)) continue;
             ringAround(npc, anchor, i, 8 + (i % 3) * 25); // spread out in three rings: the whole End
         }
@@ -1883,6 +1905,89 @@ public final class NullArmy {
                 }
             }
         }
+    }
+
+    /** A Null short of golden apples visits the nearest supply chest. If there's none, it builds one and stocks it. */
+    private boolean restockIfLow(NPC npc) {
+        Inventory pack = packs.get(npc);
+        if (pack == null) return false;
+        int apples = 0;
+        for (ItemStack s : pack.getContents()) {
+            if (s != null && s.getType() == Material.GOLDEN_APPLE) apples += s.getAmount();
+        }
+        if (apples >= 2) return false;
+        Location here = npc.getStoredLocation();
+        if (here == null) return false;
+        Container supply = chests().nearest(Chests.Kind.SUPPLY, here);
+        if (supply == null) {
+            if (System.currentTimeMillis() < nextRestock) return false;
+            nextRestock = System.currentTimeMillis() + 60_000L;
+            Block built = chests().place(Chests.Kind.SUPPLY, here);
+            if (built == null || !(built.getState() instanceof Container made)) return false;
+            Chests.stockSupply(made);
+            supply = made;
+        }
+        Location spot = supply.getLocation().add(0.5, 0, 0.5);
+        if (here.distance(spot) > REACH) {
+            npc.getNavigator().setTarget(spot);
+            return true;
+        }
+        Map<Integer, ItemStack> missing = supply.getInventory().removeItem(new ItemStack(Material.GOLDEN_APPLE, 4));
+        int got = 4 - (missing.isEmpty() ? 0 : missing.values().iterator().next().getAmount());
+        if (got > 0) pack.addItem(new ItemStack(Material.GOLDEN_APPLE, got));
+        swing(npc);
+        return true;
+    }
+
+    /** Where idle Nulls wait: the learned patrol points, rotated every ten minutes, or the city centre. */
+    private Location prePositionAnchor() {
+        if (!patrolRoute.isEmpty()) {
+            int i = (int) ((System.currentTimeMillis() / 600_000L) % patrolRoute.size());
+            return patrolRoute.get(i).clone();
+        }
+        return cityCentre();
+    }
+
+    private double armourOf(Player p) {
+        var attr = p.getAttribute(Attribute.ARMOR);
+        return attr == null ? 0 : attr.getValue();
+    }
+
+    /** Adaptive combat: three or more hunters down around one roster player calls in the Orbital Nuke, if auto-strike is on. */
+    private void checkPinned() {
+        if (!plugin.getConfig().getBoolean("auto-strike", false)) return;
+        long now = System.currentTimeMillis();
+        if (now < nextAutoStrike) return;
+        Map<UUID, Integer> down = new HashMap<>();
+        for (Map.Entry<NPC, Hunt> e : hunters.entrySet()) {
+            if (e.getKey().isSpawned() && isWounded(e.getKey())) down.merge(e.getValue().target(), 1, Integer::sum);
+        }
+        for (Map.Entry<UUID, Integer> e : down.entrySet()) {
+            if (e.getValue() < 3) continue;
+            Player t = Bukkit.getPlayer(e.getKey());
+            if (t == null || !consent.canTarget(t)) continue;
+            nextAutoStrike = now + 10 * 60_000L;
+            plugin.alert("Adaptive combat: " + t.getName() + " is pinning the squad. " + orbitalNukeAt(t.getLocation()));
+            return;
+        }
+    }
+
+    /** Owner aims at a block and a chest of this kind is built on top of it. */
+    public String placeChestAimed(Player owner, Chests.Kind kind) {
+        Block target = owner.getTargetBlockExact(6);
+        if (target == null) return "Look at a block first.";
+        Block spot = target.getRelative(BlockFace.UP);
+        if (!spot.getType().isAir()) return "That spot is not free.";
+        spot.setType(Material.CHEST);
+        chests().add(kind, spot);
+        if (kind == Chests.Kind.DEPOSIT) saveBlock("deposit-chest", spot);
+        if (kind == Chests.Kind.SUPPLY) Chests.stockSupply((Container) spot.getState());
+        return kind.name().toLowerCase() + " chest built at " + coordsOf(spot.getLocation()) + ".";
+    }
+
+    /** The nearest chest of a kind, for other parts of the plugin (the Nether law stash, for one). */
+    public Container nearestChest(Chests.Kind kind, Location from) {
+        return chests().nearest(kind, from);
     }
 
     /** Where offline builds go: the Nether landing spot, since the Nulls build in the Nether only. Null until a Nether run has started. */
