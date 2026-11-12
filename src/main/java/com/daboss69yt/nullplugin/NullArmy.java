@@ -973,7 +973,7 @@ public final class NullArmy {
         return switch (kind) {
             case MINE -> minePriority(b.getType());
             case LUMBER -> Tag.LOGS.isTagged(b.getType()) ? 0 : -1;
-            case FARM -> isMatureCrop(b) ? 0 : -1;
+            case FARM -> (isMatureCrop(b) || b.getType() == Material.MELON || b.getType() == Material.PUMPKIN) ? 0 : -1;
         };
     }
 
@@ -1032,6 +1032,8 @@ public final class NullArmy {
             if (block.getBlockData() instanceof Ageable ageable) {
                 ageable.setAge(0);
                 block.setBlockData(ageable, false);
+            } else {
+                block.setType(Material.AIR, false); // melon or pumpkin: the stem regrows it
             }
         } else {
             Material logType = block.getType();

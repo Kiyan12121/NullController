@@ -3,6 +3,7 @@ package com.daboss69yt.nullplugin;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitRunnable;
 
@@ -15,7 +16,12 @@ import java.util.Deque;
  */
 public final class BuildQueue {
 
-    public record Placement(Location location, Material material) {}
+    /** A block to place. data is optional; when set it carries facing and state, such as hopper direction. */
+    public record Placement(Location location, Material material, BlockData data) {
+        public Placement(Location location, Material material) {
+            this(location, material, null);
+        }
+    }
 
     private final Plugin plugin;
     private final Deque<Placement> pending = new ArrayDeque<>();
@@ -47,7 +53,9 @@ public final class BuildQueue {
                 for (int i = 0; i < blocksPerTick && !pending.isEmpty(); i++) {
                     Placement p = pending.poll();
                     Block block = p.location().getBlock();
-                    if (block.getType() != p.material()) {
+                    if (p.data() != null) {
+                        if (!block.getBlockData().matches(p.data())) block.setBlockData(p.data(), false);
+                    } else if (block.getType() != p.material()) {
                         block.setType(p.material(), false);
                     }
                 }

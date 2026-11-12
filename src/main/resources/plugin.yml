@@ -1,5 +1,5 @@
 name: NullController
-version: 4.1.1
+version: 4.2.0
 main: com.daboss69yt.nullplugin.NullControllerPlugin
 api-version: '26.3'
 author: daboss69yt

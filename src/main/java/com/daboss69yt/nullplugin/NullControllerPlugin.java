@@ -16,7 +16,9 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerFishEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.block.data.Openable;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
@@ -24,6 +26,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,10 +35,11 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
 
     private static final List<String> SUBCOMMANDS = List.of("summon", "dismiss", "recall", "guard", "follow",
             "hunt", "stay", "goto", "status", "ranks", "mine", "lumber", "farm", "forge", "chest", "patrol",
-            "build", "fortify", "cage", "invade", "ambush", "totem", "succession", "event", "help");
+            "build", "fortify", "cage", "invade", "ambush", "totem", "succession", "event", "remote", "help");
     private static final List<String> BUILDS = List.of("citadel", "bridge", "watchtower", "barracks",
-            "forgegate", "spire", "city", "cancel", "undo", "preview");
+            "forgegate", "spire", "city", "collector", "smelter", "door", "melonfarm", "cancel", "undo", "preview");
     private static final List<String> EVENTS = List.of("forge", "capital", "end", "clash");
+    private static final String REMOTE_NAME = ChatColor.DARK_PURPLE + "Null Remote";
 
     private static final String MENU_TITLE = ChatColor.DARK_PURPLE + "" + ChatColor.BOLD + "The Null: Control";
 
@@ -172,6 +176,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             case "totem" -> totems.giveTotem(owner);
             case "succession" -> totems.succession(owner);
             case "event" -> handleEvent(owner, args);
+            case "remote" -> handleRemote(owner, args);
             default -> owner.sendMessage(ChatColor.RED + "Unknown order: " + args[0]);
         }
     }
@@ -385,6 +390,81 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         }
     }
 
+    /** /nullcmd remote gives the Null Remote rod. /nullcmd remote link registers the iron door you're looking at. */
+    private void handleRemote(Player owner, String[] args) {
+        if (args.length > 1 && args[1].equalsIgnoreCase("link")) {
+            linkDoor(owner);
+            return;
+        }
+        ItemStack rod = new ItemStack(Material.FISHING_ROD);
+        ItemMeta meta = rod.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(REMOTE_NAME);
+            meta.setLore(List.of(ChatColor.GRAY + "Cast the hook onto a linked door to open or close it."));
+            rod.setItemMeta(meta);
+        }
+        owner.getInventory().addItem(rod);
+        owner.sendMessage(ChatColor.DARK_PURPLE + "Null Remote issued. Link doors with /nullcmd remote link while looking at them.");
+    }
+
+    private void linkDoor(Player owner) {
+        Block target = owner.getTargetBlockExact(6);
+        if (target == null || !(target.getBlockData() instanceof Openable)) {
+            owner.sendMessage(ChatColor.RED + "Look at a door within 6 blocks and try again.");
+            return;
+        }
+        String entry = target.getWorld().getName() + "," + target.getX() + "," + target.getY() + "," + target.getZ();
+        List<String> doors = new ArrayList<>(getConfig().getStringList("remote-doors"));
+        if (!doors.contains(entry)) doors.add(entry);
+        getConfig().set("remote-doors", doors);
+        saveConfig();
+        owner.sendMessage(ChatColor.DARK_PURPLE + "Door linked to the Null Remote.");
+    }
+
+    /** Casting a Null Remote onto a linked door (within 4 blocks of it) toggles the door open or closed. */
+    @EventHandler
+    public void onRemoteCast(PlayerFishEvent event) {
+        if (event.getState() != PlayerFishEvent.State.IN_GROUND) return;
+        Player p = event.getPlayer();
+        if (!consent.isOwner(p)) return;
+        ItemStack held = p.getInventory().getItemInMainHand();
+        if (held.getType() != Material.FISHING_ROD || held.getItemMeta() == null
+                || !REMOTE_NAME.equals(held.getItemMeta().getDisplayName())) return;
+
+        Location hook = event.getHook().getLocation();
+        for (String raw : getConfig().getStringList("remote-doors")) {
+            String[] parts = raw.split(",");
+            if (parts.length != 4) continue;
+            World w = Bukkit.getWorld(parts[0]);
+            if (w == null || !w.equals(hook.getWorld())) continue;
+            try {
+                int x = Integer.parseInt(parts[1]);
+                int y = Integer.parseInt(parts[2]);
+                int z = Integer.parseInt(parts[3]);
+                if (new Location(w, x + 0.5, y, z + 0.5).distance(hook) > 4) continue;
+                boolean open = toggleDoor(w, x, y, z);
+                p.sendMessage(ChatColor.DARK_PURPLE + "Door " + (open ? "opened" : "closed") + " by Null Remote.");
+            } catch (NumberFormatException ex) {
+                getLogger().warning("Bad remote-doors entry in config.yml: " + raw);
+            }
+        }
+    }
+
+    /** Flips both halves of a door. Returns true if it is now open. */
+    private boolean toggleDoor(World w, int x, int y, int z) {
+        Block base = w.getBlockAt(x, y, z);
+        if (!(base.getBlockData() instanceof Openable first)) return false;
+        boolean next = !first.isOpen();
+        for (int dy = -1; dy <= 1; dy++) {
+            Block b = w.getBlockAt(x, y + dy, z);
+            if (b.getBlockData() instanceof Openable op) {
+                op.setOpen(next);
+                b.setBlockData(op, false);
+            }
+        }
+        return next;
+    }
+
     private void title(Player p, String main, String sub) {
         p.sendTitle(ChatColor.DARK_PURPLE + main, ChatColor.GRAY + sub, 10, 60, 20);
     }
@@ -396,6 +476,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         owner.sendMessage(ChatColor.GRAY + "Builds: " + ChatColor.WHITE + "build <citadel|bridge|watchtower|barracks|forgegate|spire|cancel|undo|preview <type>>, fortify");
         owner.sendMessage(ChatColor.GRAY + "Roster only: " + ChatColor.WHITE + "cage <player>, invade <player>, ambush on|off");
         owner.sendMessage(ChatColor.GRAY + "Totem: " + ChatColor.WHITE + "totem, succession");
+        owner.sendMessage(ChatColor.GRAY + "Machines: " + ChatColor.WHITE + "build collector|smelter|door|melonfarm; remote [link]");
         owner.sendMessage(ChatColor.GRAY + "Events: " + ChatColor.WHITE + "event <forge|capital|end|clash>");
         owner.sendMessage(ChatColor.GRAY + "Or open " + ChatColor.WHITE + "/nullui" + ChatColor.GRAY + " for the panel.");
     }

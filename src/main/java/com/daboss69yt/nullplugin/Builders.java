@@ -206,6 +206,10 @@ public final class Builders {
             case "forgegate" -> new Plan("Forge Gate", Structures.forgeGate(base));
             case "spire" -> new Plan("Beacon Spire", Structures.beaconSpire(base));
             case "city" -> new Plan("Null Civilisation", City.plan(base));
+            case "collector" -> new Plan("Item Line", Machines.itemLine(base));
+            case "smelter" -> new Plan("Auto-Smelter Bank", Machines.smelterBank(base));
+            case "door" -> new Plan("Iron Door Gate", Machines.ironDoor(base));
+            case "melonfarm" -> new Plan("Melon Farm", Machines.melonFarm(base));
             case "bridge" -> {
                 int[] dir = facingDirection(owner);
                 Location start = base.clone().add(dir[0] * 2, 0, dir[1] * 2);
@@ -217,7 +221,7 @@ public final class Builders {
 
     private void unknown(Player owner, String type) {
         owner.sendMessage(ChatColor.RED + "Unknown build: " + type
-                + ". Options: citadel, bridge, watchtower, barracks, forgegate, spire, city.");
+                + ". Options: citadel, bridge, watchtower, barracks, forgegate, spire, city, collector, smelter, door, melonfarm.");
     }
 
     /** The Civilisation gets a faster budget so it finishes in minutes, not hours. */

@@ -1,4 +1,11 @@
-# NullController 4.1
+# NullController 4.2
+
+## Machines and the Null Remote (4.2)
+- `/nullcmd build collector`: an input chest, a hopper line, and an output chest.
+- `/nullcmd build smelter`: four furnace columns, each with an input chest and an output chest. Add fuel to the furnaces by hand.
+- `/nullcmd build door`: a stone doorway with an iron door.
+- `/nullcmd build melonfarm`: a melon field on farmland with a water channel. The Nulls on FARM mode harvest the melons, and the stems regrow them.
+- `/nullcmd remote`: gives you a Null Remote fishing rod. Look at an iron door and run `/nullcmd remote link` to register it. Casting the rod so the hook lands within 4 blocks of a linked door opens or closes it.
 
 ## Smarter Nulls (4.1)
 - Threat order: creepers are shot down first, then endermen, witches, blazes and pillagers, then skeletons, then everything else.
