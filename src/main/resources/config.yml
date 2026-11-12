@@ -52,3 +52,6 @@ roam-radius: 12
 
 # Repairs the last build every N minutes when it is idle and something is missing.
 auto-fortify-minutes: 3
+
+# Alarm: this many hostile mobs within 16 blocks of you rallies the army for 30 seconds.
+alarm-threshold: 5

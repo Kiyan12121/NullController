@@ -8,6 +8,7 @@ import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -27,7 +28,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public final class NullControllerPlugin extends JavaPlugin implements Listener {
+public final class NullControllerPlugin extends JavaPlugin implements Listener, TabCompleter {
+
+    private static final List<String> SUBCOMMANDS = List.of("summon", "dismiss", "recall", "guard", "follow",
+            "hunt", "stay", "goto", "status", "ranks", "mine", "lumber", "farm", "forge", "chest", "patrol",
+            "build", "fortify", "cage", "invade", "ambush", "totem", "succession", "event", "help");
+    private static final List<String> BUILDS = List.of("citadel", "bridge", "watchtower", "barracks",
+            "forgegate", "spire", "cancel", "undo", "preview");
+    private static final List<String> EVENTS = List.of("forge", "capital", "end", "clash");
 
     private static final String MENU_TITLE = ChatColor.DARK_PURPLE + "" + ChatColor.BOLD + "The Null: Control";
 
@@ -58,6 +66,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener {
         }, 20L * 60, 20L * 60 * minutes);
         totems = new TotemManager(this, consent, army);
         getServer().getPluginManager().registerEvents(this, this);
+        getCommand("nullcmd").setTabCompleter(this);
         getLogger().info("NullController 3.0.0 online. Consent roster loaded.");
     }
 
@@ -127,7 +136,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener {
         }
         Player owner = (Player) sender;
         if (args.length == 0) {
-            owner.sendMessage(ChatColor.GRAY + "Usage: /nullcmd <summon [n]|dismiss|recall|guard|follow|hunt|stay|goto|status|mine|lumber|farm|forge|chest|patrol|build|fortify|cage|invade|ambush|totem|succession|event>");
+            owner.sendMessage(ChatColor.GRAY + "Usage: /nullcmd help  (lists every order)");
             return true;
         }
         dispatch(owner, args);
@@ -145,6 +154,8 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener {
             case "hunt" -> army.setMode(NullArmy.Mode.HUNT, owner);
             case "stay" -> army.setMode(NullArmy.Mode.STAY, owner);
             case "status" -> army.status(owner);
+            case "ranks" -> army.showRanks(owner);
+            case "help" -> sendHelp(owner);
             case "goto" -> handleGoto(owner, args);
             case "mine" -> army.setMode(NullArmy.Mode.MINE, owner);
             case "lumber" -> army.setMode(NullArmy.Mode.LUMBER, owner);
@@ -244,6 +255,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener {
         Player target = requireConsentingTarget(owner, args, 1, "cage");
         if (target == null) return;
         builders.startBuild(owner, "Bedrock Cage", Structures.cage(target.getLocation()));
+        title(owner, "BEDROCK CAGE", "Sealing the target");
         army.guardCage(target.getLocation());
     }
 
@@ -308,14 +320,17 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener {
         String ev = args.length > 1 ? args[1].toLowerCase() : "";
         switch (ev) {
             case "forge" -> {
+                title(owner, "FORGE AWAKENING", "The squad mobilises");
                 if (army.setMode(NullArmy.Mode.FORGE, owner)) army.summon(owner, 5);
             }
             case "capital" -> {
+                title(owner, "CAPITAL DEFENSE", "Watchtower rising");
                 army.setMode(NullArmy.Mode.GUARD, owner);
                 army.summon(owner, 8);
                 builders.build(owner, "watchtower");
             }
             case "end" -> {
+                title(owner, "END COMMAND POST", "Barracks going up");
                 if (owner.getWorld().getEnvironment() != World.Environment.THE_END) {
                     owner.sendMessage(ChatColor.RED + "The End Command Post can only be set up in The End.");
                     return;
@@ -325,6 +340,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener {
                 builders.build(owner, "barracks");
             }
             case "clash" -> {
+                title(owner, "FACTION CLASH", "Hostiles will be engaged");
                 army.setMode(NullArmy.Mode.GUARD, owner);
                 army.summon(owner, 8);
                 owner.sendMessage(ChatColor.GRAY + "Faction Clash: the squad will engage hostile mobs. "
@@ -332,6 +348,35 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener {
             }
             default -> owner.sendMessage(ChatColor.GRAY + "Usage: /nullcmd event <forge|capital|end|clash>");
         }
+    }
+
+    private void title(Player p, String main, String sub) {
+        p.sendTitle(ChatColor.DARK_PURPLE + main, ChatColor.GRAY + sub, 10, 60, 20);
+    }
+
+    private void sendHelp(Player owner) {
+        owner.sendMessage(ChatColor.DARK_PURPLE + "=== NullController 4.0 ===");
+        owner.sendMessage(ChatColor.GRAY + "Army: " + ChatColor.WHITE + "summon [n], dismiss, recall, status, ranks");
+        owner.sendMessage(ChatColor.GRAY + "Modes: " + ChatColor.WHITE + "guard, follow, hunt, stay, goto <x> <y> <z>, mine, lumber, farm, forge, patrol");
+        owner.sendMessage(ChatColor.GRAY + "Builds: " + ChatColor.WHITE + "build <citadel|bridge|watchtower|barracks|forgegate|spire|cancel|undo|preview <type>>, fortify");
+        owner.sendMessage(ChatColor.GRAY + "Roster only: " + ChatColor.WHITE + "cage <player>, invade <player>, ambush on|off");
+        owner.sendMessage(ChatColor.GRAY + "Totem: " + ChatColor.WHITE + "totem, succession");
+        owner.sendMessage(ChatColor.GRAY + "Events: " + ChatColor.WHITE + "event <forge|capital|end|clash>");
+        owner.sendMessage(ChatColor.GRAY + "Or open " + ChatColor.WHITE + "/nullui" + ChatColor.GRAY + " for the panel.");
+    }
+
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (!isOwner(sender)) return List.of();
+        if (args.length == 1) return filter(SUBCOMMANDS, args[0]);
+        if (args.length == 2 && args[0].equalsIgnoreCase("build")) return filter(BUILDS, args[1]);
+        if (args.length == 2 && args[0].equalsIgnoreCase("event")) return filter(EVENTS, args[1]);
+        return List.of();
+    }
+
+    private static List<String> filter(List<String> options, String typed) {
+        String t = typed.toLowerCase();
+        return options.stream().filter(o -> o.startsWith(t)).toList();
     }
 
     private int parseInt(String s, int fallback) {
@@ -385,6 +430,8 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener {
         button(inv, 40, Material.RED_NETHER_BRICKS, "Nether Ambush: toggle", "Two hunters for roster players entering the Nether", "ambush", "toggle");
         button(inv, 41, Material.TOTEM_OF_UNDYING, "Get Totem of NULL", "Issues your active totem", "totem");
         button(inv, 42, Material.NETHER_STAR, "Succession", "Mints a new totem and voids the old ones", "succession");
+        button(inv, 43, Material.SPYGLASS, "Ranks", "Every Null's rank, health and state", "ranks");
+        button(inv, 44, Material.WRITABLE_BOOK, "Help", "Lists every command", "help");
 
         button(inv, 46, Material.CRIMSON_FUNGUS, "Event: Forge Awakening", "Squad of 5 mobilises at the Forge", "event", "forge");
         button(inv, 47, Material.GOLD_BLOCK, "Event: Capital Defense", "Squad of 8 guards, watchtower built", "event", "capital");

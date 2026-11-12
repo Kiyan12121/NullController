@@ -60,6 +60,7 @@ public final class NullArmy {
     private static final int SCAN_EVERY_CYCLES = 6;
     private static final int ATTACK_COOLDOWN_CYCLES = 2;
     private static final int ROAM_CYCLES = 8;
+    private static final int FORGE_AWAKEN_CYCLES = 120;
     private static final double WOUNDED_HP = 6.0;
     private static final Set<Material> FARM_CROPS = Set.of(
             Material.WHEAT, Material.CARROTS, Material.POTATOES, Material.BEETROOTS, Material.NETHER_WART);
@@ -99,6 +100,10 @@ public final class NullArmy {
     private NPC leader;
     private final Map<NPC, Character> ranks = new HashMap<>();
     private Location cageGuard;
+    private final Map<NPC, Character> promotions = new HashMap<>();
+    private final Map<NPC, Integer> forgeCycles = new HashMap<>();
+    private long alarmUntil;
+    private long nextAlarm;
 
     private boolean swinging;
     private BukkitRunnable swingTask;
@@ -383,6 +388,8 @@ public final class NullArmy {
         wanderGoals.remove(npc);
         wanderUntil.remove(npc);
         ranks.remove(npc);
+        promotions.remove(npc);
+        forgeCycles.remove(npc);
         if (npc == leader) {
             leader = nulls.isEmpty() ? null : nulls.get(0);
         }
@@ -415,7 +422,61 @@ public final class NullArmy {
         ranks.clear();
         for (int i = 0; i < nulls.size(); i++) {
             char rank = i == 0 ? 'R' : i <= 2 ? 'A' : i <= 6 ? 'I' : 'D';
+            Character promoted = promotions.get(nulls.get(i));
+            if (promoted != null && rankLevel(promoted) > rankLevel(rank)) rank = promoted;
             ranks.put(nulls.get(i), rank);
+        }
+    }
+
+    private static int rankLevel(char r) {
+        return switch (r) {
+            case 'R' -> 4;
+            case 'A' -> 3;
+            case 'I' -> 2;
+            default -> 1;
+        };
+    }
+
+    /** Forge Awakening: a Null held at the Forge long enough rises one rank (D to I, I to A). */
+    private void forgeHold(NPC npc, Player owner) {
+        int held = forgeCycles.merge(npc, 1, Integer::sum);
+        if (held < FORGE_AWAKEN_CYCLES) return;
+        forgeCycles.remove(npc);
+        char current = ranks.getOrDefault(npc, 'D');
+        char next = current == 'D' ? 'I' : current == 'I' ? 'A' : '\0';
+        if (next == '\0') return;
+        promotions.put(npc, next);
+        recomputeRanks();
+        owner.sendMessage(ChatColor.DARK_PURPLE + "[NULL] " + npc.getName() + " rose at the Forge. Rank " + next + ".");
+    }
+
+    /** Alarm: when hostile mobs crowd the owner, the army rallies with doubled reach for 30 seconds. */
+    private void checkAlarm(Player owner) {
+        long now = System.currentTimeMillis();
+        if (now < nextAlarm) return;
+        int threat = 0;
+        for (Entity e : owner.getNearbyEntities(16, 8, 16)) {
+            if (e instanceof Monster) threat++;
+        }
+        if (threat < plugin.getConfig().getInt("alarm-threshold", 5)) return;
+        alarmUntil = now + 30_000L;
+        nextAlarm = now + 60_000L;
+        owner.sendTitle(ChatColor.DARK_RED + "ALARM", ChatColor.GRAY + "" + threat + " hostiles. Rally.", 5, 40, 10);
+        owner.sendMessage(ChatColor.DARK_RED + "[NULL] Alarm: " + threat + " hostiles near you. The army is rallying.");
+    }
+
+    /** Lists every Null with its rank and health. */
+    public void showRanks(Player owner) {
+        if (nulls.isEmpty()) {
+            owner.sendMessage(ChatColor.GRAY + "No Nulls on the field.");
+            return;
+        }
+        owner.sendMessage(ChatColor.DARK_PURPLE + "Army ranks:");
+        for (NPC npc : nulls) {
+            Entity e = npc.getEntity();
+            int hp = e instanceof LivingEntity living ? (int) Math.ceil(living.getHealth()) : 0;
+            owner.sendMessage(ChatColor.GRAY + " [" + ranks.getOrDefault(npc, 'D') + "] " + ChatColor.WHITE
+                    + npc.getName() + ChatColor.GRAY + " HP " + hp + (npc.isSpawned() ? "" : " (not spawned)"));
         }
     }
 
@@ -490,6 +551,7 @@ public final class NullArmy {
         if (owner == null) return;
         cycle++;
         expireHunters();
+        checkAlarm(owner);
 
         double leash = plugin.getConfig().getDouble("leash-distance", 15);
         double huntRange = plugin.getConfig().getDouble("hunt-range", 100);
@@ -589,11 +651,15 @@ public final class NullArmy {
         Location here = npc.getStoredLocation();
         Player best = null;
         double bestDist = range;
+        double bestScore = Double.MAX_VALUE;
         if (here != null) {
             for (Player p : Bukkit.getOnlinePlayers()) {
                 if (!consent.canTarget(p) || !sameWorld(here, p.getLocation())) continue;
                 double d = here.distance(p.getLocation());
-                if (d < bestDist) {
+                if (d > range) continue;
+                double score = d + p.getHealth() * 0.75; // near and weak first
+                if (score < bestScore) {
+                    bestScore = score;
                     bestDist = d;
                     best = p;
                 }
@@ -632,7 +698,7 @@ public final class NullArmy {
     private boolean engageMobs(NPC npc) {
         Location here = npc.getStoredLocation();
         if (here == null || here.getWorld() == null) return false;
-        double range = plugin.getConfig().getDouble("combat-range", 8);
+        double range = plugin.getConfig().getDouble("combat-range", 8) * (System.currentTimeMillis() < alarmUntil ? 2 : 1);
         Monster best = null;
         double bestDist = range;
         double bestHealth = Double.MAX_VALUE;
@@ -713,6 +779,8 @@ public final class NullArmy {
             teleport(npc, spot);
         } else if (here.distance(spot) > FORGE_HOLD) {
             npc.getNavigator().setTarget(spot);
+        } else {
+            forgeHold(npc, owner);
         }
     }
 
