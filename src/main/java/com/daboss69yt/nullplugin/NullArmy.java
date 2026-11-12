@@ -22,6 +22,8 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Monster;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.scheduler.BukkitRunnable;
 
@@ -572,6 +574,7 @@ public final class NullArmy {
                 continue;
             }
             if (isWounded(npc)) {
+                fieldHeal(npc);
                 followOwner(npc, owner, nulls.indexOf(npc), leash);
                 continue;
             }
@@ -583,6 +586,7 @@ public final class NullArmy {
                 case GUARD -> {
                     if (engageMobs(npc)) continue;
                     if (cageGuard != null) guardPoint(npc, index);
+                    else if (index % 2 == 1 && isNight(owner)) ringAround(npc, owner.getLocation(), index, 10);
                     else followOwner(npc, owner, index, leash);
                 }
                 case FOLLOW -> {
@@ -720,12 +724,17 @@ public final class NullArmy {
         Monster best = null;
         double bestDist = range;
         double bestHealth = Double.MAX_VALUE;
+        int bestRank = Integer.MAX_VALUE;
         for (Entity e : here.getWorld().getNearbyEntities(here, range, range, range)) {
             if (!(e instanceof Monster m)) continue;
             double d = here.distance(m.getLocation());
             if (d > range) continue;
+            int rank = threatRank(m);
             double hp = m.getHealth();
-            if (hp < bestHealth || (hp == bestHealth && d < bestDist)) {
+            boolean better = rank < bestRank
+                    || (rank == bestRank && (hp < bestHealth || (hp == bestHealth && d < bestDist)));
+            if (better) {
+                bestRank = rank;
                 bestHealth = hp;
                 bestDist = d;
                 best = m;
@@ -738,6 +747,41 @@ public final class NullArmy {
             npc.getNavigator().setTarget(best, true);
         }
         return true;
+    }
+
+    /** Lower is more urgent: creepers first (they explode), then ranged and dangerous mobs, then the rest. */
+    private static int threatRank(Monster m) {
+        return switch (m.getType()) {
+            case CREEPER -> 0;
+            case ENDERMAN, WITCH, BLAZE, PILLAGER, VINDICATOR -> 1;
+            case SKELETON, STRAY, WITHER_SKELETON -> 2;
+            default -> 3;
+        };
+    }
+
+    /** Wounded Nulls get regeneration while they fall back to the group. */
+    private void fieldHeal(NPC npc) {
+        Entity e = npc.getEntity();
+        if (e instanceof LivingEntity living) {
+            living.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 60, 1, false, false));
+        }
+    }
+
+    private static boolean isNight(Player owner) {
+        long t = owner.getWorld().getTime();
+        return t >= 13000 && t < 23000;
+    }
+
+    /** Puts a Null on a ring of the given radius around a centre point. */
+    private void ringAround(NPC npc, Location centre, int index, double radius) {
+        double angle = (2 * Math.PI / Math.max(1, nulls.size())) * index;
+        Location spot = centre.clone().add(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+        Location here = npc.getStoredLocation();
+        if (here == null || !sameWorld(here, spot) || here.distance(spot) > TELEPORT_OVER) {
+            teleport(npc, spot);
+        } else if (here.distance(spot) > REACH) {
+            npc.getNavigator().setTarget(spot);
+        }
     }
 
     private void attack(NPC npc, LivingEntity target) {

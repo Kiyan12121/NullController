@@ -1,4 +1,9 @@
-# NullController 4.0
+# NullController 4.1
+
+## Smarter Nulls (4.1)
+- Threat order: creepers are shot down first, then endermen, witches, blazes and pillagers, then skeletons, then everything else.
+- Field medic: a wounded Null falls back to you and gets regeneration on the way.
+- Night watch: from dusk to dawn, every other Null stands a ring 10 blocks around you while the rest stay on guard.
 
 ## Hunting and the Null Civilisation
 - `/nullcmd hunt <player>`: the whole army hunts one roster player until you change the order. Use `/nullcmd hunt any` to go back to hunting whoever on the roster is nearest.
