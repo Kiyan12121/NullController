@@ -46,3 +46,9 @@ army-cooldown-minutes: 30
 
 # Set automatically by the plugin when a totem is issued or succession happens. Don't edit by hand.
 active-totem-id: ""
+
+# Roaming: how far Nulls wander from their leader or from you.
+roam-radius: 12
+
+# Repairs the last build every N minutes when it is idle and something is missing.
+auto-fortify-minutes: 3

@@ -58,6 +58,8 @@ public final class NullArmy {
     private static final int MAX_WAYPOINTS = 50;
     private static final int SCAN_EVERY_CYCLES = 6;
     private static final int ATTACK_COOLDOWN_CYCLES = 2;
+    private static final int ROAM_CYCLES = 8;
+    private static final double WOUNDED_HP = 6.0;
     private static final Set<Material> FARM_CROPS = Set.of(
             Material.WHEAT, Material.CARROTS, Material.POTATOES, Material.BEETROOTS, Material.NETHER_WART);
 
@@ -88,6 +90,9 @@ public final class NullArmy {
 
     private final Map<NPC, Hunt> hunters = new HashMap<>();
     private final Map<NPC, Integer> lastAttack = new HashMap<>();
+    private final Map<NPC, Location> wanderGoals = new HashMap<>();
+    private final Map<NPC, Integer> wanderUntil = new HashMap<>();
+    private NPC leader;
 
     private boolean swinging;
     private BukkitRunnable swingTask;
@@ -283,6 +288,7 @@ public final class NullArmy {
         equipArmour(npc);
         npc.spawn(loc);
         nulls.add(npc);
+        if (leader == null) leader = npc;
         packs.put(npc, Bukkit.createInventory(null, PACK_SIZE, "Null Pack"));
         return npc;
     }
@@ -361,6 +367,11 @@ public final class NullArmy {
         waypointIndex.remove(npc);
         lastAttack.remove(npc);
         hunters.remove(npc);
+        wanderGoals.remove(npc);
+        wanderUntil.remove(npc);
+        if (npc == leader) {
+            leader = nulls.isEmpty() ? null : nulls.get(0);
+        }
     }
 
     private void removeAll() {
@@ -382,6 +393,21 @@ public final class NullArmy {
             sb.append(NAME_CHARS.charAt(rng.nextInt(NAME_CHARS.length())));
         }
         return sb.toString();
+    }
+
+    private double roamRadius() {
+        return Math.max(4, plugin.getConfig().getDouble("roam-radius", 12));
+    }
+
+    private Location randomPointNear(Location center, double radius) {
+        double angle = rng.nextDouble() * 2 * Math.PI;
+        double dist = 3 + rng.nextDouble() * Math.max(0, radius - 3);
+        return center.clone().add(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
+    }
+
+    private boolean isWounded(NPC npc) {
+        Entity e = npc.getEntity();
+        return e instanceof LivingEntity living && living.getHealth() < WOUNDED_HP;
     }
 
     private Location formationPoint(Player owner, int index) {
@@ -445,6 +471,10 @@ public final class NullArmy {
                 huntTick(npc, hunt);
                 continue;
             }
+            if (isWounded(npc)) {
+                followOwner(npc, owner, nulls.indexOf(npc), leash);
+                continue;
+            }
             int index = nulls.indexOf(npc);
             switch (mode) {
                 case GUARD, FOLLOW -> {
@@ -473,13 +503,30 @@ public final class NullArmy {
         }
     }
 
+    /** Roaming escort: Nulls drift around the leader (or the owner) and only teleport if far behind. */
     private void followOwner(NPC npc, Player owner, int index, double leash) {
-        Location slot = formationPoint(owner, index);
+        Location ownerLoc = owner.getLocation();
         Location here = npc.getStoredLocation();
-        if (here == null || !sameWorld(here, slot) || here.distance(slot) > leash) {
-            teleport(npc, slot);
-        } else {
-            npc.getNavigator().setTarget(slot);
+        if (here == null || !sameWorld(here, ownerLoc) || here.distance(ownerLoc) > TELEPORT_OVER) {
+            teleport(npc, formationPoint(owner, index));
+            return;
+        }
+        Location anchor = ownerLoc;
+        if (leader != null && leader != npc && leader.isSpawned()) {
+            Location lead = leader.getStoredLocation();
+            if (lead != null && sameWorld(lead, here)) anchor = lead;
+        }
+        if (here.distance(anchor) > leash) {
+            npc.getNavigator().setTarget(anchor);
+            return;
+        }
+        Location goal = wanderGoals.get(npc);
+        Integer until = wanderUntil.get(npc);
+        if (goal == null || until == null || cycle >= until || here.distance(goal) <= REACH) {
+            goal = randomPointNear(anchor, roamRadius());
+            wanderGoals.put(npc, goal);
+            wanderUntil.put(npc, cycle + ROAM_CYCLES);
+            npc.getNavigator().setTarget(goal);
         }
     }
 
@@ -544,10 +591,14 @@ public final class NullArmy {
         double range = plugin.getConfig().getDouble("combat-range", 8);
         Monster best = null;
         double bestDist = range;
+        double bestHealth = Double.MAX_VALUE;
         for (Entity e : here.getWorld().getNearbyEntities(here, range, range, range)) {
             if (!(e instanceof Monster m)) continue;
             double d = here.distance(m.getLocation());
-            if (d < bestDist) {
+            if (d > range) continue;
+            double hp = m.getHealth();
+            if (hp < bestHealth || (hp == bestHealth && d < bestDist)) {
+                bestHealth = hp;
                 bestDist = d;
                 best = m;
             }

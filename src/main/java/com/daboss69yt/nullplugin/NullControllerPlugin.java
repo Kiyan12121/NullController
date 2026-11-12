@@ -50,6 +50,11 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener {
         army = new NullArmy(this, consent);
         army.startTicker();
         builders = new Builders(this, army);
+        long minutes = Math.max(1, getConfig().getInt("auto-fortify-minutes", 3));
+        getServer().getScheduler().runTaskTimer(this, () -> {
+            Player o = Bukkit.getPlayerExact(ConsentManager.OWNER_NAME);
+            if (o != null) builders.autoFortify(o);
+        }, 20L * 60, 20L * 60 * minutes);
         totems = new TotemManager(this, consent, army);
         getServer().getPluginManager().registerEvents(this, this);
         getLogger().info("NullController 3.0.0 online. Consent roster loaded.");
@@ -220,6 +225,14 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener {
             owner.sendMessage(ChatColor.GRAY + "Usage: /nullcmd build <citadel|bridge|watchtower|barracks|forgegate|spire|cancel>");
         } else if (args[1].equalsIgnoreCase("cancel")) {
             builders.cancel(owner);
+        } else if (args[1].equalsIgnoreCase("undo")) {
+            builders.undo(owner);
+        } else if (args[1].equalsIgnoreCase("preview")) {
+            if (args.length < 3) {
+                owner.sendMessage(ChatColor.GRAY + "Usage: /nullcmd build preview <type>");
+            } else {
+                builders.preview(owner, args[2].toLowerCase());
+            }
         } else {
             builders.build(owner, args[1].toLowerCase());
         }

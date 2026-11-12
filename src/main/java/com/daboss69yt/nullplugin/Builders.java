@@ -2,15 +2,22 @@ package com.daboss69yt.nullplugin;
 
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.Particle;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
+import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 
 import java.util.List;
 
-/** Starts structure builds at the owner's position, repairs the last build, and drives arm swings. */
+/** Plans, previews, builds, undoes, and repairs structures. The Nulls do the placing. */
 public final class Builders {
 
     private static final int BRIDGE_LENGTH = 50;
+    private static final int PREVIEW_TICKS = 100;
+
+    public record Plan(String name, List<BuildQueue.Placement> placements) {}
 
     private final NullControllerPlugin plugin;
     private final NullArmy army;
@@ -36,44 +43,115 @@ public final class Builders {
             owner.sendMessage(ChatColor.RED + "Already building " + queue.currentName() + ". Use /nullcmd build cancel first.");
             return;
         }
-        Location base = owner.getLocation().clone();
-        base.setY(Math.floor(base.getY()) - 1);
-
-        List<BuildQueue.Placement> placements;
-        String name;
-        switch (type) {
-            case "citadel" -> { placements = Structures.voidCitadel(base); name = "Void Citadel"; }
-            case "watchtower" -> { placements = Structures.watchtower(base); name = "Watchtower"; }
-            case "barracks" -> { placements = Structures.barracks(base); name = "Barracks"; }
-            case "forgegate" -> { placements = Structures.forgeGate(base); name = "Forge Gate"; }
-            case "spire" -> { placements = Structures.beaconSpire(base); name = "Beacon Spire"; }
-            case "bridge" -> {
-                int[] dir = facingDirection(owner);
-                Location start = base.clone().add(dir[0] * 2, 0, dir[1] * 2);
-                placements = Structures.bridge(start, dir[0], dir[1], BRIDGE_LENGTH);
-                name = "Bridge";
-            }
-            default -> {
-                owner.sendMessage(ChatColor.RED + "Unknown build: " + type
-                        + ". Options: citadel, bridge, watchtower, barracks, forgegate, spire.");
-                return;
-            }
+        Plan plan = planFor(owner, type);
+        if (plan == null) {
+            unknown(owner, type);
+            return;
         }
-        startBuild(owner, name, placements);
+        startBuild(owner, plan.name(), plan.placements(), true);
     }
 
-    /** Places a list of blocks through the queue. Used by builds, cages, and repairs. */
-    public void startBuild(Player owner, String name, List<BuildQueue.Placement> placements) {
+    /** Shows a particle outline of the footprint for five seconds before anything is built. */
+    public void preview(Player owner, String type) {
+        Plan plan = planFor(owner, type);
+        if (plan == null) {
+            unknown(owner, type);
+            return;
+        }
+        if (plan.placements().isEmpty()) return;
+
+        int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
+        World world = null;
+        for (BuildQueue.Placement p : plan.placements()) {
+            Location l = p.location();
+            world = l.getWorld();
+            minX = Math.min(minX, l.getBlockX());
+            minY = Math.min(minY, l.getBlockY());
+            minZ = Math.min(minZ, l.getBlockZ());
+            maxX = Math.max(maxX, l.getBlockX());
+            maxY = Math.max(maxY, l.getBlockY());
+            maxZ = Math.max(maxZ, l.getBlockZ());
+        }
+        if (world == null) return;
+
+        final World w = world;
+        final int x0 = minX, y0 = minY, z0 = minZ, x1 = maxX + 1, y1 = maxY + 1, z1 = maxZ + 1;
+        owner.sendMessage(ChatColor.DARK_PURPLE + "Previewing " + plan.name() + " for 5 seconds.");
+        new BukkitRunnable() {
+            int runs = 0;
+
+            @Override
+            public void run() {
+                if (runs * 10 >= PREVIEW_TICKS) {
+                    cancel();
+                    return;
+                }
+                runs++;
+                drawBox(w, x0, y0, z0, x1, y1, z1);
+            }
+        }.runTaskTimer(plugin, 0L, 10L);
+    }
+
+    private void drawBox(World w, int x0, int y0, int z0, int x1, int y1, int z1) {
+        for (int x = x0; x <= x1; x++)
+            for (int y : new int[]{y0, y1})
+                for (int z : new int[]{z0, z1})
+                    dot(w, x, y, z);
+        for (int y = y0; y <= y1; y++)
+            for (int x : new int[]{x0, x1})
+                for (int z : new int[]{z0, z1})
+                    dot(w, x, y, z);
+        for (int z = z0; z <= z1; z++)
+            for (int x : new int[]{x0, x1})
+                for (int y : new int[]{y0, y1})
+                    dot(w, x, y, z);
+    }
+
+    private void dot(World w, int x, int y, int z) {
+        w.spawnParticle(Particle.END_ROD, x + 0.5, y + 0.5, z + 0.5, 1, 0, 0, 0, 0);
+    }
+
+    /** Removes the last finished build, block by block. */
+    public void undo(Player owner) {
         if (queue.isBusy()) {
             owner.sendMessage(ChatColor.RED + "Already building " + queue.currentName() + ". Use /nullcmd build cancel first.");
             return;
         }
-        int perTick = Math.max(1, plugin.getConfig().getInt("build-blocks-per-tick", 4));
+        if (lastPlacements.isEmpty()) {
+            owner.sendMessage(ChatColor.GRAY + "Nothing to undo. Finish a build first.");
+            return;
+        }
+        String name = lastName;
+        List<BuildQueue.Placement> clear = lastPlacements.stream()
+                .map(p -> new BuildQueue.Placement(p.location(), Material.AIR))
+                .toList();
+        lastPlacements = List.of();
+        lastName = "";
         army.startSwinging();
-        boolean started = queue.start(name, placements, perTick, () -> {
+        queue.start("Undo " + name, clear, perTick(), () -> {
             army.stopSwinging();
-            lastName = name;
-            lastPlacements = placements;
+            owner.sendMessage(ChatColor.DARK_PURPLE + "Undid " + name + ".");
+        });
+        owner.sendMessage(ChatColor.DARK_PURPLE + "Undoing " + name + ".");
+    }
+
+    public void startBuild(Player owner, String name, List<BuildQueue.Placement> placements) {
+        startBuild(owner, name, placements, true);
+    }
+
+    private void startBuild(Player owner, String name, List<BuildQueue.Placement> placements, boolean remember) {
+        if (queue.isBusy()) {
+            owner.sendMessage(ChatColor.RED + "Already building " + queue.currentName() + ". Use /nullcmd build cancel first.");
+            return;
+        }
+        army.startSwinging();
+        boolean started = queue.start(name, placements, perTick(), () -> {
+            army.stopSwinging();
+            if (remember) {
+                lastName = name;
+                lastPlacements = placements;
+            }
             owner.sendMessage(ChatColor.DARK_PURPLE + name + " complete.");
         });
         if (started) {
@@ -81,20 +159,59 @@ public final class Builders {
         }
     }
 
-    /** Re-places any block from the last completed build that has gone missing. */
+    /** Re-places any missing block from the last build, and tells the owner. */
     public void fortify(Player owner) {
         if (lastPlacements.isEmpty()) {
             owner.sendMessage(ChatColor.RED + "Nothing to repair yet. Finish a build first.");
             return;
         }
-        List<BuildQueue.Placement> missing = lastPlacements.stream()
-                .filter(p -> p.location().getBlock().getType() != p.material())
-                .toList();
+        List<BuildQueue.Placement> missing = missingBlocks();
         if (missing.isEmpty()) {
             owner.sendMessage(ChatColor.DARK_PURPLE + "The " + lastName + " is intact.");
             return;
         }
-        startBuild(owner, "Fortify " + lastName, missing);
+        startBuild(owner, "Fortify " + lastName, missing, false);
+    }
+
+    /** Called by the timer. Repairs quietly, and only when idle and something is missing. */
+    public void autoFortify(Player owner) {
+        if (queue.isBusy() || lastPlacements.isEmpty()) return;
+        List<BuildQueue.Placement> missing = missingBlocks();
+        if (missing.isEmpty()) return;
+        startBuild(owner, "Auto-repair " + lastName, missing, false);
+    }
+
+    private List<BuildQueue.Placement> missingBlocks() {
+        return lastPlacements.stream()
+                .filter(p -> p.location().getBlock().getType() != p.material())
+                .toList();
+    }
+
+    private Plan planFor(Player owner, String type) {
+        Location base = owner.getLocation().clone();
+        base.setY(Math.floor(base.getY()) - 1);
+        return switch (type) {
+            case "citadel" -> new Plan("Void Citadel", Structures.voidCitadel(base));
+            case "watchtower" -> new Plan("Watchtower", Structures.watchtower(base));
+            case "barracks" -> new Plan("Barracks", Structures.barracks(base));
+            case "forgegate" -> new Plan("Forge Gate", Structures.forgeGate(base));
+            case "spire" -> new Plan("Beacon Spire", Structures.beaconSpire(base));
+            case "bridge" -> {
+                int[] dir = facingDirection(owner);
+                Location start = base.clone().add(dir[0] * 2, 0, dir[1] * 2);
+                yield new Plan("Bridge", Structures.bridge(start, dir[0], dir[1], BRIDGE_LENGTH));
+            }
+            default -> null;
+        };
+    }
+
+    private void unknown(Player owner, String type) {
+        owner.sendMessage(ChatColor.RED + "Unknown build: " + type
+                + ". Options: citadel, bridge, watchtower, barracks, forgegate, spire.");
+    }
+
+    private int perTick() {
+        return Math.max(1, plugin.getConfig().getInt("build-blocks-per-tick", 4));
     }
 
     /** Returns the dominant horizontal direction the owner is facing as {dx, dz}, one axis only. */
