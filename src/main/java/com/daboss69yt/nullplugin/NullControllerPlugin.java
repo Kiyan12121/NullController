@@ -200,6 +200,20 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
                         : queued == 0 ? "Army cap reached. Raise max-nulls in config.yml."
                         : "Summoning " + queued + " Nulls at the army's position.");
             }
+            case "explore" -> offlineMode(sender, NullArmy.Mode.EXPLORE);
+            case "nether" -> offlineMode(sender, NullArmy.Mode.NETHER);
+            case "spy" -> {
+                if (args.length > 1 && args[1].equalsIgnoreCase("stop")) {
+                    sender.sendMessage("Spies recalled (" + army.stopSpiesOffline() + ").");
+                } else if (args.length < 2) {
+                    sender.sendMessage("Usage: spy <player>  or  spy stop");
+                } else {
+                    Player target = Bukkit.getPlayerExact(args[1]);
+                    if (target == null) sender.sendMessage("That player is not online.");
+                    else if (!army.spyOffline(target)) sender.sendMessage("Roster only. " + target.getName() + " is not on it.");
+                    else sender.sendMessage("Spy on " + target.getName() + " set. Reports go to /nullalerts.");
+                }
+            }
             case "dismiss" -> sender.sendMessage("Dismissed " + army.dismissOffline() + " Nulls.");
             case "guard" -> offlineMode(sender, NullArmy.Mode.GUARD);
             case "stay" -> offlineMode(sender, NullArmy.Mode.STAY);
@@ -225,7 +239,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     }
 
     private static final String OFFLINE_HELP = ChatColor.GRAY + "Owner is offline. Console orders: "
-            + "summon [n], dismiss, guard, stay, mine, lumber, farm, status, ambush on|off|toggle";
+            + "summon [n], dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle";
 
     private void offlineMode(CommandSender sender, NullArmy.Mode mode) {
         sender.sendMessage(army.setModeOffline(mode)

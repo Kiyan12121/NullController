@@ -50,7 +50,7 @@ import java.util.UUID;
 /** Owns every Null NPC, each Null's own pack, the army's mode, combat, hunters, and the behaviour loop. */
 public final class NullArmy {
 
-    public enum Mode { GUARD, FOLLOW, HUNT, GOTO, STAY, MINE, LUMBER, FARM, PATROL, FORGE }
+    public enum Mode { GUARD, FOLLOW, HUNT, GOTO, STAY, MINE, LUMBER, FARM, PATROL, FORGE, EXPLORE, NETHER }
 
     enum WorkKind { MINE, LUMBER, FARM }
 
@@ -120,6 +120,14 @@ public final class NullArmy {
     private long lastOfflineScan;
     private record Spy(UUID target, long[] nextReport) {}
     private final Map<NPC, Spy> spies = new HashMap<>();
+    /** Offline roaming: where each Null is heading, and when it picks a new spot. */
+    private record Wander(Location dest, long until) {}
+    private final Map<NPC, Wander> wanders = new HashMap<>();
+    private final Random wander = new Random();
+    /** Offline Nether run: the frame built in the overworld, and where it lands in the Nether. */
+    private Location netherPortal;
+    private Location netherSpot;
+    private static final double DEFENCE_RANGE = 24.0;
     private long nextAlarm;
 
     private boolean swinging;
@@ -191,6 +199,7 @@ public final class NullArmy {
         cageGuard = null;
         huntTarget = null;
         resetWork();
+        wanders.clear();
         applyGear(newMode);
         return true;
     }
@@ -262,6 +271,7 @@ public final class NullArmy {
         cageGuard = null;
         huntTarget = null;
         resetWork();
+        wanders.clear();
         applyGear(newMode);
         owner.sendMessage(ChatColor.DARK_PURPLE + "Army mode: " + newMode.name());
         return true;
@@ -683,6 +693,7 @@ public final class NullArmy {
             tickHunters();
             tickSpies();
             tickOffline();
+            tickDefence();
             return;
         }
         cycle++;
@@ -736,6 +747,7 @@ public final class NullArmy {
                 case FORGE -> {
                     if (!engageMobs(npc)) forgeTick(npc, owner, index, leash);
                 }
+                case EXPLORE, NETHER -> followOwner(npc, owner, index, leash);
             }
         }
     }
@@ -1308,6 +1320,16 @@ public final class NullArmy {
 
     /** The owner is offline: working Nulls keep mining, chopping or farming around the offline centre. */
     private void tickOffline() {
+        if (mode == Mode.EXPLORE) {
+            Location centre = offlineCentre();
+            if (centre == null) idleGuard();
+            else roamGroup(centre, false);
+            return;
+        }
+        if (mode == Mode.NETHER) {
+            netherOffline();
+            return;
+        }
         WorkKind kind = kindOf(mode);
         Location centre = offlineCentre();
         if (kind == null || centre == null) {
@@ -1529,6 +1551,161 @@ public final class NullArmy {
 
     private boolean sameWorld(Location a, Location b) {
         return a.getWorld() != null && a.getWorld().equals(b.getWorld());
+    }
+
+    // ---------- Offline roaming, Nether run, defence and spies ----------
+
+    /** Roams every free Null around the centre: the overworld, or the Nether when nether is true. */
+    private void roamGroup(Location centre, boolean nether) {
+        for (NPC npc : new ArrayList<>(nulls)) {
+            if (!npc.isSpawned() || arriving.contains(npc) || hunters.containsKey(npc) || spies.containsKey(npc)) continue;
+            if (engageMobs(npc)) continue;
+            roamOne(npc, centre, nether);
+        }
+    }
+
+    private void roamOne(NPC npc, Location centre, boolean nether) {
+        Location here = npc.getStoredLocation();
+        Wander w = wanders.get(npc);
+        boolean stale = w == null || System.currentTimeMillis() >= w.until()
+                || here == null || !sameWorld(here, w.dest()) || here.distance(w.dest()) < 4;
+        if (stale) {
+            w = new Wander(wanderPoint(centre, nether), System.currentTimeMillis() + 60_000L);
+            wanders.put(npc, w);
+        }
+        travel(npc, w.dest());
+    }
+
+    /** A spot 20 to 200 blocks from the centre, standing on the ground. */
+    private Location wanderPoint(Location centre, boolean nether) {
+        double angle = wander.nextDouble() * 2 * Math.PI;
+        double dist = 20 + wander.nextDouble() * 180;
+        int x = centre.getBlockX() + (int) (Math.cos(angle) * dist);
+        int z = centre.getBlockZ() + (int) (Math.sin(angle) * dist);
+        World world = centre.getWorld();
+        int y = nether ? netherFloor(world, x, z) : world.getHighestBlockYAt(x, z) + 1;
+        return new Location(world, x + 0.5, y, z + 0.5);
+    }
+
+    /** In the Nether the ceiling is solid too, so look for a floor with two air blocks above it. */
+    private int netherFloor(World world, int x, int z) {
+        for (int y = 120; y > 32; y--) {
+            if (world.getBlockAt(x, y, z).getType().isSolid()
+                    && world.getBlockAt(x, y + 1, z).getType().isAir()
+                    && world.getBlockAt(x, y + 2, z).getType().isAir()) {
+                return y + 1;
+            }
+        }
+        return 64;
+    }
+
+    private World netherWorld() {
+        for (World w : Bukkit.getWorlds()) {
+            if (w.getEnvironment() == World.Environment.NETHER) return w;
+        }
+        return null;
+    }
+
+    /** Builds a 4 by 5 obsidian frame in the overworld, twelve blocks east of the centre. */
+    private Location buildNetherFrame(Location centre) {
+        World world = centre.getWorld();
+        int bx = centre.getBlockX() + 12;
+        int bz = centre.getBlockZ();
+        int by = world.getHighestBlockYAt(bx, bz) + 1;
+        for (int dx = 0; dx < 4; dx++) {
+            for (int dy = 0; dy < 5; dy++) {
+                if (dx == 0 || dx == 3 || dy == 0 || dy == 4) {
+                    world.getBlockAt(bx + dx, by + dy, bz).setType(Material.OBSIDIAN);
+                }
+            }
+        }
+        return new Location(world, bx, by, bz);
+    }
+
+    /** Owner offline, NETHER: the Nulls build a frame, walk through it, then roam the Nether. */
+    private void netherOffline() {
+        Location centre = offlineCentre();
+        if (centre == null) {
+            idleGuard();
+            return;
+        }
+        if (netherPortal == null) {
+            World nether = netherWorld();
+            if (nether == null) return;
+            netherPortal = buildNetherFrame(centre);
+            int x = netherPortal.getBlockX() / 8;
+            int z = netherPortal.getBlockZ() / 8;
+            netherSpot = new Location(nether, x + 0.5, netherFloor(nether, x, z), z + 0.5);
+            plugin.alert("Nether run: frame built, Nulls heading through.");
+        }
+        Location gate = netherPortal.clone().add(1.5, 1, 0.5);
+        for (NPC npc : new ArrayList<>(nulls)) {
+            if (!npc.isSpawned() || arriving.contains(npc) || hunters.containsKey(npc) || spies.containsKey(npc)) continue;
+            Location here = npc.getStoredLocation();
+            boolean inNether = here != null && here.getWorld() != null
+                    && here.getWorld().getEnvironment() == World.Environment.NETHER;
+            if (inNether) {
+                roamOne(npc, netherSpot, true);
+            } else if (here != null && sameWorld(here, gate) && here.distance(gate) <= 3) {
+                teleport(npc, netherSpot.clone());
+            } else {
+                travel(npc, gate);
+            }
+        }
+    }
+
+    /**
+     * Owner offline: a roster player who comes within DEFENCE_RANGE of a Null is hunted by three
+     * temporary Nulls for defence-minutes. Non-roster players and the owner are never targeted.
+     */
+    private void tickDefence() {
+        int minutes = plugin.getConfig().getInt("defence-minutes", 3);
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            if (!consent.canTarget(p)) continue;
+            Location pl = p.getLocation();
+            boolean near = false;
+            for (NPC npc : nulls) {
+                Location here = npc.getStoredLocation();
+                if (npc.isSpawned() && !hunters.containsKey(npc) && !spies.containsKey(npc)
+                        && here != null && sameWorld(here, pl) && here.distance(pl) <= DEFENCE_RANGE) {
+                    near = true;
+                    break;
+                }
+            }
+            if (!near || alreadyHunting(p)) continue;
+            if (nulls.size() >= armyCap()) {
+                plugin.alert("Defence: " + p.getName() + " came near the Nulls, but the army is at its cap.");
+                continue;
+            }
+            long expires = System.currentTimeMillis() + minutes * 60_000L;
+            Location spot = cornerSpot(pl);
+            NPC npc = createNull(spot, gearForMode(Mode.HUNT), false);
+            hunters.put(npc, new Hunt(p.getUniqueId(), expires));
+            plugin.alert("Defence: " + p.getName() + " came near the Nulls. A Null is hunting them for " + minutes + " min.");
+        }
+    }
+
+    private boolean alreadyHunting(Player p) {
+        for (Hunt h : hunters.values()) {
+            if (h.target().equals(p.getUniqueId())) return true;
+        }
+        return false;
+    }
+
+    /** Console spy with the owner offline. Reports go to /nullalerts and the console. Roster only. */
+    public boolean spyOffline(Player target) {
+        if (!consent.canTarget(target)) return false;
+        NPC npc = createNull(cornerSpot(target.getLocation()), gearForMode(Mode.FOLLOW), false);
+        if (npc.getEntity() instanceof LivingEntity living) living.setInvisible(true);
+        spies.put(npc, new Spy(target.getUniqueId(), new long[]{0L}));
+        return true;
+    }
+
+    /** Recalls every spy with the owner offline. Returns how many were recalled. */
+    public int stopSpiesOffline() {
+        List<NPC> all = new ArrayList<>(spies.keySet());
+        for (NPC npc : all) dropNpc(npc);
+        return all.size();
     }
 
     private Player findOwner() {
