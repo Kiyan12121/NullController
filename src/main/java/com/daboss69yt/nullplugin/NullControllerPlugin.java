@@ -98,19 +98,10 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             sender.sendMessage("Only players can agree to the rules.");
             return true;
         }
-        if (args.length == 0 || !args[0].equalsIgnoreCase("accept")) {
-            player.sendMessage(ChatColor.DARK_PURPLE + "=== The Null: Consent Rules ===");
-            player.sendMessage(ChatColor.GRAY + "By agreeing, you allow The Null to hunt you, ambush you when you enter The End,"
-                    + " and cage you during events.");
-            player.sendMessage(ChatColor.GRAY + "Lightning in the End is not part of this agreement.");
-            player.sendMessage(ChatColor.GRAY + "To revoke, message the owner. Type " + ChatColor.WHITE
-                    + "/nullagree accept" + ChatColor.GRAY + " to confirm.");
-            return true;
-        }
         if (consent.grant(player)) {
-            player.sendMessage(ChatColor.DARK_PURPLE + "Consent recorded. Welcome to the roster.");
+            player.sendMessage(ChatColor.DARK_PURPLE + "Verified. Welcome to the roster.");
         } else {
-            player.sendMessage(ChatColor.GRAY + "You are already on the roster.");
+            player.sendMessage(ChatColor.GRAY + "Verified. You are already on the roster.");
         }
         return true;
     }
