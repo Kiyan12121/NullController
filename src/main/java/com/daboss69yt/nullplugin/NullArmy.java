@@ -142,6 +142,8 @@ public final class NullArmy {
     private long nextReplenish;
     private long nextRestock;
     private long nextAutoStrike;
+    /** Learned per player: how hard the Nulls have been hit by them. Raises the damage the Nulls deal back. */
+    private final Map<UUID, Double> threat = new HashMap<>();
     private Chests chestsRef;
     private Chests chests() {
         if (chestsRef == null) chestsRef = new Chests(plugin);
@@ -494,7 +496,11 @@ public final class NullArmy {
 
     private ItemStack gearForMode(Mode m) {
         WorkKind kind = kindOf(m);
-        return kind == null ? new ItemStack(Material.NETHERITE_SWORD) : gearForKind(kind);
+        if (kind != null) return gearForKind(kind);
+        ItemStack sword = new ItemStack(Material.NETHERITE_SWORD);
+        sword.addUnsafeEnchantment(Enchantment.SHARPNESS, 5);
+        sword.addUnsafeEnchantment(Enchantment.UNBREAKING, 3);
+        return sword;
     }
 
     /** Mining gets Fortune III / Efficiency V netherite. Lumber gets an axe. Farming gets a hoe. */
@@ -869,6 +875,12 @@ public final class NullArmy {
     private void huntTick(NPC npc, Hunt hunt) {
         Player target = Bukkit.getPlayer(hunt.target());
         if (target == null) return; // target offline: wait
+        if (npc.getEntity() instanceof LivingEntity fighter) {
+            // Fight buffs, refreshed every tick while the hunt lasts.
+            fighter.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 100, 1, false, false));
+            fighter.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 100, 0, false, false));
+            fighter.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 100, 0, false, false));
+        }
         if (!consent.canTarget(target)) {
             dropNpc(npc); // consent revoked: stop immediately
             return;
@@ -879,6 +891,7 @@ public final class NullArmy {
             appearNear(npc, target);
         } else if (isWounded(npc)) {
             // Retreat: back off ten blocks from the target and heal before going in again.
+            threat.merge(hunt.target(), 0.5, Double::sum);
             eatApple(npc);
             Vector off = here.toVector().subtract(tl.toVector());
             if (off.lengthSquared() < 0.01) off = new Vector(1, 0, 0);
@@ -889,6 +902,9 @@ public final class NullArmy {
             double base = Math.atan2(here.getZ() - tl.getZ(), here.getX() - tl.getX());
             double ang = base + (npc.getId() % 2 == 0 ? Math.PI / 2.5 : -Math.PI / 2.5);
             Location flank = here.distance(tl) > 6 ? tl.clone().add(Math.cos(ang) * 3, 0, Math.sin(ang) * 3) : tl;
+            // Adapt to the player: shield users get hit from behind, archers get rushed.
+            if (target.isBlocking()) flank = tl.clone().add(target.getLocation().getDirection().multiply(-2.5));
+            else if (holdsRanged(target)) flank = tl;
             npc.getNavigator().setTarget(flank);
         } else {
             attack(npc, target);
@@ -991,6 +1007,10 @@ public final class NullArmy {
         if (last != null && cycle - last < ATTACK_COOLDOWN_CYCLES) return;
         lastAttack.put(npc, cycle);
         double damage = plugin.getConfig().getDouble("combat-damage", 8) * rankScale(npc);
+        if (target instanceof Player p) {
+            if (p.isBlocking()) damage *= 1.5; // a Null hit breaks through a raised shield
+            damage *= 1.0 + Math.min(0.5, threat.getOrDefault(p.getUniqueId(), 0.0) / 20.0); // learned from past fights
+        }
         target.damage(damage, npc.getEntity());
         swing(npc);
     }
@@ -1946,6 +1966,12 @@ public final class NullArmy {
             return patrolRoute.get(i).clone();
         }
         return cityCentre();
+    }
+
+    private boolean holdsRanged(Player p) {
+        Material main = p.getInventory().getItemInMainHand().getType();
+        Material off = p.getInventory().getItemInOffHand().getType();
+        return main == Material.BOW || main == Material.CROSSBOW || off == Material.BOW || off == Material.CROSSBOW;
     }
 
     private double armourOf(Player p) {
