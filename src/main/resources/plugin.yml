@@ -1,5 +1,5 @@
 name: NullController
-version: 5.0.0
+version: 5.1.0
 main: com.daboss69yt.nullplugin.NullControllerPlugin
 api-version: '26.3'
 author: daboss69yt
@@ -18,6 +18,10 @@ commands:
   bottestverify:
     description: Accept the Null consent rules.
     usage: /bottestverify
+  nullnether:
+    description: Nether law: strikes, prisoners and the prison (owner only).
+    usage: /nullnether status | prison set | arrest|release|clear <player>
+    permission: nullcontroller.owner
   nullreload:
     description: Reload the consent roster after editing config.yml (owner only).
     usage: /nullreload

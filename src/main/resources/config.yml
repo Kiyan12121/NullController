@@ -67,3 +67,26 @@ metropolis-blocks-per-tick: 40
 
 # How far from the city centre the Enderman and chorus fruit sweep reaches.
 sweep-radius: 120
+
+# Nether law. The Nether is owned. Roster players only. Strikes reset after a visit's warning cooldown.
+nether-warning-minutes: 10
+nether-hunt-minutes: 5
+# Prison: set in game with /nullnether prison set. Prisoners must stay inside this radius.
+prison: ""
+prison-radius: 25
+prison-food-minutes: 5
+prisoner-blocked-commands:
+  - home
+  - homes
+  - sethome
+  - tp
+  - tpa
+  - tpahere
+  - tpaccept
+  - tpo
+  - tpohere
+  - spawn
+  - warp
+  - back
+  - ec
+  - enderchest

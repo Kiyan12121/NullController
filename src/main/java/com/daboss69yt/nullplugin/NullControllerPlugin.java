@@ -47,6 +47,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     private NullArmy army;
     private Builders builders;
     private TotemManager totems;
+    private NetherLaw netherLaw;
     private final Map<Integer, String[]> menuActions = new HashMap<>();
 
     @Override
@@ -69,6 +70,11 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             if (o != null) builders.autoFortify(o);
         }, 20L * 60, 20L * 60 * minutes);
         totems = new TotemManager(this, consent, army);
+        netherLaw = new NetherLaw(this, consent, army);
+        netherLaw.start();
+        getServer().getPluginManager().registerEvents(netherLaw, this);
+        getCommand("nullnether").setExecutor(netherLaw);
+        getCommand("nullnether").setTabCompleter(netherLaw);
         getServer().getPluginManager().registerEvents(this, this);
         getCommand("nullcmd").setTabCompleter(this);
         getServer().getScheduler().runTaskTimer(this, this::sweepCity, 100L, 40L);
@@ -77,6 +83,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
 
     @Override
     public void onDisable() {
+        if (netherLaw != null) netherLaw.save();
         if (army != null) army.shutdown();
     }
 

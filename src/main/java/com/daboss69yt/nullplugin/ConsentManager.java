@@ -54,6 +54,11 @@ public final class ConsentManager {
         return consented.contains(target.getUniqueId());
     }
 
+    /** Roster check by UUID, for players who are offline. */
+    public boolean isConsented(UUID id) {
+        return consented.contains(id);
+    }
+
     /** Adds a player to the roster and writes it to config.yml. */
     public boolean grant(Player player) {
         if (!consented.add(player.getUniqueId())) {

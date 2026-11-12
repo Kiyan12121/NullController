@@ -246,15 +246,15 @@ public final class NullArmy {
                 + block.getY() + ", " + block.getZ() + ".");
     }
 
-    /** Spawns a timed hunting group against one roster player. The caller checks consent first. */
+    /** Spawns a timed hunting group against one roster player. The caller checks consent first. Owner may be null. */
     public boolean spawnHunters(Player owner, Player target, Location center, int count, int minutes) {
         if (nulls.size() + count > armyCap()) {
-            owner.sendMessage(ChatColor.RED + "Not enough room under the army cap (" + armyCap() + ").");
+            if (owner != null) owner.sendMessage(ChatColor.RED + "Not enough room under the army cap (" + armyCap() + ").");
             return false;
         }
         long expires = System.currentTimeMillis() + minutes * 60_000L;
         for (int i = 0; i < count; i++) {
-            Location loc = center.clone().add(rng.nextInt(5) - 2, 0, rng.nextInt(5) - 2);
+            Location loc = cornerSpot(target.getLocation());
             NPC npc = createNull(loc, gearForMode(Mode.HUNT), false);
             hunters.put(npc, new Hunt(target.getUniqueId(), expires));
         }
@@ -585,6 +585,8 @@ public final class NullArmy {
     private void tick() {
         Player owner = findOwner();
         if (owner == null) {
+            expireHunters();
+            tickHunters();
             idleGuard();
             return;
         }
@@ -743,7 +745,7 @@ public final class NullArmy {
         Location here = npc.getStoredLocation();
         Location tl = target.getLocation();
         if (here == null || !sameWorld(here, tl) || here.distance(tl) > TELEPORT_OVER) {
-            teleport(npc, tl);
+            appearNear(npc, target);
         } else if (here.distance(tl) > ATTACK_REACH) {
             npc.getNavigator().setTarget(tl);
         } else {
@@ -1151,6 +1153,44 @@ public final class NullArmy {
                 }
             }
         }.runTaskLater(plugin, 30L);
+    }
+
+    /** Hunters keep working while the owner is offline. */
+    private void tickHunters() {
+        for (Map.Entry<NPC, Hunt> entry : new ArrayList<>(hunters.entrySet())) {
+            NPC npc = entry.getKey();
+            if (!npc.isSpawned() || arriving.contains(npc)) continue;
+            huntTick(npc, entry.getValue());
+        }
+    }
+
+    /** A spot 9 to 13 blocks from the target, out of its line of sight, found on solid ground. */
+    private Location cornerSpot(Location around) {
+        World w = around.getWorld();
+        double ang = rng.nextDouble() * Math.PI * 2;
+        double dist = 9 + rng.nextDouble() * 4;
+        int x = (int) Math.floor(around.getX() + Math.cos(ang) * dist);
+        int z = (int) Math.floor(around.getZ() + Math.sin(ang) * dist);
+        int top = around.getBlockY() + 3;
+        for (int y = top; y > top - 10; y--) {
+            Block floor = w.getBlockAt(x, y - 1, z);
+            if (floor.getType().isSolid()
+                    && !w.getBlockAt(x, y, z).getType().isSolid()
+                    && !w.getBlockAt(x, y + 1, z).getType().isSolid()) {
+                return new Location(w, x + 0.5, y, z + 0.5);
+            }
+        }
+        return around.clone().add(Math.cos(ang) * dist, 0, Math.sin(ang) * dist);
+    }
+
+    /** Hunters appear around a corner and chase. No portal, no flash, no teleport onto the player. */
+    private void appearNear(NPC npc, Player target) {
+        Location spot = cornerSpot(target.getLocation());
+        if (npc.getEntity() == null) {
+            npc.spawn(spot);
+            return;
+        }
+        if (npc.isSpawned()) npc.getEntity().teleport(spot);
     }
 
     /** The End city centre from config, or null if it hasn't been built yet. */

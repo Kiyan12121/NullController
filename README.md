@@ -103,3 +103,13 @@ Owner-only control. Players are only ever targeted after they run `/bottestverif
 2. Upload the jar and the Citizens jar to `/plugins` on Falixnode, then restart.
 3. Set `null-skin` in config.yml to the skin you want.
 4. Give the server 3 GB of RAM or more.
+
+## Nether law (5.1)
+The Nether is owned. Roster players only. Non-roster players are never touched.
+- Taking loot out of the Nether (picking it up, or breaking blocks there) is logged per player.
+- Strike 1: a warning. Strike 2: told to come to you, with your coordinates. Strike 3: Nulls hunt them down, and everything they took from the Nether drops on death.
+- Strike 4: arrested. The loot is dropped at the prison, and they are sent to mine there. Blocked commands (home, tpa, tp, spawn, warp, back, ec) are cancelled, rations come every few minutes, and any ancient debris they dig up is reported to you.
+- Escaping the prison makes the Nulls hunt them down.
+- Hunters now appear around a corner nearby and chase. They don't teleport onto the player, and they keep working while you're offline.
+
+Commands (owner only): `/nullnether status`, `/nullnether prison set` (stand where the prison should be), `/nullnether arrest|release|clear <player>`.
