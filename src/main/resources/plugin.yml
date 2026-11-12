@@ -1,5 +1,5 @@
 name: NullController
-version: 4.2.2
+version: 4.2.3
 main: com.daboss69yt.nullplugin.NullControllerPlugin
 api-version: '26.3'
 author: daboss69yt
@@ -15,9 +15,9 @@ commands:
     description: Give the Nulls an order (owner only).
     usage: /nullcmd <see in-game usage>
     permission: nullcontroller.owner
-  nullagree:
+  bottestverify:
     description: Accept the Null consent rules.
-    usage: /nullagree accept
+    usage: /bottestverify
   nullreload:
     description: Reload the consent roster after editing config.yml (owner only).
     usage: /nullreload

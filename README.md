@@ -16,7 +16,7 @@
 - `/nullcmd hunt <player>`: the whole army hunts one roster player until you change the order. Use `/nullcmd hunt any` to go back to hunting whoever on the roster is nearest.
 - `/nullcmd build city` (End only): the Null Civilisation. A round platform with a ringed road and four spokes, a great castle in the middle with a furnished hall and a throne for you, four corner keeps, a spire, eight glass skyscrapers, four Null quarters, and a dome of white light over the whole city. Chorus inside the footprint is cleared. Endermen and dropped chorus fruit inside the city are removed every couple of seconds. It builds at `city-blocks-per-tick` (default 12) so it finishes in a minute or two.
 
-Owner-only control. Players are only ever targeted after they run `/nullagree`.
+Owner-only control. Players are only ever targeted after they run `/bottestverify`.
 
 ## What's new in 4.0
 - `/nullcmd help` lists every order. `/nullcmd ranks` shows each Null's rank, health and state. Tab completion works for commands, build types and events.

@@ -83,7 +83,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         switch (command.getName().toLowerCase()) {
-            case "nullagree" -> { return handleAgree(sender, args); }
+            case "bottestverify" -> { return handleAgree(sender, args); }
             case "nullreload" -> { return handleReload(sender); }
             case "nullui" -> { return handleUi(sender); }
             case "nullcmd" -> { return handleCmd(sender, args); }
