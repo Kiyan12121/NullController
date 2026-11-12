@@ -45,12 +45,16 @@ import java.util.Random;
  *  Gravity   roster players within eight blocks of the hook are pulled in
  *  Orbital   eight lightning bolts walk over the landing spot
  *  Nuke      three big explosions on the landing spot
+ *  Orbital Nuke  a 7 by 7 carpet of TNT on the aim spot
+ *  Stab Shot     a column of explosions drilled down to bedrock at the aim spot
  */
 public final class Rods implements Listener, CommandExecutor, TabCompleter {
 
     static final String AMBUSH = ChatColor.DARK_RED + "Ambush Rod";
     static final String STASIS = ChatColor.AQUA + "Stasis Rod";
     static final String TNT = ChatColor.GOLD + "TNT Rod";
+    static final String ORBITAL_NUKE = ChatColor.DARK_GRAY + "Orbital Nuke Rod";
+    static final String STAB_SHOT = ChatColor.AQUA + "Stab Shot Rod";
     static final String SUMMON = ChatColor.GREEN + "Summon Rod";
     static final String LIGHTNING = ChatColor.YELLOW + "Lightning Rod";
     static final String LAUNCH = ChatColor.LIGHT_PURPLE + "Launch Rod";
@@ -62,7 +66,7 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
     static final String MOB_PREFIX = ChatColor.GREEN + "Mob Rod: ";
     private static final double TNT_SAFE_RADIUS = 12;
     private static final Map<String, String> NAME_BY_KIND = Map.ofEntries(
-            Map.entry("ambush", AMBUSH), Map.entry("stasis", STASIS), Map.entry("tnt", TNT),
+            Map.entry("ambush", AMBUSH), Map.entry("stasis", STASIS), Map.entry("tnt", TNT), Map.entry("orbitalnuke", ORBITAL_NUKE), Map.entry("stabshot", STAB_SHOT),
             Map.entry("summon", SUMMON), Map.entry("lightning", LIGHTNING), Map.entry("launch", LAUNCH),
             Map.entry("wither", WITHER), Map.entry("gravity", GRAVITY), Map.entry("orbital", ORBITAL),
             Map.entry("nuke", NUKE));
@@ -138,6 +142,8 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
             case "ambush" -> "Portals open around a roster player. Nulls step out.";
             case "stasis" -> "Hook a roster player: they are pulled to the Nether base and frozen.";
             case "tnt" -> "Land the hook: portal flash, then TNT drops from the sky.";
+            case "orbitalnuke" -> "Aim at a spot: a 7 by 7 carpet of TNT drops on it.";
+            case "stabshot" -> "Aim at a spot: a column of explosions drills down to bedrock.";
             case "summon" -> "Land the hook: the whole army walks there and guards it.";
             case "lightning" -> "Land near a roster player: a bolt strikes them.";
             case "launch" -> "Hook near a roster player: they are thrown into the air.";
@@ -194,6 +200,8 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
             case "gravity" -> gravity(p, hook);
             case "orbital" -> orbital(p, hook);
             case "nuke" -> nuke(p, hook);
+            case "orbitalnuke" -> p.sendMessage(ChatColor.DARK_PURPLE + army.orbitalNukeAt(hook));
+            case "stabshot" -> p.sendMessage(ChatColor.DARK_PURPLE + army.stabShotAt(hook));
             default -> { }
         }
     }

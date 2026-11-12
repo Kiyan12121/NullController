@@ -1767,11 +1767,15 @@ public final class NullArmy {
         return "The Strike is coming down on " + target.getName() + ".";
     }
 
-    /** Orbital Nuke: a 7 by 7 carpet of primed TNT dropped over the target's area. Roster only; team and strangers refuse. */
+    /** Orbital Nuke on a roster player. */
     public String orbitalNuke(Player target) {
-        World w = target.getWorld();
-        if (w.getEnvironment() != World.Environment.NORMAL) return "The Orbital Nuke drops on the overworld only.";
-        Location tl = target.getLocation();
+        return orbitalNukeAt(target.getLocation());
+    }
+
+    /** Orbital Nuke: a 7 by 7 carpet of primed TNT dropped over a spot. Refused if a non-roster or team player is within 22 blocks. */
+    public String orbitalNukeAt(Location tl) {
+        World w = tl.getWorld();
+        if (w == null || w.getEnvironment() != World.Environment.NORMAL) return "The Orbital Nuke drops on the overworld only.";
         String near = unsafeNear(w, tl);
         if (near != null) return "Refused. " + near + " is not on the roster and is too close to the impact.";
         int skyY = Math.min(tl.getBlockY() + 30, w.getMaxHeight() - 2);
@@ -1784,15 +1788,19 @@ public final class NullArmy {
                 if (e instanceof TNTPrimed t) t.setFuseTicks(60);
             }
         }
-        plugin.alert("Orbital Nuke carpet-bombing the area of " + target.getName() + ".");
-        return "Orbital Nuke inbound on " + target.getName() + ".";
+        plugin.alert("Orbital Nuke carpet-bombing " + coordsOf(tl) + ".");
+        return "Orbital Nuke inbound on " + coordsOf(tl) + ".";
     }
 
-    /** Stab Shot: a column of explosions drilled straight down through the target's spot to bedrock. Roster only. */
+    /** Stab Shot on a roster player. */
     public String stabShot(Player target) {
-        World w = target.getWorld();
-        if (w.getEnvironment() != World.Environment.NORMAL) return "The Stab Shot drills in the overworld only.";
-        Location tl = target.getLocation();
+        return stabShotAt(target.getLocation());
+    }
+
+    /** Stab Shot: a column of explosions drilled straight down through a spot to bedrock. Same safety as the Nuke. */
+    public String stabShotAt(Location tl) {
+        World w = tl.getWorld();
+        if (w == null || w.getEnvironment() != World.Environment.NORMAL) return "The Stab Shot drills in the overworld only.";
         String near = unsafeNear(w, tl);
         if (near != null) return "Refused. " + near + " is not on the roster and is too close to the impact.";
         int x = tl.getBlockX();
@@ -1812,8 +1820,12 @@ public final class NullArmy {
                 if (i >= ys.size()) cancel();
             }
         }.runTaskTimer(plugin, 0L, 2L);
-        plugin.alert("Stab Shot drilling down under " + target.getName() + ".");
-        return "Stab Shot drilling down through " + target.getName() + "'s spot.";
+        plugin.alert("Stab Shot drilling down at " + coordsOf(tl) + ".");
+        return "Stab Shot drilling down at " + coordsOf(tl) + ".";
+    }
+
+    private static String coordsOf(Location l) {
+        return l.getBlockX() + ", " + l.getBlockY() + ", " + l.getBlockZ();
     }
 
     /** Mob Cannon: a swarm of hostile mobs drops in a ring around the target. Roster only; the owner is never targeted. */
