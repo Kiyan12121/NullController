@@ -30,6 +30,10 @@ commands:
     description: Nether base machines: turret, trap, alarm, drill, debris drill (owner only).
     usage: /nullbase build|clear <turret|trap|alarm|drill|debrisdrill> | status
     permission: nullcontroller.owner
+  nullalerts:
+    description: The last 30 alarms, escapes and finds (owner only).
+    usage: /nullalerts
+    permission: nullcontroller.owner
   nullupdate:
     description: Check GitHub for a newer NullController and stage it for the next restart (owner only).
     usage: /nullupdate

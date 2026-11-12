@@ -59,6 +59,7 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
     static final String ORBITAL = ChatColor.BLUE + "Orbital Rod";
     static final String NUKE = ChatColor.RED + "Nuke Rod";
 
+    static final String MOB_PREFIX = ChatColor.GREEN + "Mob Rod: ";
     private static final double TNT_SAFE_RADIUS = 12;
     private static final Map<String, String> NAME_BY_KIND = Map.ofEntries(
             Map.entry("ambush", AMBUSH), Map.entry("stasis", STASIS), Map.entry("tnt", TNT),
@@ -105,6 +106,10 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
             } else {
                 owner.sendMessage(ChatColor.GRAY + "Usage: /nullrod base set");
             }
+            return true;
+        }
+        if (kind.equals("mob")) {
+            mobRod(owner, args);
             return true;
         }
         String name = NAME_BY_KIND.get(kind);
@@ -165,7 +170,12 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
         ItemStack held = p.getInventory().getItemInMainHand();
         ItemMeta meta = held.getItemMeta();
         if (held.getType() != Material.FISHING_ROD || meta == null || meta.getDisplayName() == null) return;
-        String kind = KIND_BY_NAME.get(meta.getDisplayName());
+        String display = meta.getDisplayName();
+        if (display.startsWith(MOB_PREFIX)) {
+            mobCast(p, display.substring(MOB_PREFIX.length()), event.getHook().getLocation());
+            return;
+        }
+        String kind = KIND_BY_NAME.get(display);
         if (kind == null) return;
 
         Location hook = event.getHook().getLocation();
@@ -185,6 +195,39 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
             case "nuke" -> nuke(p, hook);
             default -> { }
         }
+    }
+
+    /** /nullrod mob <TYPE>: a rod that summons that mob where it lands. */
+    private void mobRod(Player owner, String[] args) {
+        if (args.length < 2) {
+            owner.sendMessage(ChatColor.GRAY + "Usage: /nullrod mob <ENTITY_TYPE>, e.g. ZOMBIE, WARDEN, CREEPER");
+            return;
+        }
+        EntityType type;
+        try {
+            type = EntityType.valueOf(args[1].toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            owner.sendMessage(ChatColor.RED + "No such mob: " + args[1]);
+            return;
+        }
+        if (!type.isAlive()) {
+            owner.sendMessage(ChatColor.RED + type.name() + " is not a mob.");
+            return;
+        }
+        give(owner, MOB_PREFIX + type.name(), "Land it to summon a " + type.name().toLowerCase(Locale.ROOT) + ".");
+    }
+
+    private void mobCast(Player owner, String typeName, Location hook) {
+        EntityType type;
+        try {
+            type = EntityType.valueOf(typeName);
+        } catch (IllegalArgumentException ex) {
+            owner.sendMessage(ChatColor.RED + "This rod has no mob set.");
+            return;
+        }
+        if (hook.getWorld() == null || !safe(owner, hook)) return;
+        hook.getWorld().spawnEntity(hook, type);
+        owner.sendMessage(ChatColor.DARK_PURPLE + "A " + type.name().toLowerCase(Locale.ROOT) + " appears at " + coords(hook) + ".");
     }
 
     private void ambush(Player owner, Location hook) {

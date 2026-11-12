@@ -51,6 +51,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     private Builders builders;
     private TotemManager totems;
     private NetherLaw netherLaw;
+    private final List<String> alerts = new ArrayList<>();
     private final Map<Integer, String[]> menuActions = new HashMap<>();
 
     @Override
@@ -86,6 +87,17 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         base.start();
         getCommand("nullbase").setExecutor(base);
         getCommand("nullbase").setTabCompleter(base);
+        getCommand("nullalerts").setExecutor((sender, cmd, label, args) -> {
+            if (!(sender instanceof Player p) || !consent.isOwner(p)) {
+                sender.sendMessage(ChatColor.RED + "Access denied.");
+                return true;
+            }
+            synchronized (alerts) {
+                if (alerts.isEmpty()) p.sendMessage(ChatColor.GRAY + "No alerts yet.");
+                for (String a : alerts) p.sendMessage(ChatColor.DARK_PURPLE + "- " + a);
+            }
+            return true;
+        });
         getServer().getPluginManager().registerEvents(netherLaw, this);
         getCommand("nullnether").setExecutor(netherLaw);
         getCommand("nullnether").setTabCompleter(netherLaw);
@@ -186,6 +198,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             case "invade" -> handleInvade(owner, args);
             case "ambush" -> handleAmbush(owner, args);
             case "totem" -> totems.giveTotem(owner);
+            case "cmd" -> owner.performCommand(String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length)));
             case "succession" -> totems.succession(owner);
             case "event" -> handleEvent(owner, args);
             case "remote" -> handleRemote(owner, args);
@@ -563,6 +576,26 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         button(inv, 43, Material.SPYGLASS, "Ranks", "Every Null's rank, health and state", "ranks");
         button(inv, 44, Material.WRITABLE_BOOK, "Help", "Lists every command", "help");
 
+        // One-click rods along the top row, and the Nether base machines and panels along the bottom.
+        button(inv, 0, Material.CRYING_OBSIDIAN, "Ambush Rod", "Portals open around a roster player", "cmd", "nullrod", "ambush");
+        button(inv, 1, Material.BLUE_ICE, "Stasis Rod", "Pull a roster player to the base and freeze them", "cmd", "nullrod", "stasis");
+        button(inv, 2, Material.TNT, "TNT Rod", "TNT from the sky onto the landing spot", "cmd", "nullrod", "tnt");
+        button(inv, 3, Material.BELL, "Summon Rod", "The army walks to the hook", "cmd", "nullrod", "summon");
+        button(inv, 4, Material.LIGHTNING_ROD, "Lightning Rod", "Bolt on the nearest roster player", "cmd", "nullrod", "lightning");
+        button(inv, 5, Material.FEATHER, "Launch Rod", "Throws the nearest roster player up", "cmd", "nullrod", "launch");
+        button(inv, 6, Material.WITHER_ROSE, "Wither Rod", "Wither, slowness and blindness", "cmd", "nullrod", "wither");
+        button(inv, 7, Material.ENDER_EYE, "Gravity Rod", "Pulls roster players in", "cmd", "nullrod", "gravity");
+        button(inv, 8, Material.BEACON, "Orbital Rod", "Eight lightning bolts over the spot", "cmd", "nullrod", "orbital");
+        button(inv, 26, Material.DRAGON_BREATH, "Nuke Rod", "Three big explosions on the spot", "cmd", "nullrod", "nuke");
+        button(inv, 9, Material.TURTLE_HELMET, "Base: Turret", "Arrow turret at the base", "cmd", "nullbase", "build", "turret");
+        button(inv, 18, Material.IRON_BARS, "Base: Trap", "Floor that drops under roster players", "cmd", "nullbase", "build", "trap");
+        button(inv, 36, Material.REDSTONE_LAMP, "Base: Alarm", "Lamps and bell when roster players come", "cmd", "nullbase", "build", "alarm");
+        button(inv, 45, Material.IRON_PICKAXE, "Base: Drill", "Mines the shaft under the base", "cmd", "nullbase", "build", "drill");
+        button(inv, 50, Material.ANCIENT_DEBRIS, "Base: Debris Drill", "Digs up debris within 12 blocks", "cmd", "nullbase", "build", "debrisdrill");
+        button(inv, 51, Material.FURNACE, "Base: Crafting Line", "Smelts debris into scrap from the chest", "cmd", "nullbase", "build", "craft");
+        button(inv, 52, Material.OBSERVER, "Alerts", "The last 30 alarms and finds", "cmd", "nullalerts");
+        button(inv, 53, Material.NETHERITE_INGOT, "Nether Law", "Strikes, prisoners and the prison", "cmd", "nullnether", "status");
+
         button(inv, 46, Material.CRIMSON_FUNGUS, "Event: Forge Awakening", "Squad of 5 mobilises at the Forge", "event", "forge");
         button(inv, 47, Material.GOLD_BLOCK, "Event: Capital Defense", "Squad of 8 guards, watchtower built", "event", "capital");
         button(inv, 48, Material.END_STONE, "Event: End Command Post", "Squad of 5 and barracks, End only", "event", "end");
@@ -595,6 +628,14 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         String[] action = menuActions.get(slot);
         if (action != null) {
             dispatch(p, action);
+        }
+    }
+
+    /** Keeps the last 30 alerts for /nullalerts and the control panel. */
+    public void alert(String message) {
+        synchronized (alerts) {
+            alerts.add(message);
+            while (alerts.size() > 30) alerts.remove(0);
         }
     }
 

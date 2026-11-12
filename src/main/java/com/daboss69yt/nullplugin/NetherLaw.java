@@ -705,6 +705,7 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
     private void notifyOwner(String message) {
         Player o = owner();
         if (o != null) o.sendMessage(message);
+        plugin.alert(ChatColor.stripColor(message));
         plugin.getLogger().info(ChatColor.stripColor(message));
     }
 

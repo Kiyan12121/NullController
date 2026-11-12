@@ -23,6 +23,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Monster;
+import org.bukkit.util.Vector;
 import java.util.EnumSet;
 import java.util.Set;
 import org.bukkit.entity.Player;
@@ -772,8 +773,16 @@ public final class NullArmy {
         Location tl = target.getLocation();
         if (here == null || !sameWorld(here, tl) || here.distance(tl) > TELEPORT_OVER) {
             appearNear(npc, target);
+        } else if (isWounded(npc)) {
+            // Retreat: back off ten blocks from the target and heal before going in again.
+            Vector off = here.toVector().subtract(tl.toVector());
+            if (off.lengthSquared() < 0.01) off = new Vector(1, 0, 0);
+            npc.getNavigator().setTarget(here.clone().add(off.normalize().multiply(10)));
         } else if (here.distance(tl) > ATTACK_REACH) {
-            npc.getNavigator().setTarget(tl);
+            // Flank: each Null comes in from its own side, so the group surrounds the target.
+            double ang = (npc.getId() % 8) * Math.PI / 4;
+            Location flank = here.distance(tl) > 6 ? tl.clone().add(Math.cos(ang) * 3, 0, Math.sin(ang) * 3) : tl;
+            npc.getNavigator().setTarget(flank);
         } else {
             attack(npc, target);
         }

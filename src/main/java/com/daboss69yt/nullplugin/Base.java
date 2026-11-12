@@ -9,6 +9,8 @@ import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.Container;
 import org.bukkit.block.Dispenser;
+import org.bukkit.block.Furnace;
+import org.bukkit.inventory.FurnaceInventory;
 import org.bukkit.block.data.Lightable;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -125,6 +127,8 @@ public final class Base implements CommandExecutor, TabCompleter {
                 }
                 w.getBlockAt(ax, ay + 2, az).setType(Material.BELL);
             }
+            case "craft" -> w.getBlockAt(ax - 3, ay + 1, az).setBlockData(
+                    Bukkit.createBlockData("minecraft:furnace[facing=east]"));
             default -> { }
         }
         List<String> list = active();
@@ -150,6 +154,7 @@ public final class Base implements CommandExecutor, TabCompleter {
         if (active().contains("turret") && roster && !intruder) turret(a);
         if (active().contains("trap") && !intruder) trap(a);
         if (active().contains("drill")) drillLayer(a);
+        if (active().contains("craft")) craft(a);
     }
 
     private void turret(Location a) {
@@ -170,6 +175,7 @@ public final class Base implements CommandExecutor, TabCompleter {
             w.playSound(a, Sound.BLOCK_BELL_USE, 2f, 0.8f);
             Player o = Bukkit.getPlayerExact(ConsentManager.OWNER_NAME);
             if (o != null) o.sendMessage(ChatColor.DARK_RED + "[Base] Roster player at the base.");
+            plugin.alert("Roster player at the base.");
         } else if (!roster) {
             alarmOn = false;
         }
@@ -280,6 +286,46 @@ public final class Base implements CommandExecutor, TabCompleter {
                 a.getWorld().dropItemNaturally(a, item);
             }
         }
+    }
+
+    /**
+     * Crafting line: the furnace three blocks west of the base takes up to eight ancient debris from the
+     * deposit chest, smelts it into netherite scrap, and puts the scrap back in the chest. Coal is kept topped up.
+     */
+    private void craft(Location a) {
+        World w = a.getWorld();
+        Block fb = w.getBlockAt(a.getBlockX() - 3, a.getBlockY() + 1, a.getBlockZ());
+        if (fb.getType() != Material.FURNACE || !(fb.getState() instanceof Furnace f)) return;
+        Container c = depositChest();
+        if (c == null) return;
+        FurnaceInventory fi = f.getInventory();
+        if (fi.getFuel() == null || fi.getFuel().getType() == Material.AIR) {
+            fi.setFuel(new ItemStack(Material.COAL, 8));
+        }
+        ItemStack input = fi.getSmelting();
+        if (input == null || input.getType() == Material.AIR) {
+            int moved = takeFrom(c, Material.ANCIENT_DEBRIS, 8);
+            if (moved > 0) fi.setSmelting(new ItemStack(Material.ANCIENT_DEBRIS, moved));
+        }
+        ItemStack out = fi.getResult();
+        if (out != null && out.getType() != Material.AIR) {
+            for (ItemStack left : c.getInventory().addItem(out.clone()).values()) {
+                w.dropItemNaturally(a, left);
+            }
+            fi.setResult(null);
+        }
+        f.update();
+    }
+
+    /** Takes up to max of one material out of a container. Returns how many were taken. */
+    private static int takeFrom(Container c, Material m, int max) {
+        int have = 0;
+        for (ItemStack s : c.getInventory().getContents()) {
+            if (s != null && s.getType() == m) have += s.getAmount();
+        }
+        int n = Math.min(have, max);
+        if (n > 0) c.getInventory().removeItem(new ItemStack(m, n));
+        return n;
     }
 
     // ---------- Helpers ----------
