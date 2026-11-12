@@ -280,6 +280,7 @@ public final class NullArmy {
         NPC npc = CitizensAPI.getNPCRegistry().createNPC(EntityType.PLAYER, randomName());
         npc.getOrAddTrait(SkinTrait.class).setSkinName(plugin.getConfig().getString("null-skin", "NULL"));
         setHeldItem(npc, gear);
+        equipArmour(npc);
         npc.spawn(loc);
         nulls.add(npc);
         packs.put(npc, Bukkit.createInventory(null, PACK_SIZE, "Null Pack"));
@@ -291,6 +292,22 @@ public final class NullArmy {
         for (NPC npc : nulls) {
             setHeldItem(npc, gear);
         }
+    }
+
+    /** Every Null wears full enchanted netherite armour. */
+    private void equipArmour(NPC npc) {
+        Equipment eq = npc.getOrAddTrait(Equipment.class);
+        eq.set(Equipment.EquipmentSlot.HELMET, enchantedNetherite(Material.NETHERITE_HELMET));
+        eq.set(Equipment.EquipmentSlot.CHESTPLATE, enchantedNetherite(Material.NETHERITE_CHESTPLATE));
+        eq.set(Equipment.EquipmentSlot.LEGGINGS, enchantedNetherite(Material.NETHERITE_LEGGINGS));
+        eq.set(Equipment.EquipmentSlot.BOOTS, enchantedNetherite(Material.NETHERITE_BOOTS));
+    }
+
+    private ItemStack enchantedNetherite(Material m) {
+        ItemStack item = new ItemStack(m);
+        item.addUnsafeEnchantment(Enchantment.PROTECTION, 4);
+        item.addUnsafeEnchantment(Enchantment.UNBREAKING, 3);
+        return item;
     }
 
     private void setHeldItem(NPC npc, ItemStack item) {
