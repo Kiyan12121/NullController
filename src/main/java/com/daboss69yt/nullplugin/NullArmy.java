@@ -3,8 +3,10 @@ package com.daboss69yt.nullplugin;
 import net.citizensnpcs.api.CitizensAPI;
 import net.citizensnpcs.api.npc.NPC;
 import net.citizensnpcs.api.trait.trait.Equipment;
+import net.citizensnpcs.trait.GameModeTrait;
 import net.citizensnpcs.trait.SkinTrait;
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -304,15 +306,30 @@ public final class NullArmy {
 
     private NPC createNull(Location loc, ItemStack gear) {
         NPC npc = CitizensAPI.getNPCRegistry().createNPC(EntityType.PLAYER, randomName());
-        npc.getOrAddTrait(SkinTrait.class).setSkinName(plugin.getConfig().getString("null-skin", "NULL"));
+        npc.setProtected(false); // Citizens NPCs are invulnerable by default; Nulls must be hittable
+        npc.getOrAddTrait(GameModeTrait.class).setGameMode(GameMode.SURVIVAL); // creative players can't be hurt
         setHeldItem(npc, gear);
         equipArmour(npc);
         npc.spawn(loc);
+        applySkin(npc);
         nulls.add(npc);
         if (leader == null) leader = npc;
         recomputeRanks();
         packs.put(npc, Bukkit.createInventory(null, PACK_SIZE, "Null Pack"));
         return npc;
+    }
+
+    /** Black skin from the configured URL when set, otherwise the skin name from config. Needs the NPC spawned. */
+    private void applySkin(NPC npc) {
+        String url = plugin.getConfig().getString("null-skin-url", "");
+        if (url != null && !url.isBlank()) {
+            var console = Bukkit.getConsoleSender();
+            CitizensAPI.getDefaultNPCSelector().select(console, npc);
+            Bukkit.dispatchCommand(console, "npc skin --url " + url);
+            CitizensAPI.getDefaultNPCSelector().deselect(console);
+        } else {
+            npc.getOrAddTrait(SkinTrait.class).setSkinName(plugin.getConfig().getString("null-skin", "NULL"));
+        }
     }
 
     private void applyGear(Mode m) {
