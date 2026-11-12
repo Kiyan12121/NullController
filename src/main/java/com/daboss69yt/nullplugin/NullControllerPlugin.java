@@ -164,7 +164,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     }
 
     private boolean handleReload(CommandSender sender) {
-        if (!isOwner(sender)) {
+        if (!(sender instanceof ConsoleCommandSender) && !isOwner(sender)) {
             sender.sendMessage(ChatColor.RED + "Access denied.");
             return true;
         }
@@ -186,7 +186,50 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         return true;
     }
 
+    /** Console orders while the owner is offline: only what needs no player. */
+    private boolean offlineOrder(CommandSender sender, String[] args) {
+        if (args.length == 0) {
+            sender.sendMessage(OFFLINE_HELP);
+            return true;
+        }
+        switch (args[0].toLowerCase()) {
+            case "dismiss" -> sender.sendMessage("Dismissed " + army.dismissOffline() + " Nulls.");
+            case "guard" -> offlineMode(sender, NullArmy.Mode.GUARD);
+            case "stay" -> offlineMode(sender, NullArmy.Mode.STAY);
+            case "mine" -> offlineMode(sender, NullArmy.Mode.MINE);
+            case "lumber" -> offlineMode(sender, NullArmy.Mode.LUMBER);
+            case "farm" -> offlineMode(sender, NullArmy.Mode.FARM);
+            case "status" -> sender.sendMessage(army.statusOffline());
+            case "ambush" -> {
+                String sub = args.length > 1 ? args[1].toLowerCase() : "toggle";
+                boolean current = getConfig().getBoolean("nether-ambush", false);
+                boolean next = switch (sub) {
+                    case "on" -> true;
+                    case "off" -> false;
+                    default -> !current;
+                };
+                getConfig().set("nether-ambush", next);
+                saveConfig();
+                sender.sendMessage("Nether ambush " + (next ? "enabled" : "disabled") + ".");
+            }
+            default -> sender.sendMessage(OFFLINE_HELP);
+        }
+        return true;
+    }
+
+    private static final String OFFLINE_HELP = ChatColor.GRAY + "Owner is offline. Console orders: "
+            + "dismiss, guard, stay, mine, lumber, farm, status, ambush on|off|toggle";
+
+    private void offlineMode(CommandSender sender, NullArmy.Mode mode) {
+        sender.sendMessage(army.setModeOffline(mode)
+                ? "Army mode: " + mode.name()
+                : "That mode can't run yet (patrol route or forge block not set).");
+    }
+
     private boolean handleCmd(CommandSender sender, String[] args) {
+        if (sender instanceof ConsoleCommandSender && ownerFor(sender) == null) {
+            return offlineOrder(sender, args);
+        }
         if (!isOwner(sender)) {
             sender.sendMessage(ChatColor.RED + "Access denied, or the owner is offline.");
             return true;

@@ -176,6 +176,29 @@ public final class NullArmy {
         }.runTaskTimer(plugin, 0L, 2L);
     }
 
+    /** Console-only: dismiss with the owner offline. Returns how many Nulls were removed. */
+    public int dismissOffline() {
+        int count = nulls.size();
+        removeAll();
+        return count;
+    }
+
+    /** Console-only mode switch with the owner offline. Returns false if the mode can't run yet. */
+    public boolean setModeOffline(Mode newMode) {
+        if (newMode == Mode.PATROL && patrolRoute.isEmpty()) return false;
+        if (newMode == Mode.FORGE && configuredBlock("forge-block") == null) return false;
+        this.mode = newMode;
+        cageGuard = null;
+        huntTarget = null;
+        resetWork();
+        applyGear(newMode);
+        return true;
+    }
+
+    public String statusOffline() {
+        return "Nulls: " + nulls.size() + "/" + armyCap() + "  Mode: " + mode.name();
+    }
+
     public void dismissAll(Player owner) {
         int count = nulls.size();
         removeAll();
