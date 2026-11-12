@@ -11,6 +11,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
+import org.bukkit.Sound;
 import org.bukkit.Tag;
 import org.bukkit.World;
 import org.bukkit.block.Block;
@@ -108,6 +109,8 @@ public final class NullArmy {
     private final Map<NPC, Integer> forgeCycles = new HashMap<>();
     private long alarmUntil;
     private UUID huntTarget;
+    /** Nulls mid-arrival: they're in the portal effect and skip their normal moves until it lands. */
+    private final Set<NPC> arriving = new HashSet<>();
     private long nextAlarm;
 
     private boolean swinging;
@@ -409,6 +412,7 @@ public final class NullArmy {
         wanderGoals.remove(npc);
         wanderUntil.remove(npc);
         ranks.remove(npc);
+        arriving.remove(npc);
         promotions.remove(npc);
         forgeCycles.remove(npc);
         if (npc == leader) {
@@ -569,7 +573,10 @@ public final class NullArmy {
 
     private void tick() {
         Player owner = findOwner();
-        if (owner == null) return;
+        if (owner == null) {
+            idleGuard();
+            return;
+        }
         cycle++;
         expireHunters();
         checkAlarm(owner);
@@ -584,7 +591,7 @@ public final class NullArmy {
         }
 
         for (NPC npc : new ArrayList<>(nulls)) {
-            if (!npc.isSpawned()) continue;
+            if (!npc.isSpawned() || arriving.contains(npc)) continue;
             Hunt hunt = hunters.get(npc);
             if (hunt != null) {
                 huntTick(npc, hunt);
@@ -1102,12 +1109,63 @@ public final class NullArmy {
         return Arrays.stream(items).filter(i -> i != null).toArray(ItemStack[]::new);
     }
 
+    /** Moves a Null by portal-style arrival: a portal flash at the destination, then the Null steps out. */
     private void teleport(NPC npc, Location loc) {
-        Entity entity = npc.getEntity();
-        if (entity != null) {
-            entity.teleport(loc);
-        } else {
+        if (npc.getEntity() == null) {
             npc.spawn(loc);
+            return;
+        }
+        entrance(npc, loc);
+    }
+
+    private void entrance(NPC npc, Location dest) {
+        if (!arriving.add(npc)) return;
+        World w = dest.getWorld();
+        if (w != null) {
+            w.spawnParticle(Particle.PORTAL, dest.clone().add(0, 1, 0), 80, 0.6, 1.0, 0.6, 0.5);
+            w.playSound(dest, Sound.BLOCK_PORTAL_TRAVEL, 0.7f, 1.3f);
+        }
+        Location arrival = dest.clone();
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                arriving.remove(npc);
+                Entity e = npc.getEntity();
+                if (!npc.isSpawned() || e == null) return;
+                e.teleport(arrival);
+                World aw = arrival.getWorld();
+                if (aw != null) {
+                    aw.spawnParticle(Particle.PORTAL, arrival.clone().add(0, 1, 0), 80, 0.6, 1.0, 0.6, 0.5);
+                    aw.playSound(arrival, Sound.BLOCK_PORTAL_TRAVEL, 0.7f, 0.9f);
+                }
+            }
+        }.runTaskLater(plugin, 30L);
+    }
+
+    /** The End city centre from config, or null if it hasn't been built yet. */
+    private Location cityCentre() {
+        String raw = plugin.getConfig().getString("city-centre", "");
+        if (raw == null || raw.isBlank()) return null;
+        String[] p = raw.split(",");
+        if (p.length != 4) return null;
+        World w = Bukkit.getWorld(p[0]);
+        if (w == null) return null;
+        try {
+            return new Location(w, Integer.parseInt(p[1]) + 0.5, Integer.parseInt(p[2]), Integer.parseInt(p[3]) + 0.5);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    /** With the owner offline, every Null that isn't on a hunt keeps watch around the Civilisation. */
+    private void idleGuard() {
+        Location anchor = cityCentre();
+        if (anchor == null) return;
+        for (int i = 0; i < nulls.size(); i++) {
+            NPC npc = nulls.get(i);
+            if (!npc.isSpawned() || arriving.contains(npc) || hunters.containsKey(npc)) continue;
+            if (engageMobs(npc)) continue;
+            ringAround(npc, anchor, i, 8);
         }
     }
 

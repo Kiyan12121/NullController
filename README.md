@@ -1,4 +1,8 @@
-# NullController 4.2
+# NullController 4.3
+
+## Always on (4.3)
+- With you offline, every Null that isn't on a hunt guards the Null Civilisation, fighting any hostile mobs that come near.
+- Moves are now portal-style arrivals: a portal flash where the Null is going, then it steps out there about 1.5 seconds later. Hunters use the same arrival when they come after a roster player.
 
 ## Machines and the Null Remote (4.2)
 - `/nullcmd build collector`: an input chest, a hopper line, and an output chest.
