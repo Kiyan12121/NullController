@@ -9,6 +9,8 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.Container;
@@ -547,7 +549,6 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
             for (ItemStack l : left.values()) addStash(r, l);
         }
         p.getInventory().clear();
-        p.getInventory().addItem(new ItemStack(Material.DIAMOND_PICKAXE)); // the lowest tool that mines ancient debris
         r.ledger.clear();
         r.stripped = true;
         save();
@@ -726,6 +727,8 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
                 p.sendMessage(ChatColor.GRAY + "Rations issued.");
                 save();
             }
+            // Mining fatigue for as long as they're held: they can't dig their way out by hand.
+            p.addPotionEffect(new PotionEffect(PotionEffectType.MINING_FATIGUE, 100, 2, false, false));
             if (configLoc("prison") != null && !inPrison(p.getLocation())) escape(p, r);
         }
     }
