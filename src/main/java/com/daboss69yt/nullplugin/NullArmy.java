@@ -2083,6 +2083,15 @@ public final class NullArmy {
         }
     }
 
+    /** True if any spawned Null in the army is within the radius of the spot. */
+    public boolean hasNullsNear(Location spot, double radius) {
+        for (NPC npc : nulls) {
+            Location here = npc.getStoredLocation();
+            if (npc.isSpawned() && here != null && sameWorld(here, spot) && here.distance(spot) <= radius) return true;
+        }
+        return false;
+    }
+
     /** True if a Null of this player's hunt is currently engaged with them. */
     public boolean isEngaged(UUID id) {
         for (Hunt h : hunters.values()) {

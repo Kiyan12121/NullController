@@ -80,6 +80,10 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             Player o = Bukkit.getPlayerExact(ConsentManager.OWNER_NAME);
             if (o != null) builders.autoFortify(o);
         }, 20L * 60, 20L * 60 * minutes);
+        getServer().getScheduler().runTaskTimer(this, () -> {
+            Player o = Bukkit.getPlayerExact(ConsentManager.OWNER_NAME);
+            if (o != null) builders.repairUnderAttack(o);
+        }, 20L * 10, 20L * 10); // every ten seconds: repairs happen while the Nulls are still there
         totems = new TotemManager(this, consent, army);
         netherLaw = new NetherLaw(this, consent, army);
         netherLaw.start();

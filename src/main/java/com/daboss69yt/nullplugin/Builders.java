@@ -183,9 +183,26 @@ public final class Builders {
         startBuild(msg -> owner.sendMessage(msg), "Fortify " + lastName, missing, false);
     }
 
-    /** Called by the timer. Repairs quietly, and only when idle and something is missing. */
+    /**
+     * Self-repair under attack: if part of the last build is missing and Nulls are standing near it,
+     * the Nulls put it back straight away. Autonomous, so Nether builds only.
+     */
+    public void repairUnderAttack(Player owner) {
+        if (queue.isBusy() || lastPlacements.isEmpty() || !inNether(lastPlacements.get(0).location())) return;
+        List<BuildQueue.Placement> missing = missingBlocks();
+        if (missing.isEmpty()) return;
+        Location spot = missing.get(0).location();
+        if (!army.hasNullsNear(spot, 24)) return;
+        startBuild(msg -> owner.sendMessage(msg), "Emergency repair of " + lastName, missing, false);
+    }
+
+    private boolean inNether(Location l) {
+        return l.getWorld() != null && l.getWorld().getEnvironment() == World.Environment.NETHER;
+    }
+
+    /** Called by the timer. Repairs quietly, and only when idle and something is missing. Nether builds only. */
     public void autoFortify(Player owner) {
-        if (queue.isBusy() || lastPlacements.isEmpty()) return;
+        if (queue.isBusy() || lastPlacements.isEmpty() || !inNether(lastPlacements.get(0).location())) return;
         List<BuildQueue.Placement> missing = missingBlocks();
         if (missing.isEmpty()) return;
         startBuild(msg -> owner.sendMessage(msg), "Auto-repair " + lastName, missing, false);
