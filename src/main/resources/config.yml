@@ -110,3 +110,7 @@ defence-minutes: 3
 
 # Team: allies the Null weapons (rods, strikes, mob cannon) never hit. Manage with /nullcmd team add|remove|list.
 allies: []
+
+# The Commander's voice: type "null <message>" in chat. Needs a Groq API key. Keep the key private.
+groq-api-key: ""
+groq-model: "llama-3.3-70b-versatile"
