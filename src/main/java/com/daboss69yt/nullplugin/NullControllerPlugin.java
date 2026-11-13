@@ -44,7 +44,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     private Rods rods;
 
     private static final List<String> SUBCOMMANDS = List.of("summon", "dismiss", "recall", "guard", "follow",
-            "hunt", "stay", "goto", "status", "ranks", "mine", "lumber", "farm", "forge", "chest", "patrol",
+            "hunt", "stay", "goto", "status", "ranks", "mine", "lumber", "farm", "forge", "chest", "patrol", "stashroom",
             "build", "fortify", "cage", "invade", "ambush", "totem", "succession", "event", "remote", "team", "orbital", "stabshot", "chests", "help");
     private static final List<String> BUILDS = List.of("citadel", "bridge", "watchtower", "barracks",
             "forgegate", "spire", "city", "metropolis", "collector", "smelter", "door", "melonfarm", "cancel", "undo", "preview");
@@ -337,6 +337,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             case "ambush" -> handleAmbush(owner, args);
             case "team" -> teamOrder(owner, args);
             case "chests" -> handleChests(owner, args);
+            case "stashroom" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.buildStashRoom(owner));
             case "orbital" -> targetedOrder(owner, args, army::orbitalNuke);
             case "stabshot" -> targetedOrder(owner, args, army::stabShot);
             case "totem" -> totems.giveTotem(owner);

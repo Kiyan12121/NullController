@@ -2374,6 +2374,25 @@ public final class NullArmy {
         }
     }
 
+    /**
+     * Builds a stash room at the Nether base: six stash chests in a row, six blocks east of the base,
+     * on the same floor. Nether only. Returns a line for the owner.
+     */
+    public String buildStashRoom(Player owner) {
+        Location base = configLoc("nether-base");
+        if (base == null) return "Set the base first: stand at the base and run /nullrod base set.";
+        World w = base.getWorld();
+        if (w == null || w.getEnvironment() != World.Environment.NETHER) return "Stash rooms are built in the Nether only.";
+        int built = 0;
+        for (int i = 0; i < 6; i++) {
+            Location spot = base.clone().add(6 + i, 0, 0);
+            Block placed = chests().place(Chests.Kind.STASH, spot);
+            if (placed != null) built++;
+        }
+        return built == 0 ? "No free spot for the stash room. Clear some space at the base."
+                : "Stash room built with " + built + " stash chests at " + coordsOf(base.clone().add(6, 0, 0)) + ".";
+    }
+
     /** Owner aims at a block and a chest of this kind is built on top of it. */
     public String placeChestAimed(Player owner, Chests.Kind kind) {
         Block target = owner.getTargetBlockExact(6);
