@@ -932,6 +932,18 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         }
     }
 
+    /**
+     * Minecraft doesn't pass the H key to plugins, so the owner's F key opens the control panel
+     * instead. F normally swaps the hand items, so that swap is cancelled for the owner.
+     */
+    @EventHandler
+    public void onPanelKey(org.bukkit.event.player.PlayerSwapHandItemsEvent event) {
+        Player p = event.getPlayer();
+        if (!consent.isOwner(p)) return;
+        event.setCancelled(true);
+        p.openInventory(buildMenu());
+    }
+
     @EventHandler
     public void onOwnerPlace(org.bukkit.event.block.BlockPlaceEvent event) {
         army.noteBuilding(event.getPlayer());
