@@ -45,7 +45,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
 
     private static final List<String> SUBCOMMANDS = List.of("summon", "dismiss", "recall", "guard", "follow",
             "hunt", "stay", "goto", "status", "ranks", "mine", "lumber", "farm", "forge", "chest", "patrol", "stashroom", "autowork", "autospy",
-            "build", "fortify", "cage", "invade", "ambush", "totem", "succession", "event", "remote", "team", "orbital", "stabshot", "chests", "help");
+            "build", "fortify", "cage", "invade", "ambush", "totem", "succession", "event", "remote", "team", "orbital", "stabshot", "chests", "pearl", "help");
     private static final List<String> BUILDS = List.of("citadel", "bridge", "watchtower", "barracks",
             "forgegate", "spire", "city", "metropolis", "collector", "smelter", "door", "melonfarm", "prison", "cancel", "undo", "preview");
     private static final List<String> EVENTS = List.of("forge", "capital", "end", "clash");
@@ -374,6 +374,11 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             case "autowork" -> owner.sendMessage(ChatColor.DARK_PURPLE + "Auto work " + toggleKey(args, "auto-work", true) + ".");
             case "autospy" -> owner.sendMessage(ChatColor.DARK_PURPLE + "Auto spy " + toggleKey(args, "auto-spy", true) + ".");
             case "orbital" -> targetedOrder(owner, args, army::orbitalNuke);
+            case "pearl" -> {
+                Block aimed = owner.getTargetBlockExact(60);
+                owner.sendMessage(aimed == null ? ChatColor.RED + "Look at a spot to aim the pearl cannon."
+                        : ChatColor.DARK_PURPLE + army.pearlCannonAt(owner, aimed.getLocation().add(0, 1, 0)));
+            }
             case "stabshot" -> targetedOrder(owner, args, army::stabShot);
             case "totem" -> totems.giveTotem(owner);
             case "cmd" -> owner.performCommand(String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length)));

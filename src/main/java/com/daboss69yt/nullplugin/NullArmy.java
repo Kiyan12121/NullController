@@ -220,6 +220,39 @@ public final class NullArmy {
         }
     }
 
+    /**
+     * The ender pearl cannon: a free Null throws a pearl at the aim spot. The pearl teleports the
+     * Null where it lands, a long-range move faster than walking. Refuses if a non-roster player
+     * is near the landing spot.
+     */
+    public String pearlCannonAt(Player owner, Location aim) {
+        for (Player other : aim.getWorld().getPlayers()) {
+            if (other.getLocation().distance(aim) <= 10 && !consent.canTarget(other) && !other.equals(owner)) {
+                return "Refused. " + other.getName() + " is not on the roster and is near the landing spot.";
+            }
+        }
+        NPC shooter = null;
+        for (NPC npc : nulls) {
+            if (npc.isSpawned() && npc.getEntity() instanceof LivingEntity && !hunters.containsKey(npc)
+                    && !spies.containsKey(npc) && !arriving.contains(npc)) {
+                shooter = npc;
+                break;
+            }
+        }
+        if (shooter == null) return "No free Null to fire the pearl cannon.";
+        LivingEntity e = (LivingEntity) shooter.getEntity();
+        Location from = e.getEyeLocation();
+        if (!sameWorld(from, aim)) return "The pearl cannon only fires within one world.";
+        Vector dir = aim.toVector().subtract(from.toVector());
+        double dist = dir.length();
+        if (dist < 1) return "Aim further away.";
+        double speed = Math.min(3.5, 1.8 + dist * 0.05);
+        Vector velocity = dir.normalize().multiply(speed).setY(dir.getY() / dist * speed + 0.6);
+        e.launchProjectile(org.bukkit.entity.EnderPearl.class, velocity);
+        swing(shooter);
+        return "Pearl cannon fired at " + coordsOf(aim) + ".";
+    }
+
     /** A Mark Rod: the army hits this player much harder from now on. Adds to the learned threat. */
     public void markTarget(UUID id) {
         threat.merge(id, 10.0, Double::sum);
