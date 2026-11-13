@@ -229,6 +229,36 @@ public final class Builders {
      * Owner offline: builds at the given site, facing +X. Civilisation builds need the owner
      * in The End, so they stay in game. Returns false if the build did not start.
      */
+    private final java.util.Random pick = new java.util.Random();
+
+    /**
+     * Terrain-aware site: the nearest spot within eight blocks where a five by five footprint
+     * is solid underneath, air above, and free of lava. Null if the ground is too rough.
+     */
+    private Location flatSite(Location site) {
+        World w = site.getWorld();
+        if (w == null) return null;
+        for (int tries = 0; tries < 30; tries++) {
+            int x = site.getBlockX() + (tries == 0 ? 0 : pick.nextInt(17) - 8);
+            int z = site.getBlockZ() + (tries == 0 ? 0 : pick.nextInt(17) - 8);
+            for (int y = site.getBlockY() + 3; y >= site.getBlockY() - 3; y--) {
+                if (levelAt(w, x, y, z)) return new Location(w, x + 0.5, y, z + 0.5);
+            }
+        }
+        return null;
+    }
+
+    private boolean levelAt(World w, int x, int y, int z) {
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                Material floor = w.getBlockAt(x + dx, y - 1, z + dz).getType();
+                Material air = w.getBlockAt(x + dx, y, z + dz).getType();
+                if (!floor.isSolid() || floor == Material.LAVA || !air.isAir()) return false;
+            }
+        }
+        return true;
+    }
+
     public boolean buildOffline(Location site, String type, Consumer<String> say) {
         if (queue.isBusy()) {
             say.accept("Already building " + queue.currentName() + ".");
@@ -242,7 +272,12 @@ public final class Builders {
             say.accept("Offline builds happen in the Nether only.");
             return false;
         }
-        Location base = site.clone();
+        Location level = flatSite(site);
+        if (level == null) {
+            say.accept("No level ground near the site. Try again after the Nulls have moved.");
+            return false;
+        }
+        Location base = level.clone();
         base.setY(Math.floor(base.getY()) - 1);
         Plan plan = planAt(base, new int[]{1, 0}, type);
         if (plan == null) {
