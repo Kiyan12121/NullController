@@ -22,6 +22,8 @@ import org.bukkit.entity.Entity;
 import net.citizensnpcs.api.CitizensAPI;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerFishEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.block.data.Openable;
 import org.bukkit.inventory.EquipmentSlot;
@@ -870,6 +872,23 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         int minutes = getConfig().getInt("ambush-minutes", 3);
         army.spawnHunters(owner, p, p.getLocation(), 2, minutes);
         owner.sendMessage(ChatColor.DARK_PURPLE + "Nether ambush sent after " + p.getName() + ".");
+    }
+
+    // ---------- Rejoin watch ----------
+
+    /** A roster player who logs off hurt or mid-fight leaves one hidden Null waiting where they'll come back. */
+    @EventHandler
+    public void onRosterQuit(PlayerQuitEvent event) {
+        Player p = event.getPlayer();
+        if (!consent.canTarget(p)) return;
+        if (p.getHealth() < 8 || army.isEngaged(p.getUniqueId())) {
+            army.markRejoin(p.getUniqueId(), p.getLocation(), p.getName());
+        }
+    }
+
+    @EventHandler
+    public void onRosterJoin(PlayerJoinEvent event) {
+        army.releaseRejoin(event.getPlayer().getUniqueId());
     }
 
     // ---------- Totem revival ----------

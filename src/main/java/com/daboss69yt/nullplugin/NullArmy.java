@@ -152,6 +152,11 @@ public final class NullArmy {
     /** Learned per player: how hard the Nulls have been hit by them. Raises the damage the Nulls deal back. */
     private final Map<UUID, Double> threat = new HashMap<>();
     private final Map<NPC, Long> potCooldown = new HashMap<>();
+    /** Learned from losses: where Nulls have gone down. The most recent twenty. */
+    private final List<Location> dangerSpots = new ArrayList<>();
+    private final Map<NPC, Long> woundAlert = new HashMap<>();
+    /** Nulls waiting, hidden, where a hurt or fleeing roster player will rejoin. Maps the Null to the player. */
+    private final Map<NPC, UUID> lurkers = new HashMap<>();
     private Chests chestsRef;
     private Chests chests() {
         if (chestsRef == null) chestsRef = new Chests(plugin);
@@ -946,7 +951,7 @@ public final class NullArmy {
                 double d = here.distance(p.getLocation());
                 if (d > range) continue;
                 // Near and weak first, but well-armoured players count as the bigger threat.
-                double score = d + p.getHealth() * 0.75 - armourOf(p) * 0.5;
+                double score = d + p.getHealth() * 0.75 - armourOf(p) * 0.5 - threat.getOrDefault(p.getUniqueId(), 0.0) * 0.5;
                 if (score < bestScore) {
                     bestScore = score;
                     bestDist = d;
@@ -986,7 +991,7 @@ public final class NullArmy {
             appearNear(npc, target);
         } else if (isWounded(npc)) {
             // Retreat: back off ten blocks from the target and heal before going in again.
-            threat.merge(hunt.target(), 0.5, Double::sum);
+            recordWound(npc, here, hunt.target());
             eatApple(npc);
             selfPot(npc);
             Vector off = here.toVector().subtract(tl.toVector());
@@ -998,6 +1003,8 @@ public final class NullArmy {
             double base = Math.atan2(here.getZ() - tl.getZ(), here.getX() - tl.getX());
             double ang = base + (npc.getId() % 2 == 0 ? Math.PI / 2.5 : -Math.PI / 2.5);
             Location flank = here.distance(tl) > 6 ? tl.clone().add(Math.cos(ang) * 3, 0, Math.sin(ang) * 3) : tl;
+            char role = ranks.getOrDefault(npc, 'D');
+            if (role == 'R' || role == 'A') flank = tl; // the leader and officers push straight in
             // Adapt to the player: shield users get hit from behind, archers get rushed.
             if (target.isBlocking()) flank = tl.clone().add(target.getLocation().getDirection().multiply(-2.5));
             else if (holdsRanged(target)) flank = tl;
@@ -1811,6 +1818,7 @@ public final class NullArmy {
         int minutes = plugin.getConfig().getInt("defence-minutes", 3);
         for (Player p : Bukkit.getOnlinePlayers()) {
             if (!consent.canTarget(p)) continue;
+            if (p.getWorld().getEnvironment() != World.Environment.THE_END) continue; // elsewhere, only on the owner's order
             Location pl = p.getLocation();
             boolean near = false;
             for (NPC npc : nulls) {
@@ -2062,6 +2070,45 @@ public final class NullArmy {
             return patrolRoute.get(i).clone();
         }
         return cityCentre();
+    }
+
+    private void recordWound(NPC npc, Location here, UUID target) {
+        threat.merge(target, 0.5, Double::sum);
+        if (dangerSpots.size() >= 20) dangerSpots.remove(0);
+        dangerSpots.add(here.clone());
+        long now = System.currentTimeMillis();
+        if (now >= woundAlert.getOrDefault(npc, 0L)) {
+            woundAlert.put(npc, now + 30_000L);
+            plugin.alert("A Null went down at " + coordsOf(here) + ". Danger spot marked.");
+        }
+    }
+
+    /** True if a Null of this player's hunt is currently engaged with them. */
+    public boolean isEngaged(UUID id) {
+        for (Hunt h : hunters.values()) {
+            if (h.target().equals(id)) return true;
+        }
+        return false;
+    }
+
+    /** A roster player logged off hurt or mid-fight: one Null waits, hidden, where they'll rejoin. */
+    public void markRejoin(UUID id, Location where, String name) {
+        releaseRejoin(id);
+        NPC npc = createNull(where, gearForMode(Mode.HUNT), false);
+        if (npc.getEntity() instanceof LivingEntity living) living.setInvisible(true);
+        spies.put(npc, new Spy(id, new long[]{0L}));
+        lurkers.put(npc, id);
+        plugin.alert("Rejoin watch: a Null waits, hidden, where " + name + " will come back.");
+    }
+
+    /** The roster player is back: the waiting Null rejoins the army. */
+    public void releaseRejoin(UUID id) {
+        for (Map.Entry<NPC, UUID> e : new ArrayList<>(lurkers.entrySet())) {
+            if (e.getValue().equals(id)) {
+                lurkers.remove(e.getKey());
+                dropNpc(e.getKey());
+            }
+        }
     }
 
     private boolean holdsRanged(Player p) {
