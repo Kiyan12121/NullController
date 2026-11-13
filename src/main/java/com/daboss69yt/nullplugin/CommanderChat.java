@@ -31,7 +31,8 @@ import java.util.Set;
 public final class CommanderChat implements Listener {
     private static final String ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
     private static final Set<String> ACTIONS = Set.of("none", "status", "scout", "recall", "guard", "follow", "stay", "design",
-            "hunt", "portal", "weapon", "bring");
+            "hunt", "portal", "weapon", "bring", "mine", "lumber", "farm", "patrol", "stashroom",
+            "ambush", "stabshot", "orbital", "mobcannon");
     private static final int HISTORY_TURNS = 6;
     private static final long COOLDOWN_MS = 3000;
 
@@ -43,6 +44,8 @@ public final class CommanderChat implements Listener {
             + "hunt sends the Nulls after one roster player named in \"target\"; the owner must confirm first, so say so. "
             + "portal opens a real nether portal in front of the owner. "
             + "bring opens a portal to a roster player who is in the Nether, named in \"target\". "
+            + "mine, lumber, farm and patrol set the army to work. stashroom builds the stash room. "
+            + "ambush, stabshot, orbital and mobcannon strike a roster player named in \"target\"; the owner confirms first. "
             + "weapon hands the owner one weapon named in \"key\" (blade, axe, mace, spear, bow, crossbow). "
             + "To design a build, use action design with a build object: {\"name\": \"...\", \"ops\": [ ... ]}. "
             + "Each op is {\"op\": \"fill\"|\"hollow\"|\"set\", \"from\": [x,y,z], \"to\": [x,y,z], \"at\": [x,y,z], \"block\": \"MATERIAL_NAME\"}. "
@@ -283,6 +286,31 @@ public final class CommanderChat implements Listener {
                 }
             }
             case "portal" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.buildPortal(owner));
+            case "mine" -> army.setMode(NullArmy.Mode.MINE, owner);
+            case "lumber" -> army.setMode(NullArmy.Mode.LUMBER, owner);
+            case "farm" -> army.setMode(NullArmy.Mode.FARM, owner);
+            case "patrol" -> army.setMode(NullArmy.Mode.PATROL, owner);
+            case "stashroom" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.buildStashRoom(owner));
+            case "ambush", "stabshot", "orbital", "mobcannon" -> {
+                String name = out == null || !out.has("target") ? "" : out.get("target").getAsString();
+                Player target = name.isEmpty() ? null : Bukkit.getPlayerExact(name);
+                if (target == null) {
+                    owner.sendMessage(ChatColor.GRAY + "I can't find that player online.");
+                } else if (!consent.canTarget(target)) {
+                    owner.sendMessage(ChatColor.RED + "Roster only. " + target.getName() + " is not on it.");
+                } else {
+                    String what = action;
+                    awaiting.put(owner.getUniqueId(), () -> {
+                        switch (what) {
+                            case "ambush" -> army.ambush(owner, target, 6, 5);
+                            case "stabshot" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.stabShot(target));
+                            case "orbital" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.orbitalNuke(target));
+                            default -> owner.sendMessage(ChatColor.DARK_PURPLE + army.mobCannon(target, 20));
+                        }
+                    });
+                    owner.sendMessage(ChatColor.DARK_PURPLE + "Send the army against " + target.getName() + " with " + what + "? Say 'null confirm' or 'null cancel'.");
+                }
+            }
             case "bring" -> {
                 String name = out == null || !out.has("target") ? "" : out.get("target").getAsString();
                 Player target = name.isEmpty() ? null : Bukkit.getPlayerExact(name);
