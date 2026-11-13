@@ -59,6 +59,9 @@ public final class CommanderChat implements Listener {
     private final ConsentManager consent;
     private final BuildDesigner designer;
     private VoiceListener voice;
+    /** Portals opened for "bring me there": owner -> roster player to land beside, and when it expires. */
+    private final Map<UUID, UUID> bringTo = new HashMap<>();
+    private final Map<UUID, Long> bringUntil = new HashMap<>();
     /** An action waiting for the owner's "confirm" (a hunt). Cleared by "cancel". */
     private final Map<UUID, Runnable> awaiting = new HashMap<>();
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
@@ -71,6 +74,38 @@ public final class CommanderChat implements Listener {
         this.army = army;
         this.consent = consent;
         this.designer = new BuildDesigner(plugin, consent);
+    }
+
+    /** When the owner steps into the portal opened for them, they land beside the roster player instead. */
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onPortal(org.bukkit.event.player.PlayerPortalEvent e) {
+        Player owner = e.getPlayer();
+        UUID targetId = bringTo.get(owner.getUniqueId());
+        if (targetId == null || e.getFrom().getWorld() == null) return;
+        Long until = bringUntil.get(owner.getUniqueId());
+        if (until == null || System.currentTimeMillis() > until) {
+            bringTo.remove(owner.getUniqueId());
+            return;
+        }
+        if (e.getFrom().getWorld().getEnvironment() != org.bukkit.World.Environment.NORMAL) return;
+        Player target = Bukkit.getPlayer(targetId);
+        bringTo.remove(owner.getUniqueId());
+        bringUntil.remove(owner.getUniqueId());
+        if (target == null || target.getWorld().getEnvironment() != org.bukkit.World.Environment.NETHER
+                || !consent.canTarget(target)) {
+            owner.sendMessage(ChatColor.GRAY + "The player you wanted has left the Nether.");
+            return;
+        }
+        e.setCancelled(true);
+        org.bukkit.Location t = target.getLocation();
+        org.bukkit.util.Vector facing = t.getDirection().setY(0);
+        if (facing.lengthSquared() < 0.0001) facing = new org.bukkit.util.Vector(1, 0, 0);
+        facing.normalize();
+        org.bukkit.Location dest = t.clone().add(facing.multiply(2));
+        dest.setYaw(t.getYaw() + 180);
+        dest.setPitch(0);
+        owner.teleport(dest);
+        owner.sendMessage(ChatColor.DARK_PURPLE + "You're beside " + target.getName() + ", facing them.");
     }
 
     /** Tells the owner when a roster player goes into the Nether, with the spot to walk to. */
@@ -253,7 +288,13 @@ public final class CommanderChat implements Listener {
                 } else if (!consent.canTarget(target)) {
                     owner.sendMessage(ChatColor.RED + "Roster only. " + target.getName() + " is not on it.");
                 } else {
-                    owner.sendMessage(ChatColor.DARK_PURPLE + army.bringPortal(owner, target));
+                    boolean inNether = target.getWorld().getEnvironment() == org.bukkit.World.Environment.NETHER;
+                    String result = army.bringPortal(owner, target);
+                    owner.sendMessage(ChatColor.DARK_PURPLE + result);
+                    if (inNether && result.contains("open at")) {
+                        bringTo.put(owner.getUniqueId(), target.getUniqueId());
+                        bringUntil.put(owner.getUniqueId(), System.currentTimeMillis() + 10 * 60_000L);
+                    }
                 }
             }
             case "weapon" -> {
