@@ -26,6 +26,13 @@ jobs:
         with:
           gradle-version: '8.14'
 
+      - name: Diagnose plugin repositories
+        run: |
+          for u in https://maven.fabricmc.net/net/fabricmc/fabric-loom/net.fabricmc.fabric-loom.gradle.plugin/maven-metadata.xml https://plugins.gradle.org/m2/net/fabricmc/fabric-loom/net.fabricmc.fabric-loom.gradle.plugin/maven-metadata.xml; do
+            echo "$u -> $(curl -s -o /tmp/meta.xml -w '%{http_code}' "$u")"
+            grep -o '<version>[^<]*</version>' /tmp/meta.xml | tail -5 || true
+          done
+
       - name: Build the mod
         working-directory: client-mod
         run: gradle build --no-daemon
