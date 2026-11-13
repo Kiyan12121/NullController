@@ -27,7 +27,8 @@ import java.util.Set;
  */
 public final class CommanderChat implements Listener {
     private static final String ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
-    private static final Set<String> ACTIONS = Set.of("none", "status", "scout", "recall", "guard", "follow", "stay", "design");
+    private static final Set<String> ACTIONS = Set.of("none", "status", "scout", "recall", "guard", "follow", "stay", "design",
+            "hunt", "portal", "weapon");
     private static final int HISTORY_TURNS = 6;
     private static final long COOLDOWN_MS = 3000;
 
@@ -35,7 +36,10 @@ public final class CommanderChat implements Listener {
             "You are the Commander of the NULL army on a Minecraft server. You are pragmatic, deeply loyal to "
             + "the NULL, and lighthearted, with a dry humour. You are ruthless toward outsiders but warm to your team. "
             + "Your owner gives the orders. Keep lines short, under 40 words. Never claim you did something you did not do. "
-            + "You may only request these actions: none, status, scout, recall, guard, follow, stay, design. "
+            + "You may only request these actions: none, status, scout, recall, guard, follow, stay, design, hunt, portal, weapon. "
+            + "hunt sends the Nulls after one roster player named in \"target\"; the owner must confirm first, so say so. "
+            + "portal opens a real nether portal in front of the owner. "
+            + "weapon hands the owner one weapon named in \"key\" (blade, axe, mace, spear, bow, crossbow). "
             + "To design a build, use action design with a build object: {\"name\": \"...\", \"ops\": [ ... ]}. "
             + "Each op is {\"op\": \"fill\"|\"hollow\"|\"set\", \"from\": [x,y,z], \"to\": [x,y,z], \"at\": [x,y,z], \"block\": \"MATERIAL_NAME\"}. "
             + "Coordinates are whole numbers relative to the build origin: x east, y up, z south. "
@@ -51,6 +55,8 @@ public final class CommanderChat implements Listener {
     private final ConsentManager consent;
     private final BuildDesigner designer;
     private VoiceListener voice;
+    /** An action waiting for the owner's "confirm" (a hunt). Cleared by "cancel". */
+    private final Map<UUID, Runnable> awaiting = new HashMap<>();
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
     private final Deque<String[]> history = new ArrayDeque<>();
     private boolean busy;
@@ -81,8 +87,8 @@ public final class CommanderChat implements Listener {
         String text = msg.substring(cut).trim();
         if (text.isEmpty()) return;
         owner.sendMessage(net.md_5.bungee.api.ChatColor.GRAY + "(heard) " + net.md_5.bungee.api.ChatColor.WHITE + text);
-        if (text.equalsIgnoreCase("confirm")) designer.confirm(owner);
-        else if (text.equalsIgnoreCase("cancel")) designer.cancel(owner);
+        if (text.equalsIgnoreCase("confirm")) confirmAll(owner);
+        else if (text.equalsIgnoreCase("cancel")) cancelAll(owner);
         else ask(owner, text);
     }
 
@@ -98,11 +104,11 @@ public final class CommanderChat implements Listener {
         String text = msg.substring(cut).trim();
         if (text.isEmpty()) return;
         if (text.equalsIgnoreCase("confirm")) {
-            Bukkit.getScheduler().runTask(plugin, () -> designer.confirm(p));
+            Bukkit.getScheduler().runTask(plugin, () -> confirmAll(p));
             return;
         }
         if (text.equalsIgnoreCase("cancel")) {
-            Bukkit.getScheduler().runTask(plugin, () -> designer.cancel(p));
+            Bukkit.getScheduler().runTask(plugin, () -> cancelAll(p));
             return;
         }
         Bukkit.getScheduler().runTask(plugin, () -> ask(p, text));
@@ -205,6 +211,29 @@ public final class CommanderChat implements Listener {
             case "guard" -> army.setMode(NullArmy.Mode.GUARD, owner);
             case "follow" -> army.setMode(NullArmy.Mode.FOLLOW, owner);
             case "stay" -> army.setMode(NullArmy.Mode.STAY, owner);
+            case "hunt" -> {
+                String name = out == null || !out.has("target") ? "" : out.get("target").getAsString();
+                Player target = name.isEmpty() ? null : Bukkit.getPlayerExact(name);
+                if (target == null) {
+                    owner.sendMessage(ChatColor.GRAY + "I can't find that player online.");
+                } else if (!consent.canTarget(target)) {
+                    owner.sendMessage(ChatColor.RED + "Roster only. " + target.getName() + " is not on it.");
+                } else {
+                    awaiting.put(owner.getUniqueId(), () -> army.setHuntTarget(owner, target));
+                    owner.sendMessage(ChatColor.DARK_PURPLE + "Send the Nulls after " + target.getName() + "? Say 'null confirm' or 'null cancel'.");
+                }
+            }
+            case "portal" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.buildPortal(owner));
+            case "weapon" -> {
+                String key = out == null || !out.has("key") ? "" : out.get("key").getAsString().toLowerCase();
+                org.bukkit.inventory.ItemStack made = Arsenal.make(key);
+                if (made == null) {
+                    owner.sendMessage(ChatColor.GRAY + "I don't have that weapon. Options: " + String.join(", ", Arsenal.KEYS) + ".");
+                } else {
+                    owner.getInventory().addItem(made);
+                    owner.sendMessage(ChatColor.DARK_PURPLE + "Weapon added to your inventory.");
+                }
+            }
             case "design" -> {
                 if (out != null && out.has("build") && out.get("build").isJsonObject()) {
                     owner.sendMessage(ChatColor.DARK_PURPLE + designer.stage(owner, out.getAsJsonObject("build"), BuildDesigner.origin(owner)));
@@ -214,6 +243,21 @@ public final class CommanderChat implements Listener {
             }
             default -> { }
         }
+    }
+
+    /** Runs a waiting action if there is one, otherwise confirms the build plan. */
+    private void confirmAll(Player owner) {
+        Runnable action = awaiting.remove(owner.getUniqueId());
+        if (action != null) action.run();
+        else designer.confirm(owner);
+    }
+
+    private void cancelAll(Player owner) {
+        if (awaiting.remove(owner.getUniqueId()) != null) {
+            owner.sendMessage(ChatColor.DARK_PURPLE + "Dropped.");
+            return;
+        }
+        designer.cancel(owner);
     }
 
     private void remember(String user, String reply) {
