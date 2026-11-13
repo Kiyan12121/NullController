@@ -892,6 +892,11 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     }
 
     @EventHandler
+    public void onOwnerPlace(org.bukkit.event.block.BlockPlaceEvent event) {
+        army.noteBuilding(event.getPlayer());
+    }
+
+    @EventHandler
     public void onRosterJoin(PlayerJoinEvent event) {
         army.releaseRejoin(event.getPlayer().getUniqueId());
         army.recordLogin(event.getPlayer().getUniqueId());

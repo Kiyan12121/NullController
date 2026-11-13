@@ -112,6 +112,10 @@ public final class NullArmy {
     private final Map<NPC, Block> claimed = new HashMap<>();
     private int cycle;
     private int lastScanCycle = -SCAN_EVERY_CYCLES;
+    /** Which kind of work the shared target list holds right now, for idle Nulls working on their own. */
+    private WorkKind autoKind = WorkKind.MINE;
+    /** When the owner last placed a block: idle Nulls ring them while they build. */
+    private long lastBuildingAt;
 
     private final List<Location> patrolRoute = new ArrayList<>();
     private final Map<NPC, Integer> waypointIndex = new HashMap<>();
@@ -179,6 +183,11 @@ public final class NullArmy {
         this.consent = consent;
         this.memory = new Memory(plugin.getDataFolder());
         this.threat = memory.threat();
+    }
+
+    /** The owner placed a block: idle Nulls guard them for the next minute. */
+    public void noteBuilding(Player p) {
+        if (consent.isOwner(p)) lastBuildingAt = System.currentTimeMillis();
     }
 
     /** Called when a roster player joins: learns when they usually come online. */
@@ -908,7 +917,13 @@ public final class NullArmy {
                     else followOwner(npc, owner, index, leash);
                 }
                 case FOLLOW -> {
-                    if (!engageMobs(npc)) followOwner(npc, owner, index, leash);
+                    if (engageMobs(npc)) continue;
+                    if (autoWork(npc, owner, index, leash)) continue;
+                    if (System.currentTimeMillis() - lastBuildingAt < 60_000L) {
+                        ringAround(npc, owner.getLocation(), index, 4); // guarding the build
+                    } else {
+                        followOwner(npc, owner, index, leash);
+                    }
                 }
                 case GOTO -> travel(npc, gotoTarget);
                 case HUNT -> huntNearby(npc, owner, index, leash, huntRange);
@@ -1065,6 +1080,30 @@ public final class NullArmy {
         } else {
             attack(npc, target);
         }
+    }
+
+    /**
+     * Idle Nulls work on their own while the owner is online and near: they mine or chop around
+     * the owner, alternating kinds, without an order. Turned off with auto-work: false in config.
+     */
+    private boolean autoWork(NPC npc, Player owner, int index, double leash) {
+        if (!plugin.getConfig().getBoolean("auto-work", true)) return false;
+        if (npc == leader || isWounded(npc) || hunters.containsKey(npc) || spies.containsKey(npc)) return false;
+        if (workTargets.isEmpty() && cycle - lastScanCycle >= SCAN_EVERY_CYCLES) {
+            Location anchor = workAnchor(owner);
+            WorkKind pick = (cycle / 60) % 2 == 0 ? WorkKind.MINE : WorkKind.LUMBER;
+            refillTargetsAt(anchor, pick);
+            if (workTargets.isEmpty()) {
+                WorkKind other = pick == WorkKind.MINE ? WorkKind.LUMBER : WorkKind.MINE;
+                refillTargetsAt(anchor, other);
+                pick = other;
+            }
+            autoKind = pick;
+            lastScanCycle = cycle;
+        }
+        if (workTargets.isEmpty()) return false;
+        workTick(npc, owner, autoKind, index, leash);
+        return true;
     }
 
     /** The commander's defence of the owner. Never targets the owner or anyone off the roster. */
