@@ -1090,6 +1090,12 @@ public final class NullArmy {
         }
         Location here = npc.getStoredLocation();
         Location tl = target.getLocation();
+        if (here != null && sameWorld(here, tl) && npc != leader && rosterCrowd(here) >= 3) {
+            // Outnumbered: fall back to the army rather than fight a group alone.
+            recordWound(npc, here, hunt.target());
+            npc.getNavigator().setTarget(prePositionAnchor());
+            return;
+        }
         if (here == null || !sameWorld(here, tl) || here.distance(tl) > TELEPORT_OVER) {
             appearNear(npc, target);
         } else if (isWounded(npc)) {
@@ -1143,6 +1149,15 @@ public final class NullArmy {
         if (workTargets.isEmpty()) return false;
         workTick(npc, owner, autoKind, index, leash);
         return true;
+    }
+
+    /** How many roster players are within eight blocks of the spot. Used to tell when a Null is outnumbered. */
+    private int rosterCrowd(Location spot) {
+        int n = 0;
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            if (consent.canTarget(p) && sameWorld(spot, p.getLocation()) && spot.distance(p.getLocation()) <= 8) n++;
+        }
+        return n;
     }
 
     /** The commander's defence of the owner. Never targets the owner or anyone off the roster. */
