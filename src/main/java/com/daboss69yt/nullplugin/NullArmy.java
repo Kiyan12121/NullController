@@ -1282,7 +1282,7 @@ public final class NullArmy {
         if (target == null) return;
         Location here = npc.getStoredLocation();
         if (here == null || !sameWorld(here, target) || here.distance(target) > TELEPORT_OVER) {
-            teleport(npc, target);
+            walkTo(npc, target);
         } else {
             npc.getNavigator().setTarget(target);
         }
@@ -1299,7 +1299,7 @@ public final class NullArmy {
         if (chosen != null) {
             Location tl = chosen.getLocation();
             if (here == null || !sameWorld(here, tl) || here.distance(tl) > TELEPORT_OVER) {
-                teleport(npc, tl);
+                walkTo(npc, tl);
             } else if (here.distance(tl) <= ATTACK_REACH) {
                 attack(npc, chosen);
             } else {
@@ -1569,7 +1569,7 @@ public final class NullArmy {
         Location spot = centre.clone().add(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
         Location here = npc.getStoredLocation();
         if (here == null || !sameWorld(here, spot) || here.distance(spot) > TELEPORT_OVER) {
-            teleport(npc, spot);
+            walkTo(npc, spot);
         } else if (here.distance(spot) > REACH) {
             npc.getNavigator().setTarget(spot);
         }
@@ -1594,7 +1594,7 @@ public final class NullArmy {
         Location spot = cageGuard.clone().add(Math.cos(angle) * 6.5, 0, Math.sin(angle) * 6.5);
         Location here = npc.getStoredLocation();
         if (here == null || !sameWorld(here, spot) || here.distance(spot) > TELEPORT_OVER) {
-            teleport(npc, spot);
+            walkTo(npc, spot);
         } else if (here.distance(spot) > REACH) {
             npc.getNavigator().setTarget(spot);
         }
@@ -1643,7 +1643,7 @@ public final class NullArmy {
         Location spot = forge.getLocation().add(0.5, 1, 0.5);
         Location here = npc.getStoredLocation();
         if (here == null || !sameWorld(here, spot) || here.distance(spot) > TELEPORT_OVER) {
-            teleport(npc, spot);
+            walkTo(npc, spot);
         } else if (here.distance(spot) > FORGE_HOLD) {
             npc.getNavigator().setTarget(spot);
         } else {
@@ -1661,7 +1661,7 @@ public final class NullArmy {
         Location here = npc.getStoredLocation();
 
         if (here == null || !sameWorld(here, wp) || here.distance(wp) > TELEPORT_OVER) {
-            teleport(npc, wp);
+            walkTo(npc, wp);
         } else if (here.distance(wp) <= WAYPOINT_REACH) {
             idx = (idx + 1) % patrolRoute.size();
             waypointIndex.put(npc, idx);
@@ -1692,7 +1692,7 @@ public final class NullArmy {
         Location spot = target.getLocation().add(0.5, 0, 0.5);
         Location here = npc.getStoredLocation();
         if (here == null || !sameWorld(here, spot) || here.distance(spot) > TELEPORT_OVER) {
-            teleport(npc, spot.clone().add(0, 1, 0));
+            walkTo(npc, spot.clone().add(0, 1, 0));
         } else if (here.distance(spot) > REACH) {
             npc.getNavigator().setTarget(spot);
         } else {
@@ -1732,7 +1732,7 @@ public final class NullArmy {
         Location spot = chestBlock.getLocation().add(0.5, 0, 0.5);
         Location here = npc.getStoredLocation();
         if (here == null || !sameWorld(here, spot) || here.distance(spot) > TELEPORT_OVER) {
-            teleport(npc, spot.clone().add(0, 1, 0));
+            walkTo(npc, spot.clone().add(0, 1, 0));
         } else if (here.distance(spot) > REACH) {
             npc.getNavigator().setTarget(spot);
         } else {
@@ -1916,6 +1916,42 @@ public final class NullArmy {
     }
 
     /** Moves a Null by portal-style arrival: a portal flash at the destination, then the Null steps out. */
+    /** Walks (and sprints, jumping where the path needs it) to the spot. Used for following and moving, never as a teleport. */
+    private void walkTo(NPC npc, Location loc) {
+        if (npc.getEntity() == null) {
+            npc.spawn(loc);
+            return;
+        }
+        if (npc.getEntity() instanceof Player p) p.setSprinting(true);
+        npc.getNavigator().setTarget(loc);
+    }
+
+    /** Places a real nether portal (obsidian frame, two wide, three tall) in front of the owner. */
+    public String buildPortal(Player owner) {
+        Location spot = owner.getLocation().add(owner.getLocation().getDirection().setY(0).normalize().multiply(3));
+        World w = spot.getWorld();
+        if (w == null) return "No world to open a portal in.";
+        if (w.getEnvironment() == World.Environment.THE_END) return "Portals to the Nether don't work in the End.";
+        for (Player other : w.getPlayers()) {
+            if (other.equals(owner) || other.getLocation().distance(spot) > 20) continue;
+            if (!consent.canTarget(other)) return "Refused. " + other.getName() + " is not on the roster and is too close.";
+        }
+        int bx = spot.getBlockX(), by = spot.getBlockY(), bz = spot.getBlockZ();
+        for (int x = bx - 2; x <= bx + 1; x++)
+            for (int y = by - 1; y <= by + 3; y++) {
+                boolean interior = x >= bx - 1 && x <= bx && y >= by && y <= by + 2;
+                Block b = w.getBlockAt(x, y, bz);
+                if (interior) {
+                    Orientable axis = (Orientable) Material.NETHER_PORTAL.createBlockData();
+                    axis.setAxis(Axis.X);
+                    b.setBlockData(axis, false);
+                } else {
+                    b.setType(Material.OBSIDIAN, false);
+                }
+            }
+        return "Nether portal open at " + coordsOf(spot) + ".";
+    }
+
     private void teleport(NPC npc, Location loc) {
         if (npc.getEntity() == null) {
             npc.spawn(loc);
@@ -2007,7 +2043,7 @@ public final class NullArmy {
             Location spot = chest.getLocation().add(0.5, 1, 0.5);
             Location here = npc.getStoredLocation();
             if (here == null || !sameWorld(here, spot) || here.distance(spot) > TELEPORT_OVER) {
-                teleport(npc, spot);
+                walkTo(npc, spot);
             } else if (here.distance(spot) > REACH) {
                 npc.getNavigator().setTarget(spot);
             } else {
@@ -2038,7 +2074,7 @@ public final class NullArmy {
         Location spot = target.getLocation().add(0.5, 0, 0.5);
         Location here = npc.getStoredLocation();
         if (here == null || !sameWorld(here, spot) || here.distance(spot) > TELEPORT_OVER) {
-            teleport(npc, spot.clone().add(0, 1, 0));
+            walkTo(npc, spot.clone().add(0, 1, 0));
         } else if (here.distance(spot) > REACH) {
             npc.getNavigator().setTarget(spot);
         } else {
@@ -2421,7 +2457,7 @@ public final class NullArmy {
 
         // Stage 1: the squad crosses the Nether roof above the target.
         for (NPC npc : squad) {
-            teleport(npc, roof.clone().add(wander.nextInt(3) - 1, 0, wander.nextInt(3) - 1));
+            walkTo(npc, roof.clone().add(wander.nextInt(3) - 1, 0, wander.nextInt(3) - 1));
         }
         plugin.alert("The Strike: squad crossing the Nether roof above " + target.getName() + ".");
 
