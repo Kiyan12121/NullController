@@ -32,7 +32,7 @@ public final class CommanderChat implements Listener {
     private static final String ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
     private static final Set<String> ACTIONS = Set.of("none", "status", "scout", "recall", "guard", "follow", "stay", "design",
             "hunt", "portal", "weapon", "bring", "mine", "lumber", "farm", "patrol", "stashroom",
-            "ambush", "stabshot", "orbital", "mobcannon");
+            "ambush", "stabshot", "orbital", "mobcannon", "ranks", "forge", "explore");
     private static final int HISTORY_TURNS = 6;
     private static final long COOLDOWN_MS = 3000;
 
@@ -44,7 +44,7 @@ public final class CommanderChat implements Listener {
             + "hunt sends the Nulls after one roster player named in \"target\"; the owner must confirm first, so say so. "
             + "portal opens a real nether portal in front of the owner. "
             + "bring opens a portal to a roster player who is in the Nether, named in \"target\". "
-            + "mine, lumber, farm and patrol set the army to work. stashroom builds the stash room. "
+            + "mine, lumber, farm, patrol, forge and explore set the army to work. ranks reports each rank. stashroom builds the stash room. "
             + "ambush, stabshot, orbital and mobcannon strike a roster player named in \"target\"; the owner confirms first. "
             + "weapon hands the owner one weapon named in \"key\" (blade, axe, mace, spear, bow, crossbow). "
             + "To design a build, use action design with a build object: {\"name\": \"...\", \"ops\": [ ... ]}. "
@@ -286,6 +286,9 @@ public final class CommanderChat implements Listener {
                 }
             }
             case "portal" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.buildPortal(owner));
+            case "ranks" -> army.showRanks(owner);
+            case "forge" -> army.setMode(NullArmy.Mode.FORGE, owner);
+            case "explore" -> army.setMode(NullArmy.Mode.EXPLORE, owner);
             case "mine" -> army.setMode(NullArmy.Mode.MINE, owner);
             case "lumber" -> army.setMode(NullArmy.Mode.LUMBER, owner);
             case "farm" -> army.setMode(NullArmy.Mode.FARM, owner);
