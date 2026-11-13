@@ -456,8 +456,11 @@ public final class NullArmy {
                 @Override
                 public void run() {
                     NPC npc = createNull(spot, gearForMode(Mode.HUNT), false);
+                    if (!npc.isSpawned()) npc.spawn(spot); // make sure the ambush Null is actually in the world
                     hunters.put(npc, new Hunt(target.getUniqueId(), expires));
                     w.spawnParticle(Particle.PORTAL, spot.clone().add(0, 1, 0), 60, 0.4, 1.0, 0.4, 0.3);
+                    if (owner != null) owner.sendMessage(ChatColor.DARK_RED + "An ambush Null stepped out at "
+                            + coordsOf(spot) + " for " + target.getName() + ".");
                 }
             }.runTaskLater(plugin, 30L);
         }
@@ -515,6 +518,7 @@ public final class NullArmy {
         boolean becomesLeader = claimLeader && leader == null;
         NPC npc = CitizensAPI.getNPCRegistry().createNPC(EntityType.PLAYER, becomesLeader ? LEADER_NAME : randomName());
         npc.setProtected(false); // Citizens NPCs are invulnerable by default; Nulls must be hittable
+        npc.getNavigator().getDefaultParameters().baseSpeed(1.4f); // Nulls run to their jobs and fights, not stroll
         npc.getOrAddTrait(GameModeTrait.class).setGameMode(GameMode.SURVIVAL); // creative players can't be hurt
         setHeldItem(npc, gear);
         equipArmour(npc);
