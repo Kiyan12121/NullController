@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "nullclient",
+  "version": "${version}",
+  "name": "NullClient",
+  "description": "Command wheel and army panel for NullController. Tap G to open it.",
+  "authors": ["Kiyan"],
+  "license": "All-Rights-Reserved",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.daboss69yt.nullclient.NullClientMod"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.18.1",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
