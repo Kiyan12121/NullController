@@ -797,6 +797,17 @@ public final class NullArmy {
         waypointIndex.clear();
     }
 
+    private final Map<NPC, String> commanderNames = new HashMap<>();
+
+    /** A commander's name: four underscores and a few letters, kept for as long as the commander lives. */
+    private String commanderName(NPC npc) {
+        return commanderNames.computeIfAbsent(npc, k -> {
+            StringBuilder sb = new StringBuilder("____");
+            for (int i = 0; i < 3; i++) sb.append(NAME_CHARS.charAt(rng.nextInt(NAME_CHARS.length())));
+            return sb.toString();
+        });
+    }
+
     private String randomName() {
         StringBuilder sb = new StringBuilder(10);
         for (int i = 0; i < 10; i++) {
@@ -824,6 +835,10 @@ public final class NullArmy {
         // Gear follows rank: re-equip everyone, and give the sword to whoever is fighting.
         for (NPC npc : nulls) {
             if (!npc.isSpawned()) continue;
+            // The wiki: names drift to underscores as Nulls rank up. Commanders get mostly underscores.
+            if (ranks.get(npc) == 'A' && npc != leader) {
+                npc.setName(commanderName(npc));
+            }
             equipArmour(npc);
             if (kindOf(mode) == null) setHeldItem(npc, rankSword(ranks.getOrDefault(npc, 'D')));
         }
