@@ -21,7 +21,7 @@ import java.util.Deque;
 import java.util.Set;
 
 /**
- * Talk to the Commander: the owner types "null <message>" in chat. The message is kept private and the
+ * Talk to the Commander: the owner types "null <message>" or "commander <message>" in chat. The message is kept private and the
  * reply goes only to the owner. Groq writes the words; the plugin decides what, if anything, is done,
  * and only from a short list of safe actions. The model can never attack, hunt, dismiss or strike.
  */
@@ -57,11 +57,13 @@ public final class CommanderChat implements Listener {
     @EventHandler(priority = EventPriority.LOWEST)
     public void onChat(AsyncPlayerChatEvent e) {
         String msg = e.getMessage();
-        if (!msg.regionMatches(true, 0, "null ", 0, 5)) return;
+        int cut = msg.regionMatches(true, 0, "null ", 0, 5) ? 5
+                : msg.regionMatches(true, 0, "commander ", 0, 10) ? 10 : -1;
+        if (cut < 0) return;
         Player p = e.getPlayer();
         if (!consent.isOwner(p)) return;
         e.setCancelled(true); // private: nobody else in chat sees it
-        String text = msg.substring(5).trim();
+        String text = msg.substring(cut).trim();
         if (text.isEmpty()) return;
         Bukkit.getScheduler().runTask(plugin, () -> ask(p, text));
     }
