@@ -565,6 +565,7 @@ public final class NullArmy {
         setHeldItem(npc, gear);
         equipArmour(npc);
         npc.spawn(loc);
+        if (loc.getWorld() != null) loc.getWorld().strikeLightningEffect(loc); // the wiki: lightning accompanies NULL
         applySkin(npc);
         nulls.add(npc);
         if (becomesLeader) leader = npc;
@@ -622,11 +623,11 @@ public final class NullArmy {
             case 'I' -> "sentry";
             default -> "bolt";
         };
+        // The NULL wiki's trims: leader and commanders quartz, generals redstone, soldiers netherite.
         String trimMaterial = switch (rank) {
-            case 'R' -> "netherite";
-            case 'A' -> "gold";
-            case 'I' -> "iron";
-            default -> "copper";
+            case 'R', 'A' -> "quartz";
+            case 'I' -> "redstone";
+            default -> "netherite";
         };
         Equipment eq = npc.getOrAddTrait(Equipment.class);
         eq.set(Equipment.EquipmentSlot.HELMET, rankPiece(Material.NETHERITE_HELMET, protection, pattern, trimMaterial));
@@ -635,6 +636,12 @@ public final class NullArmy {
             ItemStack elytra = new ItemStack(Material.ELYTRA);
             elytra.addUnsafeEnchantment(Enchantment.UNBREAKING, 3);
             eq.set(Equipment.EquipmentSlot.CHESTPLATE, elytra);
+        } else if (rank == 'A' || rank == 'I') {
+            // Generals and commanders fly with elytra and carry a shield, as on the wiki.
+            ItemStack elytra = new ItemStack(Material.ELYTRA);
+            elytra.addUnsafeEnchantment(Enchantment.UNBREAKING, 3);
+            eq.set(Equipment.EquipmentSlot.CHESTPLATE, elytra);
+            eq.set(Equipment.EquipmentSlot.OFF_HAND, new ItemStack(Material.SHIELD));
         } else {
             eq.set(Equipment.EquipmentSlot.CHESTPLATE, rankPiece(Material.NETHERITE_CHESTPLATE, protection, pattern, trimMaterial));
         }
