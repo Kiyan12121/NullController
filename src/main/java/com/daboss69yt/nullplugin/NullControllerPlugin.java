@@ -136,6 +136,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         });
         getServer().getPluginManager().registerEvents(netherLaw, this);
         commanderChat = new CommanderChat(this, army, consent);
+        commanderChat.setTotems(totems);
         getServer().getPluginManager().registerEvents(commanderChat, this);
         if (getServer().getPluginManager().getPlugin("voicechat") != null) {
             var svc = getServer().getServicesManager().load(de.maxhenkel.voicechat.api.BukkitVoicechatService.class);

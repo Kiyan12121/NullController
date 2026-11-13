@@ -32,7 +32,7 @@ public final class CommanderChat implements Listener {
     private static final String ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
     private static final Set<String> ACTIONS = Set.of("none", "status", "scout", "recall", "guard", "follow", "stay", "design",
             "hunt", "portal", "weapon", "bring", "mine", "lumber", "farm", "patrol", "stashroom",
-            "ambush", "stabshot", "orbital", "mobcannon", "ranks", "forge", "explore");
+            "ambush", "stabshot", "orbital", "mobcannon", "ranks", "forge", "explore", "totem", "pearl");
     private static final int HISTORY_TURNS = 6;
     private static final long COOLDOWN_MS = 3000;
 
@@ -44,7 +44,7 @@ public final class CommanderChat implements Listener {
             + "hunt sends the Nulls after one roster player named in \"target\"; the owner must confirm first, so say so. "
             + "portal opens a real nether portal in front of the owner. "
             + "bring opens a portal to a roster player who is in the Nether, named in \"target\". "
-            + "mine, lumber, farm, patrol, forge and explore set the army to work. ranks reports each rank. stashroom builds the stash room. "
+            + "mine, lumber, farm, patrol, forge and explore set the army to work. ranks reports each rank. totem hands the owner a totem. pearl fires a pearl at the spot the owner is looking at. stashroom builds the stash room. "
             + "ambush, stabshot, orbital and mobcannon strike a roster player named in \"target\"; the owner confirms first. "
             + "weapon hands the owner one weapon named in \"key\" (blade, axe, mace, spear, bow, crossbow). "
             + "To design a build, use action design with a build object: {\"name\": \"...\", \"ops\": [ ... ]}. "
@@ -62,6 +62,7 @@ public final class CommanderChat implements Listener {
     private final ConsentManager consent;
     private final BuildDesigner designer;
     private VoiceListener voice;
+    private TotemManager totems;
     /** Portals opened for "bring me there": owner -> roster player to land beside, and when it expires. */
     private final Map<UUID, UUID> bringTo = new HashMap<>();
     private final Map<UUID, Long> bringUntil = new HashMap<>();
@@ -129,6 +130,10 @@ public final class CommanderChat implements Listener {
         Bukkit.getScheduler().runTask(plugin, () -> army.commanderSay(finalOwner,
                 p.getName() + " just went into the Nether, near " + l.getBlockX() + ", " + l.getBlockZ()
                 + ". Say 'commander bring me there' and I'll open a portal to them."));
+    }
+
+    public void setTotems(TotemManager totems) {
+        this.totems = totems;
     }
 
     /** Lets the Commander answer out loud, once voice chat is running. */
@@ -287,6 +292,15 @@ public final class CommanderChat implements Listener {
             }
             case "portal" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.buildPortal(owner));
             case "ranks" -> army.showRanks(owner);
+            case "totem" -> {
+                if (totems == null) owner.sendMessage(ChatColor.GRAY + "Totems aren't ready yet.");
+                else totems.giveTotem(owner);
+            }
+            case "pearl" -> {
+                org.bukkit.block.Block aimed = owner.getTargetBlockExact(60);
+                if (aimed == null) owner.sendMessage(ChatColor.GRAY + "Look at the spot you want the pearl to land on.");
+                else owner.sendMessage(ChatColor.DARK_PURPLE + army.pearlCannonAt(owner, aimed.getLocation().add(0, 1, 0)));
+            }
             case "forge" -> army.setMode(NullArmy.Mode.FORGE, owner);
             case "explore" -> army.setMode(NullArmy.Mode.EXPLORE, owner);
             case "mine" -> army.setMode(NullArmy.Mode.MINE, owner);
