@@ -128,6 +128,8 @@ public final class NullArmy {
     private final Map<NPC, Integer> wanderUntil = new HashMap<>();
     private NPC leader;
     private final Map<NPC, Character> ranks = new HashMap<>();
+    /** Per-rank modes set by the owner (guard, follow, stay). A rank without one follows the army mode. */
+    private final Map<Character, Mode> rankModes = new HashMap<>();
     private Location cageGuard;
     private final Map<NPC, Character> promotions = new HashMap<>();
     private final Map<NPC, Integer> forgeCycles = new HashMap<>();
@@ -417,6 +419,16 @@ public final class NullArmy {
      * Other ranks are left exactly as they are.
      */
     public String rankOrder(Player owner, char rank, String order) {
+        if (order.equals("guard") || order.equals("follow") || order.equals("stay") || order.equals("clear")) {
+            if (rank == 'R') return "Wards always stay beside you as your bodyguard.";
+            if (rank == 'A') return "The Commander stays with you. Use recall or dismiss on him.";
+            if (order.equals("clear")) {
+                rankModes.remove(rank);
+                return rankName(rank) + " Nulls go back to the army order.";
+            }
+            rankModes.put(rank, Mode.valueOf(order.toUpperCase()));
+            return rankName(rank) + " Nulls now " + order + ".";
+        }
         List<NPC> chosen = new ArrayList<>();
         for (NPC npc : nulls) {
             if (ranks.getOrDefault(npc, 'D') == rank) chosen.add(npc);
@@ -435,7 +447,7 @@ public final class NullArmy {
                 return "Dismissed " + chosen.size() + " " + rankName(rank) + " Nulls.";
             }
             default -> {
-                return "Rank orders are recall or dismiss.";
+                return "Rank orders: recall, dismiss, guard, follow, stay or clear.";
             }
         }
     }
@@ -1124,7 +1136,7 @@ public final class NullArmy {
                 followOwner(npc, owner, nulls.indexOf(npc), leash);
                 continue;
             }
-            if (npc == leader) {
+            if (npc == leader || ranks.getOrDefault(npc, 'D') == 'A') {
                 // The commander sticks with the owner and only goes out when a hunt is ordered.
                 // He defends the owner: a mob or roster player within six blocks of the owner is engaged.
                 if (defendOwner(npc, owner)) continue;
@@ -1132,10 +1144,19 @@ public final class NullArmy {
                 continue;
             }
             int index = nulls.indexOf(npc);
-            if (cycle % 4 == 0 && (mode == Mode.GUARD || mode == Mode.PATROL)) {
+            char rank = ranks.getOrDefault(npc, 'D');
+            if (rank == 'R') {
+                // Ward: the owner's bodyguard. Engages anything near the owner, otherwise stays right beside them.
+                if (defendOwner(npc, owner)) continue;
+                followOwner(npc, owner, index, 3);
+                continue;
+            }
+            Mode m = rankModes.getOrDefault(rank, mode);
+            if (rank == 'D' && m == Mode.FOLLOW && followNearestGeneral(npc, index, leash)) continue;
+            if (cycle % 4 == 0 && (m == Mode.GUARD || m == Mode.PATROL)) {
                 swing(npc); // arms moving on watch
             }
-            switch (mode) {
+            switch (m) {
                 case GUARD -> {
                     if (engageMobs(npc)) continue;
                     if (cageGuard != null) guardPoint(npc, index);
@@ -1176,6 +1197,39 @@ public final class NullArmy {
     }
 
     /** Roaming escort: Nulls drift around the leader (or the owner) and only teleport if far behind. */
+    /** A soldier follows the nearest General (sentry) within 40 blocks. Returns false if there isn't one. */
+    private boolean followNearestGeneral(NPC npc, int index, double leash) {
+        Location here = npc.getStoredLocation();
+        if (here == null) return false;
+        NPC best = null;
+        double bestDist = 40;
+        for (NPC g : nulls) {
+            if (g == npc || !g.isSpawned() || ranks.getOrDefault(g, 'D') != 'I') continue;
+            Location gl = g.getStoredLocation();
+            if (gl == null || !sameWorld(gl, here)) continue;
+            double d = gl.distance(here);
+            if (d < bestDist) {
+                bestDist = d;
+                best = g;
+            }
+        }
+        if (best == null) return false;
+        Location anchor = best.getStoredLocation();
+        if (here.distance(anchor) > leash) {
+            npc.getNavigator().setTarget(anchor);
+            return true;
+        }
+        Location goal = wanderGoals.get(npc);
+        Integer until = wanderUntil.get(npc);
+        if (goal == null || until == null || cycle >= until || here.distance(goal) <= REACH) {
+            goal = randomPointNear(anchor, roamRadius() * rankScale(npc));
+            wanderGoals.put(npc, goal);
+            wanderUntil.put(npc, cycle + ROAM_CYCLES);
+            npc.getNavigator().setTarget(goal);
+        }
+        return true;
+    }
+
     private void followOwner(NPC npc, Player owner, int index, double leash) {
         Location ownerLoc = owner.getLocation();
         Location here = npc.getStoredLocation();

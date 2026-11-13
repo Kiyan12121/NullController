@@ -377,7 +377,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             case "scout" -> army.scoutReport(owner);
             case "rank" -> {
                 if (args.length < 3 || args[1].isEmpty()) {
-                    owner.sendMessage(ChatColor.GRAY + "Usage: rank <R|A|I|D> <recall|dismiss>");
+                    owner.sendMessage(ChatColor.GRAY + "Usage: rank <R|A|I|D> <recall|dismiss|guard|follow|stay|clear>");
                 } else {
                     owner.sendMessage(ChatColor.DARK_PURPLE + army.rankOrder(owner, Character.toUpperCase(args[1].charAt(0)), args[2].toLowerCase()));
                 }
