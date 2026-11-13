@@ -1774,7 +1774,33 @@ public final class NullArmy {
             npc.spawn(spot);
             return;
         }
-        if (npc.isSpawned()) npc.getEntity().teleport(spot);
+        if (!npc.isSpawned()) return;
+        Location here = npc.getStoredLocation();
+        // Changing dimension: walk to a real portal nearby and step through it, if there is one.
+        if (here != null && !sameWorld(here, spot) && usePortal(npc, here)) return;
+        npc.getEntity().teleport(spot);
+    }
+
+    /**
+     * Walks the Null to the nearest real portal and, once it's in the frame, moves it to the paired portal.
+     * Returns false when there's no portal near, so the caller falls back to a plain move.
+     */
+    private boolean usePortal(NPC npc, Location here) {
+        Location portal = Portals.portalNear(here);
+        if (portal == null) return false;
+        if (here.distance(portal) > 1.5) {
+            npc.getNavigator().setTarget(portal);
+            return true;
+        }
+        Location paired = Portals.pairedPortal(portal);
+        if (paired == null) return false;
+        World pw = paired.getWorld();
+        if (pw != null) {
+            pw.spawnParticle(Particle.PORTAL, paired.clone().add(0, 1, 0), 80, 0.6, 1.0, 0.6, 0.5);
+            pw.playSound(paired, Sound.BLOCK_PORTAL_TRAVEL, 0.7f, 1.1f);
+        }
+        npc.getEntity().teleport(paired);
+        return true;
     }
 
     /** The End city centre from config, or null if it hasn't been built yet. */
