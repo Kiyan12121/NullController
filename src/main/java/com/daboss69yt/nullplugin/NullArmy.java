@@ -27,6 +27,8 @@ import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.Container;
 import org.bukkit.block.data.Ageable;
+import org.bukkit.block.data.Orientable;
+import org.bukkit.Axis;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
@@ -445,25 +447,65 @@ public final class NullArmy {
             if (owner != null) owner.sendMessage(ChatColor.RED + "Not enough room under the army cap (" + armyCap() + ").");
             return;
         }
+        Location centre = cornerSpot(target.getLocation());
+        World w = centre.getWorld();
+        if (w == null) return;
+        // A real portal walks anyone in: refuse if anyone who isn't on the roster, or you, is close by.
+        for (Player other : w.getPlayers()) {
+            if (other.getLocation().distance(centre) > 20) continue;
+            if (other.equals(target)) continue;
+            if (!consent.canTarget(other)) {
+                if (owner != null) owner.sendMessage(ChatColor.RED + "Ambush refused: " + other.getName()
+                        + " is not on the roster and is too close to the portal.");
+                return;
+            }
+        }
+        int bx = centre.getBlockX(), by = centre.getBlockY(), bz = centre.getBlockZ();
+        // Portal: two wide, three tall, facing east-west, in a obsidian frame on the ground.
+        List<Block> built = new ArrayList<>();
+        for (int x = bx - 2; x <= bx + 1; x++)
+            for (int y = by - 1; y <= by + 3; y++) {
+                boolean interior = x >= bx - 1 && x <= bx && y >= by && y <= by + 2;
+                Block b = w.getBlockAt(x, y, bz);
+                if (interior) {
+                    Orientable axis = (Orientable) Material.NETHER_PORTAL.createBlockData();
+                    axis.setAxis(Axis.X);
+                    b.setBlockData(axis, false);
+                } else {
+                    b.setType(Material.OBSIDIAN, false);
+                }
+                built.add(b);
+            }
+        w.strikeLightningEffect(centre); // cosmetic only: no damage, no fire
+        if (owner != null) owner.sendMessage(ChatColor.DARK_RED + "Portal open at " + coordsOf(centre)
+                + ". Nulls step out for " + target.getName() + ".");
         long expires = System.currentTimeMillis() + minutes * 60_000L;
         for (int i = 0; i < count; i++) {
-            Location spot = cornerSpot(target.getLocation());
-            World w = spot.getWorld();
-            if (w == null) continue;
-            w.spawnParticle(Particle.PORTAL, spot.clone().add(0, 1, 0), 120, 0.6, 1.0, 0.6, 0.5);
-            w.playSound(spot, Sound.BLOCK_PORTAL_TRAVEL, 0.8f, 1.2f);
+            final int n = i;
             new BukkitRunnable() {
                 @Override
                 public void run() {
-                    NPC npc = createNull(spot, gearForMode(Mode.HUNT), false);
-                    if (!npc.isSpawned()) npc.spawn(spot); // make sure the ambush Null is actually in the world
+                    if (!target.isOnline()) return;
+                    Location out = new Location(w, bx - 0.5, by, bz + 0.5);
+                    w.spawnParticle(Particle.PORTAL, out.clone().add(0, 1, 0), 120, 0.6, 1.0, 0.6, 0.5);
+                    w.playSound(out, Sound.BLOCK_PORTAL_TRAVEL, 0.9f, 0.8f + n * 0.1f);
+                    NPC npc = createNull(out, gearForMode(Mode.HUNT), false);
+                    if (!npc.isSpawned()) npc.spawn(out);
                     hunters.put(npc, new Hunt(target.getUniqueId(), expires));
-                    w.spawnParticle(Particle.PORTAL, spot.clone().add(0, 1, 0), 60, 0.4, 1.0, 0.4, 0.3);
-                    if (owner != null) owner.sendMessage(ChatColor.DARK_RED + "An ambush Null stepped out at "
-                            + coordsOf(spot) + " for " + target.getName() + ".");
+                    if (owner != null) owner.sendMessage(ChatColor.DARK_RED + "Ambush Null " + (n + 1) + " of " + count
+                            + " stepped out for " + target.getName() + ".");
                 }
-            }.runTaskLater(plugin, 30L);
+            }.runTaskLater(plugin, 20L + n * 25L); // one step out every 1.25 seconds, so they arrive in turns
         }
+        // The portal closes when the ambush ends.
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                for (Block b : built) {
+                    if (b.getType() == Material.NETHER_PORTAL || b.getType() == Material.OBSIDIAN) b.setType(Material.AIR, false);
+                }
+            }
+        }.runTaskLater(plugin, minutes * 60L * 20L);
     }
 
     /** Totem of NULL ran out of charges: the army disbands and can't be resummoned for a while. */
