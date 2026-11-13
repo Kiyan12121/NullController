@@ -693,7 +693,8 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     }
 
     private void title(Player p, String main, String sub) {
-        p.sendTitle(ChatColor.DARK_PURPLE + main, ChatColor.GRAY + sub, 10, 60, 20);
+        // Nulls don't use big screen text. Their messages go to chat.
+        p.sendMessage(ChatColor.DARK_PURPLE + main + ChatColor.GRAY + (sub.isEmpty() ? "" : " " + sub));
     }
 
     private void sendHelp(Player owner) {

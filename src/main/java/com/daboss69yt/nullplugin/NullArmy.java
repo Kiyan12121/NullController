@@ -762,8 +762,7 @@ public final class NullArmy {
         if (threat < plugin.getConfig().getInt("alarm-threshold", 5)) return;
         alarmUntil = now + 30_000L;
         nextAlarm = now + 60_000L;
-        owner.sendTitle(ChatColor.DARK_RED + "ALARM", ChatColor.GRAY + "" + threat + " hostiles. Rally.", 5, 40, 10);
-        owner.sendMessage(ChatColor.DARK_RED + "[NULL] Alarm: " + threat + " hostiles near you. The army is rallying.");
+        // The army still rallies quietly: no title, no chat warning.
     }
 
     /** Lists every Null with its rank and health. */
