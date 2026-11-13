@@ -900,6 +900,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     public void onRosterJoin(PlayerJoinEvent event) {
         army.releaseRejoin(event.getPlayer().getUniqueId());
         army.recordLogin(event.getPlayer().getUniqueId());
+        army.autoSpy(event.getPlayer());
     }
 
     // ---------- Totem revival ----------

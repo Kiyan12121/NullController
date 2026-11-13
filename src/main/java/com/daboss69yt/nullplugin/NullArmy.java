@@ -2422,6 +2422,21 @@ public final class NullArmy {
         return true;
     }
 
+    /**
+     * With you online, a roster player who joins gets one hidden spy automatically, so you hear where
+     * they are without asking. Turn it off with auto-spy: false in config.
+     */
+    public void autoSpy(Player target) {
+        if (!plugin.getConfig().getBoolean("auto-spy", true)) return;
+        if (findOwner() == null || !consent.canTarget(target)) return;
+        for (Spy spy : spies.values()) {
+            if (spy.target().equals(target.getUniqueId())) return;
+        }
+        if (nulls.size() >= armyCap()) return;
+        spyOffline(target);
+        plugin.alert("Spy placed on " + target.getName() + " automatically.");
+    }
+
     /** Recalls every spy with the owner offline. Returns how many were recalled. */
     public int stopSpiesOffline() {
         List<NPC> all = new ArrayList<>(spies.keySet());
