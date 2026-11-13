@@ -31,7 +31,7 @@ import java.util.Set;
 public final class CommanderChat implements Listener {
     private static final String ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
     private static final Set<String> ACTIONS = Set.of("none", "status", "scout", "recall", "guard", "follow", "stay", "design",
-            "hunt", "portal", "weapon");
+            "hunt", "portal", "weapon", "bring");
     private static final int HISTORY_TURNS = 6;
     private static final long COOLDOWN_MS = 3000;
 
@@ -42,6 +42,7 @@ public final class CommanderChat implements Listener {
             + "You may only request these actions: none, status, scout, recall, guard, follow, stay, design, hunt, portal, weapon. "
             + "hunt sends the Nulls after one roster player named in \"target\"; the owner must confirm first, so say so. "
             + "portal opens a real nether portal in front of the owner. "
+            + "bring opens a portal to a roster player who is in the Nether, named in \"target\". "
             + "weapon hands the owner one weapon named in \"key\" (blade, axe, mace, spear, bow, crossbow). "
             + "To design a build, use action design with a build object: {\"name\": \"...\", \"ops\": [ ... ]}. "
             + "Each op is {\"op\": \"fill\"|\"hollow\"|\"set\", \"from\": [x,y,z], \"to\": [x,y,z], \"at\": [x,y,z], \"block\": \"MATERIAL_NAME\"}. "
@@ -70,6 +71,23 @@ public final class CommanderChat implements Listener {
         this.army = army;
         this.consent = consent;
         this.designer = new BuildDesigner(plugin, consent);
+    }
+
+    /** Tells the owner when a roster player goes into the Nether, with the spot to walk to. */
+    @EventHandler
+    public void onWorldChange(org.bukkit.event.player.PlayerChangedWorldEvent e) {
+        Player p = e.getPlayer();
+        if (!consent.canTarget(p) || p.getWorld().getEnvironment() != org.bukkit.World.Environment.NETHER) return;
+        Player owner = null;
+        for (Player o : Bukkit.getOnlinePlayers()) {
+            if (consent.isOwner(o)) owner = o;
+        }
+        if (owner == null) return;
+        org.bukkit.Location l = p.getLocation();
+        Player finalOwner = owner;
+        Bukkit.getScheduler().runTask(plugin, () -> army.commanderSay(finalOwner,
+                p.getName() + " just went into the Nether, near " + l.getBlockX() + ", " + l.getBlockZ()
+                + ". Say 'commander bring me there' and I'll open a portal to them."));
     }
 
     /** Lets the Commander answer out loud, once voice chat is running. */
@@ -227,6 +245,17 @@ public final class CommanderChat implements Listener {
                 }
             }
             case "portal" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.buildPortal(owner));
+            case "bring" -> {
+                String name = out == null || !out.has("target") ? "" : out.get("target").getAsString();
+                Player target = name.isEmpty() ? null : Bukkit.getPlayerExact(name);
+                if (target == null) {
+                    owner.sendMessage(ChatColor.GRAY + "I can't find that player online.");
+                } else if (!consent.canTarget(target)) {
+                    owner.sendMessage(ChatColor.RED + "Roster only. " + target.getName() + " is not on it.");
+                } else {
+                    owner.sendMessage(ChatColor.DARK_PURPLE + army.bringPortal(owner, target));
+                }
+            }
             case "weapon" -> {
                 String key = out == null || !out.has("key") ? "" : out.get("key").getAsString().toLowerCase();
                 org.bukkit.inventory.ItemStack made = Arsenal.make(key);

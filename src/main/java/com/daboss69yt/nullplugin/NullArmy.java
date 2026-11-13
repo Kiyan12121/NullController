@@ -1949,6 +1949,25 @@ public final class NullArmy {
     /** Places a real nether portal (obsidian frame, two wide, three tall) in front of the owner. */
     public String buildPortal(Player owner) {
         Location spot = owner.getLocation().add(owner.getLocation().getDirection().setY(0).normalize().multiply(3));
+        return buildPortalAt(owner, spot);
+    }
+
+    /**
+     * Opens a portal to where a roster player is in the Nether. The portal sits in the overworld at their
+     * Nether position times eight (the game's scaling), so walking through it lands beside them.
+     */
+    public String bringPortal(Player owner, Player target) {
+        if (target.getWorld().getEnvironment() != World.Environment.NETHER) {
+            return target.getName() + " is not in the Nether.";
+        }
+        World overworld = Portals.otherWorld(target.getWorld());
+        if (overworld == null) return "No overworld to open a portal in.";
+        Location l = target.getLocation();
+        Location spot = new Location(overworld, l.getBlockX() * 8, l.getBlockY(), l.getBlockZ() * 8);
+        return buildPortalAt(owner, spot) + " Walk there: it leads to " + target.getName() + " in the Nether.";
+    }
+
+    private String buildPortalAt(Player owner, Location spot) {
         World w = spot.getWorld();
         if (w == null) return "No world to open a portal in.";
         if (w.getEnvironment() == World.Environment.THE_END) return "Portals to the Nether don't work in the End.";
