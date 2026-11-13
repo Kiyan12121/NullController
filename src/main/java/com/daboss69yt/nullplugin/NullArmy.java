@@ -2322,6 +2322,21 @@ public final class NullArmy {
     }
 
     /** True for any Null in the army (including ones that are down), so a death can be handled. */
+    /**
+     * The totem pops for a Null: the Null vanishes into stasis at the Nether base and returns from there,
+     * as on the wiki. Only Nulls in the army do this; spies and hunters are left alone.
+     */
+    public void totemStasis(NPC npc) {
+        if (!owns(npc)) return;
+        Location base = configLoc("nether-base");
+        if (base == null) return;
+        Location centre = base.clone().add(0.5, 1, 0.5);
+        plugin.alert("A Null's totem popped. It went into stasis at the base.");
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (npc.isSpawned()) teleport(npc, centre);
+        }, 40L);
+    }
+
     public boolean owns(NPC npc) {
         return nulls.contains(npc) && !hunters.containsKey(npc) && !spies.containsKey(npc);
     }

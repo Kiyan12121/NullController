@@ -958,6 +958,13 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
 
     // ---------- Totem revival ----------
 
+    /** A Null's totem popped: it goes into stasis at the Nether base instead of dying. */
+    @EventHandler
+    public void onTotemPop(org.bukkit.event.entity.EntityResurrectEvent event) {
+        var npc = net.citizensnpcs.api.CitizensAPI.getNPCRegistry().getNPC(event.getEntity());
+        if (npc != null) army.totemStasis(npc);
+    }
+
     @EventHandler
     public void onNullDeath(NPCDeathEvent event) {
         if (army.owns(event.getNPC())) army.scheduleRevival(event.getNPC());
