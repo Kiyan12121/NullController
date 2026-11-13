@@ -130,6 +130,8 @@ public final class NullArmy {
     private final Map<NPC, Character> ranks = new HashMap<>();
     /** Per-rank modes set by the owner (guard, follow, stay). A rank without one follows the army mode. */
     private final Map<Character, Mode> rankModes = new HashMap<>();
+    /** Weapons the owner has armed a rank with. They survive mode changes. */
+    private final Map<Character, ItemStack> rankArms = new HashMap<>();
     private Location cageGuard;
     private final Map<NPC, Character> promotions = new HashMap<>();
     private final Map<NPC, Integer> forgeCycles = new HashMap<>();
@@ -652,6 +654,7 @@ public final class NullArmy {
     public String armRank(char rank, String key) {
         org.bukkit.inventory.ItemStack weapon = Arsenal.make(key);
         if (weapon == null) return "Unknown weapon. Options: " + String.join(", ", Arsenal.KEYS) + ".";
+        rankArms.put(rank, weapon);
         int count = 0;
         for (NPC npc : nulls) {
             if (ranks.getOrDefault(npc, 'D') != rank) continue;
@@ -767,7 +770,10 @@ public final class NullArmy {
     private void applyGear(Mode m) {
         ItemStack gear = gearForMode(m);
         for (NPC npc : nulls) {
-            setHeldItem(npc, gear);
+            char rank = ranks.getOrDefault(npc, 'D');
+            // A rank weapon chosen by the owner stays in hand, except while Nulls are working with tools.
+            boolean working = kindOf(m) != null;
+            setHeldItem(npc, !working && rankArms.containsKey(rank) ? rankArms.get(rank) : gear);
         }
     }
 
