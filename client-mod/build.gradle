@@ -16,8 +16,6 @@ repositories {
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    // Mojang's official names. Yarn and Intermediary are no longer updated after 1.21.11.
-    mappings loom.officialMojangMappings()
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
     implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 }
