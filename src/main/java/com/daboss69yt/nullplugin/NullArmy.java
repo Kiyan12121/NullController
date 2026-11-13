@@ -6,6 +6,13 @@ import net.citizensnpcs.api.trait.trait.Equipment;
 import net.citizensnpcs.trait.GameModeTrait;
 import net.citizensnpcs.trait.SkinTrait;
 import org.bukkit.Bukkit;
+import org.bukkit.inventory.meta.trim.TrimPattern;
+import org.bukkit.inventory.meta.trim.TrimMaterial;
+import org.bukkit.inventory.meta.trim.ArmorTrim;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.ArmorMeta;
+import org.bukkit.Registry;
+import org.bukkit.NamespacedKey;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.block.BlockFace;
 import org.bukkit.GameMode;
@@ -467,32 +474,49 @@ public final class NullArmy {
     }
 
     /** Every Null wears full enchanted netherite armour. */
-    /** Armour by rank: the leader is full netherite with Protection IV, down to iron with Protection I for the lowest ranks. */
+    /** Every Null wears netherite. Rank sets the enchantments and the armour trim. */
     private void equipArmour(NPC npc) {
         char rank = ranks.getOrDefault(npc, 'D');
-        String tier = switch (rank) {
-            case 'R', 'A' -> "NETHERITE_";
-            case 'I' -> "DIAMOND_";
-            default -> "IRON_";
-        };
         int protection = switch (rank) {
             case 'R' -> 4;
             case 'A' -> 3;
             case 'I' -> 2;
             default -> 1;
         };
+        String pattern = switch (rank) {
+            case 'R' -> "ward";
+            case 'A' -> "eye";
+            case 'I' -> "sentry";
+            default -> "bolt";
+        };
+        String trimMaterial = switch (rank) {
+            case 'R' -> "netherite";
+            case 'A' -> "gold";
+            case 'I' -> "iron";
+            default -> "copper";
+        };
         Equipment eq = npc.getOrAddTrait(Equipment.class);
-        eq.set(Equipment.EquipmentSlot.HELMET, rankPiece(tier + "HELMET", protection));
-        eq.set(Equipment.EquipmentSlot.CHESTPLATE, rankPiece(tier + "CHESTPLATE", protection));
-        eq.set(Equipment.EquipmentSlot.LEGGINGS, rankPiece(tier + "LEGGINGS", protection));
-        eq.set(Equipment.EquipmentSlot.BOOTS, rankPiece(tier + "BOOTS", protection));
+        eq.set(Equipment.EquipmentSlot.HELMET, rankPiece(Material.NETHERITE_HELMET, protection, pattern, trimMaterial));
+        eq.set(Equipment.EquipmentSlot.CHESTPLATE, rankPiece(Material.NETHERITE_CHESTPLATE, protection, pattern, trimMaterial));
+        eq.set(Equipment.EquipmentSlot.LEGGINGS, rankPiece(Material.NETHERITE_LEGGINGS, protection, pattern, trimMaterial));
+        eq.set(Equipment.EquipmentSlot.BOOTS, rankPiece(Material.NETHERITE_BOOTS, protection, pattern, trimMaterial));
     }
 
-    private ItemStack rankPiece(String material, int protection) {
-        ItemStack item = new ItemStack(Material.valueOf(material));
+    private ItemStack rankPiece(Material m, int protection, String pattern, String trimMaterial) {
+        ItemStack item = new ItemStack(m);
         item.addUnsafeEnchantment(Enchantment.PROTECTION, protection);
         item.addUnsafeEnchantment(Enchantment.UNBREAKING, 3);
-        if (protection >= 4) item.addUnsafeEnchantment(Enchantment.MENDING, 1);
+        if (protection >= 4) {
+            item.addUnsafeEnchantment(Enchantment.MENDING, 1);
+            item.addUnsafeEnchantment(Enchantment.THORNS, 3);
+        }
+        ItemMeta meta = item.getItemMeta();
+        if (meta instanceof ArmorMeta armor) {
+            TrimPattern tp = Registry.TRIM_PATTERN.get(NamespacedKey.minecraft(pattern));
+            TrimMaterial tm = Registry.TRIM_MATERIAL.get(NamespacedKey.minecraft(trimMaterial));
+            if (tp != null && tm != null) armor.setTrim(new ArmorTrim(tm, tp));
+            item.setItemMeta(armor);
+        }
         return item;
     }
 
@@ -514,12 +538,12 @@ public final class NullArmy {
                 return sword;
             }
             case 'I' -> {
-                ItemStack sword = new ItemStack(Material.DIAMOND_SWORD);
+                ItemStack sword = new ItemStack(Material.NETHERITE_SWORD);
                 sword.addUnsafeEnchantment(Enchantment.SHARPNESS, 3);
                 return sword;
             }
             default -> {
-                ItemStack sword = new ItemStack(Material.IRON_SWORD);
+                ItemStack sword = new ItemStack(Material.NETHERITE_SWORD);
                 sword.addUnsafeEnchantment(Enchantment.SHARPNESS, 2);
                 return sword;
             }
