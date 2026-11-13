@@ -402,6 +402,44 @@ public final class NullArmy {
         owner.sendMessage(ChatColor.DARK_PURPLE + "Dismissed " + count + " Nulls.");
     }
 
+    /** Rank names as the plugin labels them: R ward, A eye, I sentry, D bolt. */
+    private static String rankName(char rank) {
+        return switch (rank) {
+            case 'R' -> "ward (R)";
+            case 'A' -> "eye (A)";
+            case 'I' -> "sentry (I)";
+            default -> "bolt (D)";
+        };
+    }
+
+    /**
+     * An order for one rank only: recall those Nulls to the owner, or dismiss them.
+     * Other ranks are left exactly as they are.
+     */
+    public String rankOrder(Player owner, char rank, String order) {
+        List<NPC> chosen = new ArrayList<>();
+        for (NPC npc : nulls) {
+            if (ranks.getOrDefault(npc, 'D') == rank) chosen.add(npc);
+        }
+        if (chosen.isEmpty()) return "No " + rankName(rank) + " Nulls in the army.";
+        switch (order) {
+            case "recall" -> {
+                for (int i = 0; i < chosen.size(); i++) {
+                    if (chosen.get(i).isSpawned()) teleport(chosen.get(i), formationPoint(owner, i));
+                }
+                return "Recalling " + chosen.size() + " " + rankName(rank) + " Nulls to you.";
+            }
+            case "dismiss" -> {
+                for (NPC npc : chosen) dropNpc(npc);
+                resetWork();
+                return "Dismissed " + chosen.size() + " " + rankName(rank) + " Nulls.";
+            }
+            default -> {
+                return "Rank orders are recall or dismiss.";
+            }
+        }
+    }
+
     public void recall(Player owner) {
         for (int i = 0; i < nulls.size(); i++) {
             NPC npc = nulls.get(i);

@@ -55,6 +55,18 @@ public final class CommandWheelScreen extends Screen {
                     new Entry("Succession", "succession", false),
             },
             {
+                    new Entry("Recall ward", "rank R recall", false),
+                    new Entry("Recall eye", "rank A recall", false),
+                    new Entry("Recall sentry", "rank I recall", false),
+                    new Entry("Recall bolt", "rank D recall", false),
+            },
+            {
+                    new Entry("Dismiss ward", "rank R dismiss", false),
+                    new Entry("Dismiss eye", "rank A dismiss", false),
+                    new Entry("Dismiss sentry", "rank I dismiss", false),
+                    new Entry("Dismiss bolt", "rank D dismiss", false),
+            },
+            {
                     new Entry("Hunt", "hunt", true),
                     new Entry("Ambush", "ambush", true),
                     new Entry("Orbital", "orbital", true),
