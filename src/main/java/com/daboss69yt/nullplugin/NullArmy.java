@@ -1146,7 +1146,9 @@ public final class NullArmy {
             int index = nulls.indexOf(npc);
             char rank = ranks.getOrDefault(npc, 'D');
             if (rank == 'R') {
-                // Ward: the owner's bodyguard. Engages anything near the owner, otherwise stays right beside them.
+                // Ward: the owner's bodyguard. Roster players and mobs near the owner are engaged;
+                // anyone else near the owner is only reported, never attacked.
+                wardWatch(owner);
                 if (defendOwner(npc, owner)) continue;
                 followOwner(npc, owner, index, 3);
                 continue;
@@ -1406,6 +1408,36 @@ public final class NullArmy {
     }
 
     /** The commander's defence of the owner. Never targets the owner or anyone off the roster. */
+    private final Map<UUID, Long> wardWarned = new HashMap<>();
+
+    /** Ward: reports any player near the owner who is neither on the roster nor on the team. Never attacks them. */
+    private void wardWatch(Player owner) {
+        long now = System.currentTimeMillis();
+        for (Entity e : owner.getWorld().getNearbyEntities(owner.getLocation(), 5, 5, 5)) {
+            if (!(e instanceof Player p) || p.equals(owner) || consent.isTeam(p) || consent.canTarget(p)) continue;
+            if (now - wardWarned.getOrDefault(p.getUniqueId(), 0L) < 30_000L) continue;
+            wardWarned.put(p.getUniqueId(), now);
+            commanderSay(owner, p.getName() + " is within five blocks of you. Not on the roster, so I won't touch them. Add them to your team if you trust them.");
+            return;
+        }
+    }
+
+    /** The Commander's voice: a tagged line to the owner, with a pitched-down voice sound at his position. */
+    public void commanderSay(Player owner, String line) {
+        NPC commander = null;
+        for (NPC npc : nulls) {
+            if (ranks.getOrDefault(npc, 'D') == 'A' && npc.isSpawned()) {
+                commander = npc;
+                break;
+            }
+        }
+        String tag = commander == null ? "____" : commander.getName();
+        owner.sendMessage(ChatColor.DARK_GRAY + "<" + ChatColor.WHITE + tag + ChatColor.DARK_GRAY + "> " + ChatColor.GRAY + line);
+        if (commander != null && commander.getEntity() != null) {
+            owner.playSound(commander.getEntity().getLocation(), org.bukkit.Sound.ENTITY_ENDERMAN_AMBIENT, 0.6f, 1.6f);
+        }
+    }
+
     private boolean defendOwner(NPC npc, Player owner) {
         Location here = npc.getStoredLocation();
         Location ol = owner.getLocation();
