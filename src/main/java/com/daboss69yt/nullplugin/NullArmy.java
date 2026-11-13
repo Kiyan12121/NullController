@@ -200,6 +200,21 @@ public final class NullArmy {
         }
     }
 
+    /** A world-and-coordinates setting from config.yml, or null if it isn't set. */
+    private Location configLoc(String key) {
+        String raw = plugin.getConfig().getString(key, "");
+        if (raw == null || raw.isBlank()) return null;
+        String[] parts = raw.split(",");
+        if (parts.length != 4) return null;
+        World w = org.bukkit.Bukkit.getWorld(parts[0].trim());
+        if (w == null) return null;
+        try {
+            return new Location(w, Double.parseDouble(parts[1]), Double.parseDouble(parts[2]), Double.parseDouble(parts[3]));
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
     /** Keeps one Null at the prison while there's a prisoner: respawned if lost, held there if moved. */
     private void tickPrisonGuard() {
         if (!prisonGuardNeeded) return;
