@@ -218,6 +218,11 @@ public final class NullArmy {
         }
     }
 
+    /** A Mark Rod: the army hits this player much harder from now on. Adds to the learned threat. */
+    public void markTarget(UUID id) {
+        threat.merge(id, 10.0, Double::sum);
+    }
+
     /** The owner placed a block: idle Nulls guard them for the next minute. */
     public void noteBuilding(Player p) {
         if (consent.isOwner(p)) lastBuildingAt = System.currentTimeMillis();

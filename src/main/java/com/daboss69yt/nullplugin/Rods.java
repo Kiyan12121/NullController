@@ -63,13 +63,16 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
     static final String ORBITAL = ChatColor.BLUE + "Orbital Rod";
     static final String NUKE = ChatColor.RED + "Nuke Rod";
 
+    static final String MARK = ChatColor.DARK_GREEN + "Mark Rod";
+    static final String FLARE = ChatColor.WHITE + "Flare Rod";
+
     static final String MOB_PREFIX = ChatColor.GREEN + "Mob Rod: ";
     private static final double TNT_SAFE_RADIUS = 12;
     private static final Map<String, String> NAME_BY_KIND = Map.ofEntries(
             Map.entry("ambush", AMBUSH), Map.entry("stasis", STASIS), Map.entry("tnt", TNT), Map.entry("orbitalnuke", ORBITAL_NUKE), Map.entry("stabshot", STAB_SHOT),
             Map.entry("summon", SUMMON), Map.entry("lightning", LIGHTNING), Map.entry("launch", LAUNCH),
             Map.entry("wither", WITHER), Map.entry("gravity", GRAVITY), Map.entry("orbital", ORBITAL),
-            Map.entry("nuke", NUKE));
+            Map.entry("nuke", NUKE), Map.entry("mark", MARK), Map.entry("flare", FLARE));
     private static final Map<String, String> KIND_BY_NAME = new HashMap<>();
     static {
         NAME_BY_KIND.forEach((k, v) -> KIND_BY_NAME.put(v, k));
@@ -151,6 +154,8 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
             case "gravity" -> "Land the hook: roster players within 8 blocks are pulled in.";
             case "orbital" -> "Land the hook: eight lightning bolts walk over the spot.";
             case "nuke" -> "Land the hook: three big explosions on the spot.";
+            case "mark" -> "Land near a roster player: the Nulls hit them much harder for a while.";
+            case "flare" -> "Land the hook: roster players within 8 blocks glow for 30 seconds."; 
             default -> "";
         };
     }
@@ -208,6 +213,8 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
             case "wither" -> wither(p, hook);
             case "gravity" -> gravity(p, hook);
             case "orbital" -> orbital(p, hook);
+            case "mark" -> mark(p, hook);
+            case "flare" -> flare(p, hook);
             case "nuke" -> nuke(p, hook);
             case "orbitalnuke" -> p.sendMessage(ChatColor.DARK_PURPLE + army.orbitalNukeAt(hook));
             case "stabshot" -> p.sendMessage(ChatColor.DARK_PURPLE + army.stabShotAt(hook));
@@ -412,6 +419,33 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
         if (w == null) return;
         w.spawnParticle(Particle.PORTAL, loc.clone().add(0, 1, 0), 120, 0.6, 1.0, 0.6, 0.5);
         w.playSound(loc, Sound.BLOCK_PORTAL_TRAVEL, 1f, 0.8f);
+    }
+
+    /** Marks the nearest roster player: the army learns to hit them harder. */
+    private void mark(Player owner, Location hook) {
+        Player target = nearestRoster(hook, 6);
+        if (target == null) {
+            owner.sendMessage(ChatColor.GRAY + "No roster player near the hook.");
+            return;
+        }
+        army.markTarget(target.getUniqueId());
+        target.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 1200, 0, false, false));
+        owner.sendMessage(ChatColor.DARK_GREEN + "Marked " + target.getName() + ". The Nulls will hit them harder.");
+    }
+
+    /** Lights up the landing area: roster players within eight blocks glow for thirty seconds. */
+    private void flare(Player owner, Location hook) {
+        World w = hook.getWorld();
+        if (w == null) return;
+        w.spawnParticle(Particle.END_ROD, hook, 200, 3, 3, 3, 0.05);
+        w.playSound(hook, Sound.ENTITY_FIREWORK_ROCKET_LAUNCH, 1f, 1f);
+        int lit = 0;
+        for (Player p : w.getNearbyPlayers(hook, 8)) {
+            if (!consent.canTarget(p)) continue;
+            p.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 600, 0, false, false));
+            lit++;
+        }
+        owner.sendMessage(ChatColor.WHITE + "Flare lit. " + lit + " roster player" + (lit == 1 ? "" : "s") + " glowing.");
     }
 
     private Player nearestRoster(Location at, double radius) {
