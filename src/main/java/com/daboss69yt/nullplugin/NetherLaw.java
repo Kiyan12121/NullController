@@ -428,24 +428,39 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         save();
         notifyOwner(ChatColor.DARK_PURPLE + "[Nether] " + p.getName() + " took loot. Strike " + r.strikes + ".");
 
+        // First offence: one warning and the loot they took is taken back. Second: the Nulls kill them.
+        // Third and after: prison.
         switch (r.strikes) {
-            case 1 -> warn(p, ChatColor.RED + "WARNING 1 OF 3",
-                    "This Nether is owned. Put back what you took.");
-            case 2 -> {
-                warn(p, ChatColor.RED + "COME TO ME", "Follow the red trail to the Commander.");
-                escort(p, commanderTarget());
+            case 1 -> {
+                warn(p, ChatColor.RED + "WARNING", "This Nether is owned. What you took is being taken back.");
+                confiscate(p, r);
             }
-            case 3 -> {
-                warn(p, ChatColor.DARK_RED + "THE NULLS ARE COMING", "Everything you took will drop.");
-                army.spawnHunters(owner(), p, p.getLocation(), 3, (int) huntMinutes());
+            case 2 -> {
+                warn(p, ChatColor.DARK_RED + "THE NULLS KILL YOU", "You took from the Nether again.");
+                notifyOwner(ChatColor.DARK_RED + "[Nether] " + p.getName() + " was killed by the Nulls.");
+                p.setHealth(0.0);
             }
             default -> arrest(p, r);
         }
     }
 
-    /** Shows a title, plays the warning sound and writes the same line to chat. */
+    /** Takes back the loot in the ledger from the player's inventory and puts it in the stash. */
+    private void confiscate(Player p, Record r) {
+        for (Map.Entry<String, Integer> e : new ArrayList<>(r.ledger.entrySet())) {
+            Material m = Material.matchMaterial(e.getKey());
+            if (m == null || e.getValue() <= 0) continue;
+            Map<Integer, ItemStack> left = p.getInventory().removeItem(new ItemStack(m, e.getValue()));
+            int leftover = left.values().stream().mapToInt(ItemStack::getAmount).sum();
+            int taken = e.getValue() - leftover;
+            if (taken > 0) addStash(r, new ItemStack(m, taken));
+        }
+        r.ledger.clear();
+        save();
+        notifyOwner(ChatColor.DARK_PURPLE + "[Nether] Loot taken back from " + p.getName() + " and stashed.");
+    }
+
+    /** Plays the warning sound and writes the line to chat. The Nulls don't use big screen text. */
     private void warn(Player p, String title, String subtitle) {
-        p.sendTitle(title, ChatColor.GRAY + subtitle, 10, 70, 20);
         p.playSound(p.getLocation(), Sound.ENTITY_ENDER_DRAGON_GROWL, 0.6f, 1.2f);
         p.sendMessage(title + ChatColor.GRAY + " " + subtitle);
     }
