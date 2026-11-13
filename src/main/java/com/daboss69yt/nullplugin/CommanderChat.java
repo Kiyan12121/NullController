@@ -105,7 +105,10 @@ public final class CommanderChat implements Listener {
         dest.setYaw(t.getYaw() + 180);
         dest.setPitch(0);
         owner.teleport(dest);
-        owner.sendMessage(ChatColor.DARK_PURPLE + "You're beside " + target.getName() + ", facing them.");
+        // A portal across the path, three blocks behind the owner, so they can walk back.
+        org.bukkit.Location behind = dest.clone().add(facing.clone().multiply(3));
+        String made = army.portalAcross(owner, behind, Math.abs(facing.getX()) > Math.abs(facing.getZ()));
+        owner.sendMessage(ChatColor.DARK_PURPLE + "You're beside " + target.getName() + ", facing them. " + made);
     }
 
     /** Tells the owner when a roster player goes into the Nether, with the spot to walk to. */

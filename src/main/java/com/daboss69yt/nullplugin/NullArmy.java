@@ -1967,7 +1967,16 @@ public final class NullArmy {
         return buildPortalAt(owner, spot) + " Walk there: it leads to " + target.getName() + " in the Nether.";
     }
 
+    /** A portal across the path at a spot, so the owner can walk back through it. alongZ: the portal faces east-west. */
+    public String portalAcross(Player owner, Location spot, boolean alongZ) {
+        return buildPortalAt(owner, spot, alongZ);
+    }
+
     private String buildPortalAt(Player owner, Location spot) {
+        return buildPortalAt(owner, spot, false);
+    }
+
+    private String buildPortalAt(Player owner, Location spot, boolean alongZ) {
         World w = spot.getWorld();
         if (w == null) return "No world to open a portal in.";
         if (w.getEnvironment() == World.Environment.THE_END) return "Portals to the Nether don't work in the End.";
@@ -1976,13 +1985,13 @@ public final class NullArmy {
             if (!consent.canTarget(other)) return "Refused. " + other.getName() + " is not on the roster and is too close.";
         }
         int bx = spot.getBlockX(), by = spot.getBlockY(), bz = spot.getBlockZ();
-        for (int x = bx - 2; x <= bx + 1; x++)
+        for (int a = -2; a <= 1; a++)
             for (int y = by - 1; y <= by + 3; y++) {
-                boolean interior = x >= bx - 1 && x <= bx && y >= by && y <= by + 2;
-                Block b = w.getBlockAt(x, y, bz);
+                boolean interior = a >= -1 && a <= 0 && y >= by && y <= by + 2;
+                Block b = alongZ ? w.getBlockAt(bx, y, bz + a) : w.getBlockAt(bx + a, y, bz);
                 if (interior) {
                     Orientable axis = (Orientable) Material.NETHER_PORTAL.createBlockData();
-                    axis.setAxis(Axis.X);
+                    axis.setAxis(alongZ ? Axis.Z : Axis.X);
                     b.setBlockData(axis, false);
                 } else {
                     b.setType(Material.OBSIDIAN, false);
