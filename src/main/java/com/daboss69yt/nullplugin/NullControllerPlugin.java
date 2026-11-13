@@ -140,7 +140,9 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         if (getServer().getPluginManager().getPlugin("voicechat") != null) {
             var svc = getServer().getServicesManager().load(de.maxhenkel.voicechat.api.BukkitVoicechatService.class);
             if (svc != null) {
-                svc.registerPlugin(new VoiceListener(this, commanderChat));
+                VoiceListener listener = new VoiceListener(this, commanderChat);
+                commanderChat.setVoice(listener);
+                svc.registerPlugin(listener);
                 getLogger().info("Simple Voice Chat found: the Commander can hear you.");
             }
         }

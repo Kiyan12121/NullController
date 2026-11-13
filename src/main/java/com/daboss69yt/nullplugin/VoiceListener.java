@@ -32,6 +32,34 @@ public final class VoiceListener implements VoicechatPlugin {
     private final Map<UUID, Phrase> phrases = new HashMap<>();
     private final Map<UUID, de.maxhenkel.voicechat.api.opus.OpusDecoder> decoders = new HashMap<>();
     private VoicechatServerApi api;
+    private String voiceName = "troy";
+
+    /** Speaks a line to the owner through voice chat, in the Commander's voice. Safe to call from any thread. */
+    public void speak(UUID owner, String text) {
+        String key = plugin.getConfig().getString("groq-api-key", "");
+        if (key == null || key.isBlank() || text == null || text.isBlank()) return;
+        String model = plugin.getConfig().getString("groq-tts-model", "canopylabs/orpheus-v1-english");
+        String voice = plugin.getConfig().getString("groq-tts-voice", voiceName);
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                short[] pcm = Speech.toPcm48(Speech.synthesize(key, model, voice, text));
+                Bukkit.getScheduler().runTask(plugin, () -> play(owner, pcm));
+            } catch (Exception ex) {
+                plugin.getLogger().warning("Commander voice failed: " + ex);
+            }
+        });
+    }
+
+    /** Main thread. Plays the samples to the owner's voice connection, if they are connected to voice chat. */
+    private void play(UUID owner, short[] pcm) {
+        if (api == null || pcm.length == 0) return;
+        var connection = api.getConnectionOf(owner);
+        if (connection == null) return;
+        var channel = api.createStaticAudioChannel(UUID.randomUUID(), connection);
+        if (channel == null) return;
+        var player = api.createAudioPlayer(channel, api.createEncoder(), pcm);
+        player.startPlaying();
+    }
 
     /** One phrase in progress: decoded samples, and when the last packet arrived. */
     private static final class Phrase {

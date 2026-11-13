@@ -50,6 +50,7 @@ public final class CommanderChat implements Listener {
     private final NullArmy army;
     private final ConsentManager consent;
     private final BuildDesigner designer;
+    private VoiceListener voice;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
     private final Deque<String[]> history = new ArrayDeque<>();
     private boolean busy;
@@ -60,6 +61,11 @@ public final class CommanderChat implements Listener {
         this.army = army;
         this.consent = consent;
         this.designer = new BuildDesigner(plugin, consent);
+    }
+
+    /** Lets the Commander answer out loud, once voice chat is running. */
+    public void setVoice(VoiceListener voice) {
+        this.voice = voice;
     }
 
     public boolean isOwner(Player p) {
@@ -188,7 +194,10 @@ public final class CommanderChat implements Listener {
         }
         if (!ACTIONS.contains(action)) action = "none";
         remember(text, say);
-        if (!say.isBlank()) army.commanderSay(owner, say);
+        if (!say.isBlank()) {
+            army.commanderSay(owner, say);
+            if (voice != null) voice.speak(owner.getUniqueId(), say);
+        }
         switch (action) {
             case "status" -> army.status(owner);
             case "scout" -> army.scoutReport(owner);
