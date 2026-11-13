@@ -168,12 +168,21 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
 
     // ---------- Casting ----------
 
+    /** When each owner last cast a rod, so one cast triggers one effect even if the game sends two events. */
+    private final Map<java.util.UUID, Long> lastCast = new HashMap<>();
+
     @EventHandler
     public void onFish(PlayerFishEvent event) {
         Player p = event.getPlayer();
         if (!consent.isOwner(p)) return;
-        if (event.getState() != PlayerFishEvent.State.IN_GROUND
-                && event.getState() != PlayerFishEvent.State.CAUGHT_ENTITY) return;
+        // A rod acts when its hook lands on a block or a player, or when it is reeled in: a hook that
+        // lands on water or in the air used to do nothing at all.
+        PlayerFishEvent.State st = event.getState();
+        if (st != PlayerFishEvent.State.IN_GROUND && st != PlayerFishEvent.State.CAUGHT_ENTITY
+                && st != PlayerFishEvent.State.FAILED_ATTEMPT && st != PlayerFishEvent.State.REEL_IN) return;
+        long now = System.currentTimeMillis();
+        if (now - lastCast.getOrDefault(p.getUniqueId(), 0L) < 1500L) return; // one cast, one effect
+        lastCast.put(p.getUniqueId(), now);
         ItemStack held = p.getInventory().getItemInMainHand();
         ItemMeta meta = held.getItemMeta();
         if (held.getType() != Material.FISHING_ROD || meta == null || meta.getDisplayName() == null) return;
