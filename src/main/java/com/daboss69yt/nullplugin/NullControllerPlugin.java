@@ -45,7 +45,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
 
     private static final List<String> SUBCOMMANDS = List.of("summon", "dismiss", "recall", "guard", "follow",
             "hunt", "stay", "goto", "status", "ranks", "mine", "lumber", "farm", "forge", "chest", "patrol", "stashroom", "autowork", "autospy",
-            "build", "fortify", "cage", "invade", "ambush", "totem", "succession", "event", "remote", "team", "orbital", "stabshot", "chests", "pearl", "scout", "rank", "portal", "help");
+            "build", "fortify", "cage", "invade", "ambush", "totem", "succession", "event", "remote", "team", "orbital", "stabshot", "chests", "pearl", "scout", "rank", "portal", "weapon", "arm", "help");
     private static final List<String> BUILDS = List.of("citadel", "bridge", "watchtower", "barracks",
             "forgegate", "spire", "city", "metropolis", "collector", "smelter", "door", "melonfarm", "prison", "cancel", "undo", "preview");
     private static final List<String> EVENTS = List.of("forge", "capital", "end", "clash");
@@ -377,6 +377,22 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             case "orbital" -> targetedOrder(owner, args, army::orbitalNuke);
             case "scout" -> army.scoutReport(owner);
             case "portal" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.buildPortal(owner));
+            case "weapon" -> {
+                org.bukkit.inventory.ItemStack made = args.length < 2 ? null : Arsenal.make(args[1].toLowerCase());
+                if (made == null) {
+                    owner.sendMessage(ChatColor.GRAY + "Usage: weapon <" + String.join("|", Arsenal.KEYS) + ">");
+                } else {
+                    owner.getInventory().addItem(made);
+                    owner.sendMessage(ChatColor.DARK_PURPLE + "Weapon added to your inventory.");
+                }
+            }
+            case "arm" -> {
+                if (args.length < 3 || args[1].isEmpty()) {
+                    owner.sendMessage(ChatColor.GRAY + "Usage: arm <R|A|I|D> <" + String.join("|", Arsenal.KEYS) + ">");
+                } else {
+                    owner.sendMessage(ChatColor.DARK_PURPLE + army.armRank(Character.toUpperCase(args[1].charAt(0)), args[2].toLowerCase()));
+                }
+            }
             case "rank" -> {
                 if (args.length < 3 || args[1].isEmpty()) {
                     owner.sendMessage(ChatColor.GRAY + "Usage: rank <R|A|I|D> <recall|dismiss|guard|follow|stay|clear>");

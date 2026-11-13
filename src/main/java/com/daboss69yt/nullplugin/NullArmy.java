@@ -648,6 +648,20 @@ public final class NullArmy {
         }
     }
 
+    /** Equips one weapon in the hand of every Null of a rank. Returns a message for the owner. */
+    public String armRank(char rank, String key) {
+        org.bukkit.inventory.ItemStack weapon = Arsenal.make(key);
+        if (weapon == null) return "Unknown weapon. Options: " + String.join(", ", Arsenal.KEYS) + ".";
+        int count = 0;
+        for (NPC npc : nulls) {
+            if (ranks.getOrDefault(npc, 'D') != rank) continue;
+            npc.getOrAddTrait(Equipment.class).set(Equipment.EquipmentSlot.HAND, weapon.clone());
+            count++;
+        }
+        if (count == 0) return "No " + rankName(rank) + " Nulls in the army.";
+        return "Equipped " + count + " " + rankName(rank) + " Nulls with the " + key + ".";
+    }
+
     /** A short, plain summary of the army for the Commander's chat, so he knows what is going on. */
     public String chatContext(Player owner) {
         Map<Character, Integer> counts = new HashMap<>();
