@@ -891,6 +891,8 @@ public final class NullArmy {
             }
             if (npc == leader) {
                 // The commander sticks with the owner and only goes out when a hunt is ordered.
+                // He defends the owner: a mob or roster player within six blocks of the owner is engaged.
+                if (defendOwner(npc, owner)) continue;
                 followOwner(npc, owner, nulls.indexOf(npc), leash);
                 continue;
             }
@@ -1063,6 +1065,34 @@ public final class NullArmy {
         } else {
             attack(npc, target);
         }
+    }
+
+    /** The commander's defence of the owner. Never targets the owner or anyone off the roster. */
+    private boolean defendOwner(NPC npc, Player owner) {
+        Location here = npc.getStoredLocation();
+        Location ol = owner.getLocation();
+        if (here == null || !sameWorld(here, ol)) return false;
+        LivingEntity best = null;
+        double bestDist = 6;
+        for (Entity e : ol.getWorld().getNearbyEntities(ol, 6, 6, 6)) {
+            if (e == owner || e.getUniqueId().equals(npc.getEntity() == null ? null : npc.getEntity().getUniqueId())) continue;
+            LivingEntity cand = null;
+            if (e instanceof Player p && consent.canTarget(p)) cand = p;
+            else if (e instanceof Monster m && !NETHER_PEACE.contains(m.getType())) cand = m;
+            if (cand == null) continue;
+            double d = ol.distance(cand.getLocation());
+            if (d < bestDist) {
+                bestDist = d;
+                best = cand;
+            }
+        }
+        if (best == null) return false;
+        if (here.distance(best.getLocation()) <= ATTACK_REACH) {
+            attack(npc, best);
+        } else {
+            npc.getNavigator().setTarget(best, true);
+        }
+        return true;
     }
 
     /** Finds the nearest hostile mob and fights it. Returns false if there's nothing to fight. */
