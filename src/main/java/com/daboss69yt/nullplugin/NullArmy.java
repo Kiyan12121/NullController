@@ -537,7 +537,14 @@ public final class NullArmy {
         };
         Equipment eq = npc.getOrAddTrait(Equipment.class);
         eq.set(Equipment.EquipmentSlot.HELMET, rankPiece(Material.NETHERITE_HELMET, protection, pattern, trimMaterial));
-        eq.set(Equipment.EquipmentSlot.CHESTPLATE, rankPiece(Material.NETHERITE_CHESTPLATE, protection, pattern, trimMaterial));
+        if (npc == leader) {
+            eq.set(Equipment.EquipmentSlot.OFF_HAND, new ItemStack(Material.TOTEM_OF_UNDYING));
+            ItemStack elytra = new ItemStack(Material.ELYTRA);
+            elytra.addUnsafeEnchantment(Enchantment.UNBREAKING, 3);
+            eq.set(Equipment.EquipmentSlot.CHESTPLATE, elytra);
+        } else {
+            eq.set(Equipment.EquipmentSlot.CHESTPLATE, rankPiece(Material.NETHERITE_CHESTPLATE, protection, pattern, trimMaterial));
+        }
         eq.set(Equipment.EquipmentSlot.LEGGINGS, rankPiece(Material.NETHERITE_LEGGINGS, protection, pattern, trimMaterial));
         eq.set(Equipment.EquipmentSlot.BOOTS, rankPiece(Material.NETHERITE_BOOTS, protection, pattern, trimMaterial));
     }
@@ -883,6 +890,11 @@ public final class NullArmy {
                 followOwner(npc, owner, nulls.indexOf(npc), leash);
                 continue;
             }
+            if (npc == leader) {
+                // The commander sticks with the owner and only goes out when a hunt is ordered.
+                followOwner(npc, owner, nulls.indexOf(npc), leash);
+                continue;
+            }
             int index = nulls.indexOf(npc);
             if (cycle % 4 == 0 && (mode == Mode.GUARD || mode == Mode.PATROL)) {
                 swing(npc); // arms moving on watch
@@ -926,7 +938,8 @@ public final class NullArmy {
         Location ownerLoc = owner.getLocation();
         Location here = npc.getStoredLocation();
         if (here == null || !sameWorld(here, ownerLoc) || here.distance(ownerLoc) > TELEPORT_OVER) {
-            teleport(npc, formationPoint(owner, index));
+            // Far behind or in another world: walk back to the formation spot rather than teleporting.
+            npc.getNavigator().setTarget(formationPoint(owner, index));
             return;
         }
         Location anchor = ownerLoc;
