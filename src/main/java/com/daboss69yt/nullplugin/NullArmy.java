@@ -144,6 +144,7 @@ public final class NullArmy {
     private long nextAutoStrike;
     /** Learned per player: how hard the Nulls have been hit by them. Raises the damage the Nulls deal back. */
     private final Map<UUID, Double> threat = new HashMap<>();
+    private final Map<NPC, Long> potCooldown = new HashMap<>();
     private Chests chestsRef;
     private Chests chests() {
         if (chestsRef == null) chestsRef = new Chests(plugin);
@@ -466,12 +467,74 @@ public final class NullArmy {
     }
 
     /** Every Null wears full enchanted netherite armour. */
+    /** Armour by rank: the leader is full netherite with Protection IV, down to iron with Protection I for the lowest ranks. */
     private void equipArmour(NPC npc) {
+        char rank = ranks.getOrDefault(npc, 'D');
+        String tier = switch (rank) {
+            case 'R', 'A' -> "NETHERITE_";
+            case 'I' -> "DIAMOND_";
+            default -> "IRON_";
+        };
+        int protection = switch (rank) {
+            case 'R' -> 4;
+            case 'A' -> 3;
+            case 'I' -> 2;
+            default -> 1;
+        };
         Equipment eq = npc.getOrAddTrait(Equipment.class);
-        eq.set(Equipment.EquipmentSlot.HELMET, enchantedNetherite(Material.NETHERITE_HELMET));
-        eq.set(Equipment.EquipmentSlot.CHESTPLATE, enchantedNetherite(Material.NETHERITE_CHESTPLATE));
-        eq.set(Equipment.EquipmentSlot.LEGGINGS, enchantedNetherite(Material.NETHERITE_LEGGINGS));
-        eq.set(Equipment.EquipmentSlot.BOOTS, enchantedNetherite(Material.NETHERITE_BOOTS));
+        eq.set(Equipment.EquipmentSlot.HELMET, rankPiece(tier + "HELMET", protection));
+        eq.set(Equipment.EquipmentSlot.CHESTPLATE, rankPiece(tier + "CHESTPLATE", protection));
+        eq.set(Equipment.EquipmentSlot.LEGGINGS, rankPiece(tier + "LEGGINGS", protection));
+        eq.set(Equipment.EquipmentSlot.BOOTS, rankPiece(tier + "BOOTS", protection));
+    }
+
+    private ItemStack rankPiece(String material, int protection) {
+        ItemStack item = new ItemStack(Material.valueOf(material));
+        item.addUnsafeEnchantment(Enchantment.PROTECTION, protection);
+        item.addUnsafeEnchantment(Enchantment.UNBREAKING, 3);
+        if (protection >= 4) item.addUnsafeEnchantment(Enchantment.MENDING, 1);
+        return item;
+    }
+
+    /** The fighting sword by rank: the leader's has Fire Aspect and Knockback on top of Sharpness V. */
+    private ItemStack rankSword(char rank) {
+        switch (rank) {
+            case 'R' -> {
+                ItemStack sword = new ItemStack(Material.NETHERITE_SWORD);
+                sword.addUnsafeEnchantment(Enchantment.SHARPNESS, 5);
+                sword.addUnsafeEnchantment(Enchantment.FIRE_ASPECT, 2);
+                sword.addUnsafeEnchantment(Enchantment.KNOCKBACK, 2);
+                sword.addUnsafeEnchantment(Enchantment.UNBREAKING, 3);
+                return sword;
+            }
+            case 'A' -> {
+                ItemStack sword = new ItemStack(Material.NETHERITE_SWORD);
+                sword.addUnsafeEnchantment(Enchantment.SHARPNESS, 4);
+                sword.addUnsafeEnchantment(Enchantment.UNBREAKING, 3);
+                return sword;
+            }
+            case 'I' -> {
+                ItemStack sword = new ItemStack(Material.DIAMOND_SWORD);
+                sword.addUnsafeEnchantment(Enchantment.SHARPNESS, 3);
+                return sword;
+            }
+            default -> {
+                ItemStack sword = new ItemStack(Material.IRON_SWORD);
+                sword.addUnsafeEnchantment(Enchantment.SHARPNESS, 2);
+                return sword;
+            }
+        }
+    }
+
+    /** Self-potting: a wounded Null drinks a healing potion on itself, every twelve seconds at most. */
+    private void selfPot(NPC npc) {
+        long now = System.currentTimeMillis();
+        if (now < potCooldown.getOrDefault(npc, 0L)) return;
+        if (!(npc.getEntity() instanceof LivingEntity drinker)) return;
+        potCooldown.put(npc, now + 12_000L);
+        int amplifier = ranks.getOrDefault(npc, 'D') == 'R' ? 2 : 1;
+        drinker.addPotionEffect(new PotionEffect(PotionEffectType.INSTANT_HEALTH, 1, amplifier, false, false));
+        swing(npc);
     }
 
     private ItemStack enchantedNetherite(Material m) {
@@ -586,6 +649,12 @@ public final class NullArmy {
             Character promoted = promotions.get(npc);
             if (promoted != null && rankLevel(promoted) > rankLevel(rank)) rank = promoted;
             ranks.put(npc, rank);
+        }
+        // Gear follows rank: re-equip everyone, and give the sword to whoever is fighting.
+        for (NPC npc : nulls) {
+            if (!npc.isSpawned()) continue;
+            equipArmour(npc);
+            if (kindOf(mode) == null) setHeldItem(npc, rankSword(ranks.getOrDefault(npc, 'D')));
         }
     }
 
@@ -877,9 +946,11 @@ public final class NullArmy {
         if (target == null) return; // target offline: wait
         if (npc.getEntity() instanceof LivingEntity fighter) {
             // Fight buffs, refreshed every tick while the hunt lasts.
-            fighter.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 100, 1, false, false));
+            char rank = ranks.getOrDefault(npc, 'D');
+            int strength = rank == 'R' ? 2 : rank == 'A' ? 1 : 0;
+            fighter.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 100, strength, false, false));
             fighter.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 100, 0, false, false));
-            fighter.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 100, 0, false, false));
+            fighter.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 100, rank == 'R' ? 1 : 0, false, false));
         }
         if (!consent.canTarget(target)) {
             dropNpc(npc); // consent revoked: stop immediately
@@ -893,6 +964,7 @@ public final class NullArmy {
             // Retreat: back off ten blocks from the target and heal before going in again.
             threat.merge(hunt.target(), 0.5, Double::sum);
             eatApple(npc);
+            selfPot(npc);
             Vector off = here.toVector().subtract(tl.toVector());
             if (off.lengthSquared() < 0.01) off = new Vector(1, 0, 0);
             npc.getNavigator().setTarget(here.clone().add(off.normalize().multiply(10)));
