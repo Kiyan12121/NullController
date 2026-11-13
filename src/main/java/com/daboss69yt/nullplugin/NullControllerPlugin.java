@@ -44,10 +44,10 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     private Rods rods;
 
     private static final List<String> SUBCOMMANDS = List.of("summon", "dismiss", "recall", "guard", "follow",
-            "hunt", "stay", "goto", "status", "ranks", "mine", "lumber", "farm", "forge", "chest", "patrol", "stashroom",
+            "hunt", "stay", "goto", "status", "ranks", "mine", "lumber", "farm", "forge", "chest", "patrol", "stashroom", "autowork", "autospy",
             "build", "fortify", "cage", "invade", "ambush", "totem", "succession", "event", "remote", "team", "orbital", "stabshot", "chests", "help");
     private static final List<String> BUILDS = List.of("citadel", "bridge", "watchtower", "barracks",
-            "forgegate", "spire", "city", "metropolis", "collector", "smelter", "door", "melonfarm", "cancel", "undo", "preview");
+            "forgegate", "spire", "city", "metropolis", "collector", "smelter", "door", "melonfarm", "prison", "cancel", "undo", "preview");
     private static final List<String> EVENTS = List.of("forge", "capital", "end", "clash");
     private static final String REMOTE_NAME = ChatColor.DARK_PURPLE + "Null Remote";
 
@@ -355,6 +355,8 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             case "team" -> teamOrder(owner, args);
             case "chests" -> handleChests(owner, args);
             case "stashroom" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.buildStashRoom(owner));
+            case "autowork" -> owner.sendMessage(ChatColor.DARK_PURPLE + "Auto work " + toggleKey(args, "auto-work", true) + ".");
+            case "autospy" -> owner.sendMessage(ChatColor.DARK_PURPLE + "Auto spy " + toggleKey(args, "auto-spy", true) + ".");
             case "orbital" -> targetedOrder(owner, args, army::orbitalNuke);
             case "stabshot" -> targetedOrder(owner, args, army::stabShot);
             case "totem" -> totems.giveTotem(owner);
@@ -776,7 +778,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         button(inv, 14, Material.BOOK, "Status", "Army count, mode, and destinations", "status");
         button(inv, 15, Material.MAP, "Add Patrol Point", "Adds your position to the route", "patrol", "add");
         button(inv, 16, Material.PAPER, "Clear Patrol", "Empties the patrol route", "patrol", "clear");
-        button(inv, 17, Material.ENDER_CHEST, "Deposit Chest", "Look at a chest, run /nullcmd chest set", "status");
+        button(inv, 17, Material.BLAZE_ROD, "Mark Rod", "Look at a roster player: the Nulls hit them harder", "cmd", "nullrod", "mark");
 
         button(inv, 19, Material.SHIELD, "GUARD Mode", "Form a perimeter, fight mobs near you", "guard");
         button(inv, 20, Material.LEAD, "FOLLOW Mode", "Walk with you", "follow");
@@ -823,6 +825,11 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         button(inv, 51, Material.FURNACE, "Base: Crafting Line", "Smelts debris into scrap from the chest", "cmd", "nullbase", "build", "craft");
         button(inv, 52, Material.OBSERVER, "Alerts", "The last 30 alarms and finds", "cmd", "nullalerts");
         button(inv, 53, Material.NETHERITE_INGOT, "Nether Law", "Strikes, prisoners and the prison", "cmd", "nullnether", "status");
+        button(inv, 27, Material.GLOWSTONE, "Flare Rod", "Lights roster players within 8 blocks", "cmd", "nullrod", "flare");
+        button(inv, 46, Material.DEEPSLATE_BRICKS, "Build Stash Room", "Six stash chests at the Nether base", "cmd", "nullcmd", "stashroom");
+        button(inv, 47, Material.OBSIDIAN, "Build Prison", "Walled cell block at this spot, Nether only", "build", "prison");
+        button(inv, 48, Material.CLOCK, "Auto Work: toggle", "Idle Nulls mine and chop near you", "cmd", "nullcmd", "autowork", "toggle");
+        button(inv, 49, Material.ENDER_EYE, "Auto Spy: toggle", "A hidden spy on roster players who join", "cmd", "nullcmd", "autospy", "toggle");
 
         button(inv, 46, Material.CRIMSON_FUNGUS, "Event: Forge Awakening", "Squad of 5 mobilises at the Forge", "event", "forge");
         button(inv, 47, Material.GOLD_BLOCK, "Event: Capital Defense", "Squad of 8 guards, watchtower built", "event", "capital");
