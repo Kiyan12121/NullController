@@ -486,13 +486,24 @@ public final class NullArmy {
     private void applySkin(NPC npc) {
         String url = plugin.getConfig().getString("null-skin-url", "");
         if (url != null && !url.isBlank()) {
-            var console = Bukkit.getConsoleSender();
-            CitizensAPI.getDefaultNPCSelector().select(console, npc);
-            Bukkit.dispatchCommand(console, "npc skin --url " + url);
-            CitizensAPI.getDefaultNPCSelector().deselect(console);
+            setSkinUrl(npc, url);
+            // Skin lookups fail when many Nulls spawn at once (rate limits), leaving some on the default
+            // skin. Re-apply a few times so every Null ends up with the black skin. Re-applying is harmless.
+            for (long delay : new long[]{60L, 200L, 600L}) {
+                Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                    if (npc.isSpawned()) setSkinUrl(npc, url);
+                }, delay);
+            }
         } else {
             npc.getOrAddTrait(SkinTrait.class).setSkinName(plugin.getConfig().getString("null-skin", "NULL"));
         }
+    }
+
+    private void setSkinUrl(NPC npc, String url) {
+        var console = Bukkit.getConsoleSender();
+        CitizensAPI.getDefaultNPCSelector().select(console, npc);
+        Bukkit.dispatchCommand(console, "npc skin --url " + url);
+        CitizensAPI.getDefaultNPCSelector().deselect(console);
     }
 
     private void applyGear(Mode m) {
