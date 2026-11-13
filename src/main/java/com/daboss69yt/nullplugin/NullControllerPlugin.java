@@ -268,6 +268,21 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             case "farm" -> offlineMode(sender, NullArmy.Mode.FARM);
             case "status" -> sender.sendMessage(army.statusOffline());
             case "ambush" -> {
+                // "ambush <player>" opens a portal ambush on a roster player, with you offline. "on|off|toggle" flips the Nether ambush.
+                if (args.length > 1 && !List.of("on", "off", "toggle").contains(args[1].toLowerCase(Locale.ROOT))) {
+                    Player target = Bukkit.getPlayerExact(args[1]);
+                    if (target == null) {
+                        sender.sendMessage(ChatColor.RED + "That player is not online.");
+                        return true;
+                    }
+                    if (!consent.canTarget(target)) {
+                        sender.sendMessage(ChatColor.RED + "Refused. " + target.getName() + " is not on the roster.");
+                        return true;
+                    }
+                    army.ambush(null, target, 3, (int) getConfig().getLong("ambush-minutes", 3));
+                    sender.sendMessage(ChatColor.DARK_PURPLE + "Ambush opened on " + target.getName() + ".");
+                    return true;
+                }
                 String sub = args.length > 1 ? args[1].toLowerCase() : "toggle";
                 boolean current = getConfig().getBoolean("nether-ambush", false);
                 boolean next = switch (sub) {
