@@ -86,6 +86,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         }, 20L * 10, 20L * 10); // every ten seconds: repairs happen while the Nulls are still there
         totems = new TotemManager(this, consent, army);
         netherLaw = new NetherLaw(this, consent, army);
+        netherLaw.setPrisonBuilder(site -> builders.buildOffline(site, "prison", msg -> alert(msg)));
         netherLaw.start();
         Updater updater = new Updater(this, consent);
         updater.start();

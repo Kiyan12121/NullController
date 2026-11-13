@@ -554,8 +554,24 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         save();
     }
 
+    /** Starts a prison build at the given spot. Set by the plugin, since the builders live there. */
+    private java.util.function.Consumer<Location> prisonBuilder;
+
+    public void setPrisonBuilder(java.util.function.Consumer<Location> builder) {
+        this.prisonBuilder = builder;
+    }
+
     private void arrest(Player p, Record r) {
         Location prison = configLoc("prison");
+        if (prison == null && prisonBuilder != null) {
+            // No prison yet: the Nulls build one at the Nether base, then the arrest goes ahead.
+            Location base = configLoc("nether-base");
+            if (base != null && base.getWorld() != null && base.getWorld().getEnvironment() == World.Environment.NETHER) {
+                notifyOwner(ChatColor.DARK_PURPLE + "[Prison] No prison yet. The Nulls are building one at the base.");
+                prisonBuilder.accept(base);
+                prison = configLoc("prison");
+            }
+        }
         if (prison == null) {
             notifyOwner(ChatColor.RED + "[Nether] No prison set. Use /nullnether prison set in the Nether.");
             if (p != null) {
