@@ -62,6 +62,24 @@ public final class CommanderChat implements Listener {
         this.designer = new BuildDesigner(plugin, consent);
     }
 
+    public boolean isOwner(Player p) {
+        return consent.isOwner(p);
+    }
+
+    /** A phrase heard through voice chat. Must start with "null" or "commander", like a typed message. Main thread. */
+    public void spoken(Player owner, String transcript) {
+        String msg = transcript == null ? "" : transcript.trim();
+        int cut = msg.regionMatches(true, 0, "null ", 0, 5) ? 5
+                : msg.regionMatches(true, 0, "commander ", 0, 10) ? 10 : -1;
+        if (cut < 0 || !consent.isOwner(owner)) return;
+        String text = msg.substring(cut).trim();
+        if (text.isEmpty()) return;
+        owner.sendMessage(net.md_5.bungee.api.ChatColor.GRAY + "(heard) " + net.md_5.bungee.api.ChatColor.WHITE + text);
+        if (text.equalsIgnoreCase("confirm")) designer.confirm(owner);
+        else if (text.equalsIgnoreCase("cancel")) designer.cancel(owner);
+        else ask(owner, text);
+    }
+
     @EventHandler(priority = EventPriority.LOWEST)
     public void onChat(AsyncPlayerChatEvent e) {
         String msg = e.getMessage();

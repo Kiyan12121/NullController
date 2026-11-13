@@ -55,6 +55,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
 
     private ConsentManager consent;
     private NullArmy army;
+    private CommanderChat commanderChat;
     private Builders builders;
     private TotemManager totems;
     private NetherLaw netherLaw;
@@ -134,7 +135,15 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             return true;
         });
         getServer().getPluginManager().registerEvents(netherLaw, this);
-        getServer().getPluginManager().registerEvents(new CommanderChat(this, army, consent), this);
+        commanderChat = new CommanderChat(this, army, consent);
+        getServer().getPluginManager().registerEvents(commanderChat, this);
+        if (getServer().getPluginManager().getPlugin("voicechat") != null) {
+            var svc = getServer().getServicesManager().load(de.maxhenkel.voicechat.api.BukkitVoicechatService.class);
+            if (svc != null) {
+                svc.registerPlugin(new VoiceListener(this, commanderChat));
+                getLogger().info("Simple Voice Chat found: the Commander can hear you.");
+            }
+        }
         getCommand("nullnether").setExecutor(netherLaw);
         getCommand("nullnether").setTabCompleter(netherLaw);
         getServer().getPluginManager().registerEvents(this, this);
