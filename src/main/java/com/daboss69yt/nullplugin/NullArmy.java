@@ -1339,7 +1339,30 @@ public final class NullArmy {
     }
 
     private void refillTargets(Player owner, WorkKind kind) {
-        refillTargetsAt(owner.getLocation(), kind);
+        refillTargetsAt(workAnchor(owner), kind);
+    }
+
+    /**
+     * Where the Nulls look for work: around you while they are near you, otherwise around
+     * their own centre, so mining and lumber still happen when you are far from the ore.
+     */
+    private Location workAnchor(Player owner) {
+        Location ol = owner.getLocation();
+        double sx = 0, sy = 0, sz = 0;
+        int n = 0;
+        World w = null;
+        for (NPC npc : nulls) {
+            Location here = npc.getStoredLocation();
+            if (!npc.isSpawned() || here == null) continue;
+            if (sameWorld(here, ol) && here.distance(ol) <= WORK_RADIUS) return ol;
+            sx += here.getX();
+            sy += here.getY();
+            sz += here.getZ();
+            w = here.getWorld();
+            n++;
+        }
+        if (n == 0 || w == null) return ol;
+        return new Location(w, sx / n, sy / n, sz / n);
     }
 
     private void refillTargetsAt(Location c, WorkKind kind) {
