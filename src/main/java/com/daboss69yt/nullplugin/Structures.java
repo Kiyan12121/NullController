@@ -106,46 +106,67 @@ public final class Structures {
     }
 
     /**
-     * Prison: 13x9 walled block with a sealed roof. Three cells on each side are split off by iron
-     * bars, a central corridor runs between them with pressure plates on its floor, and corner
-     * battlements sit on top. The only gap is the south door, so prisoners have one way out.
+     * Prison: a 31 by 21 block with a double obsidian outer wall, a sealed roof, four corner watch
+     * towers, and cell rows split by iron bars. The cells sit inside the walls; the gear vault sits
+     * outside them, behind its own obsidian walls and a roof hatch, so no prisoner can reach it.
+     * The only gap is the south door.
      */
     public static List<Placement> prison(Location base) {
         World w = base.getWorld();
         int bx = base.getBlockX(), by = base.getBlockY(), bz = base.getBlockZ();
-        int halfX = 6, halfZ = 4, wallH = 4;
+        int halfX = 15, halfZ = 10, wallH = 6;
         List<Placement> out = new ArrayList<>();
         // Floor
         for (int x = -halfX; x <= halfX; x++)
             for (int z = -halfZ; z <= halfZ; z++)
                 out.add(at(w, bx, by, bz, x, 0, z, Material.SMOOTH_STONE));
-        // Walls, corners in crying obsidian so they can't be mined through easily
+        // Double outer wall: obsidian on the outside ring, deepslate brick on the inside ring
         for (int y = 1; y <= wallH; y++)
             for (int x = -halfX; x <= halfX; x++)
                 for (int z = -halfZ; z <= halfZ; z++) {
-                    boolean edge = Math.abs(x) == halfX || Math.abs(z) == halfZ;
-                    if (!edge) continue;
-                    boolean corner = Math.abs(x) == halfX && Math.abs(z) == halfZ;
-                    Material m = corner ? Material.CRYING_OBSIDIAN : Material.DEEPSLATE_BRICKS;
-                    // Door gap: the south wall centre, two high
-                    if (z == halfZ && x == 0 && y <= 2) continue;
+                    boolean outer = Math.abs(x) == halfX || Math.abs(z) == halfZ;
+                    boolean inner = Math.abs(x) == halfX - 1 || Math.abs(z) == halfZ - 1;
+                    if (!outer && !inner) continue;
+                    boolean corner = Math.abs(x) >= halfX - 1 && Math.abs(z) >= halfZ - 1;
+                    Material m = outer ? Material.OBSIDIAN : Material.DEEPSLATE_BRICKS;
+                    if (corner && outer) m = Material.CRYING_OBSIDIAN;
+                    // Door: the south wall centre, three high, leaving the outer and inner rings open
+                    if (z >= halfZ - 1 && x >= -1 && x <= 1 && y <= 3) continue;
                     out.add(at(w, bx, by, bz, x, y, z, m));
                 }
-        // Roof, sealed
+        // Sealed roof
         for (int x = -halfX; x <= halfX; x++)
             for (int z = -halfZ; z <= halfZ; z++)
-                out.add(at(w, bx, by, bz, x, wallH + 1, z, Material.DEEPSLATE_BRICKS));
-        // Cell partitions in iron bars, at x = -2 and x = 2, from wall to wall, leaving the corridor open
+                out.add(at(w, bx, by, bz, x, wallH + 1, z, Material.OBSIDIAN));
+        // Four corner watch towers, 3x3, rising four above the roof
+        int[][] corners = {{-halfX, -halfZ}, {halfX - 2, -halfZ}, {-halfX, halfZ - 2}, {halfX - 2, halfZ - 2}};
+        for (int[] c : corners)
+            for (int y = wallH + 2; y <= wallH + 5; y++)
+                for (int dx = 0; dx < 3; dx++)
+                    for (int dz = 0; dz < 3; dz++) {
+                        boolean ring = dx == 0 || dx == 2 || dz == 0 || dz == 2;
+                        if (ring) out.add(at(w, bx, by, bz, c[0] + dx, y, c[1] + dz, Material.CRYING_OBSIDIAN));
+                    }
+        // Cell rows: iron bar partitions running north-south at x = -6, -2, 2, 6 with a gap every four blocks
         for (int y = 1; y <= wallH; y++)
-            for (int z = -halfZ + 1; z <= halfZ - 1; z++) {
-                out.add(at(w, bx, by, bz, -2, y, z, Material.IRON_BARS));
-                out.add(at(w, bx, by, bz, 2, y, z, Material.IRON_BARS));
-            }
-        // Pressure plates in the corridor: a step on one is an alarm for the Nulls
-        for (int z = -halfZ + 1; z <= halfZ - 1; z += 2)
+            for (int x : new int[]{-6, -2, 2, 6})
+                for (int z = -halfZ + 2; z <= halfZ - 2; z++) {
+                    if (z % 4 == 0) continue; // a cell door every four blocks
+                    out.add(at(w, bx, by, bz, x, y, z, Material.IRON_BARS));
+                }
+        // Corridor pressure plates: a step on one is an alarm for the Nulls
+        for (int z = -halfZ + 2; z <= halfZ - 2; z += 2)
             out.add(at(w, bx, by, bz, 0, 1, z, Material.POLISHED_BLACKSTONE_PRESSURE_PLATE));
-        // Guard post: a barrel for the Nulls' gear, inside the south-east corner
-        out.add(at(w, bx, by, bz, halfX - 1, 1, halfZ - 1, Material.BARREL));
+        // Gear vault outside the north wall: obsidian box, barrel inside, roof hatch for the Nulls
+        int vx = -1, vz = -halfZ - 5;
+        for (int y = 0; y <= 4; y++)
+            for (int dx = -1; dx <= 1; dx++)
+                for (int dz = -1; dz <= 1; dz++) {
+                    boolean ring = Math.abs(dx) == 1 || Math.abs(dz) == 1;
+                    if (y == 4 || ring) out.add(at(w, bx, by, bz, vx + dx, y, vz + dz, Material.OBSIDIAN));
+                }
+        out.add(at(w, bx, by, bz, vx, 1, vz, Material.BARREL));
+        out.add(at(w, bx, by, bz, vx, 4, vz, Material.IRON_TRAPDOOR));
         return out;
     }
 
