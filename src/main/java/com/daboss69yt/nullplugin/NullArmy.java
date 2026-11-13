@@ -565,6 +565,39 @@ public final class NullArmy {
                 + "can't be resummoned for " + minutes + " minutes.");
     }
 
+    /**
+     * Scouting report: where every online roster player is, how many Nulls are out in each world,
+     * and which roster players have hit the army hardest. Read-only, so nothing is ordered.
+     */
+    public void scoutReport(Player owner) {
+        owner.sendMessage(ChatColor.DARK_PURPLE + "=== Scouting report ===");
+        Map<String, Integer> byWorld = new HashMap<>();
+        for (NPC npc : nulls) {
+            if (npc.isSpawned()) byWorld.merge(npc.getEntity().getWorld().getName(), 1, Integer::sum);
+        }
+        owner.sendMessage(ChatColor.GRAY + "Nulls out: " + ChatColor.WHITE + nulls.size()
+                + (byWorld.isEmpty() ? "" : ChatColor.GRAY + " (" + byWorld.entrySet().stream()
+                        .map(e -> e.getKey() + " " + e.getValue()).reduce((a, b) -> a + ", " + b).orElse("") + ")"));
+        int seen = 0;
+        for (Player p : org.bukkit.Bukkit.getOnlinePlayers()) {
+            if (p.equals(owner) || !consent.canTarget(p)) continue;
+            seen++;
+            owner.sendMessage(ChatColor.GRAY + "Roster: " + ChatColor.WHITE + p.getName() + ChatColor.GRAY
+                    + " in " + p.getWorld().getEnvironment().name().toLowerCase() + " at " + coordsOf(p.getLocation()));
+        }
+        if (seen == 0) owner.sendMessage(ChatColor.GRAY + "No roster players are online.");
+        java.util.List<java.util.Map.Entry<UUID, Double>> hardest = new java.util.ArrayList<>(threat.entrySet());
+        hardest.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
+        int shown = 0;
+        for (var e : hardest) {
+            if (shown++ >= 3 || e.getValue() <= 0) break;
+            org.bukkit.OfflinePlayer off = org.bukkit.Bukkit.getOfflinePlayer(e.getKey());
+            owner.sendMessage(ChatColor.GRAY + "Hardest hit by: " + ChatColor.WHITE
+                    + (off.getName() == null ? e.getKey().toString() : off.getName())
+                    + ChatColor.GRAY + " (threat " + String.format("%.0f", e.getValue()) + ")");
+        }
+    }
+
     public void status(Player owner) {
         owner.sendMessage(ChatColor.DARK_PURPLE + "=== Null Army ===");
         owner.sendMessage(ChatColor.GRAY + "Nulls: " + ChatColor.WHITE + nulls.size() + "/" + armyCap());
