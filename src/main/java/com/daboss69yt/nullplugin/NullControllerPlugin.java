@@ -279,13 +279,30 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
                 saveConfig();
                 sender.sendMessage("Nether ambush " + (next ? "enabled" : "disabled") + ".");
             }
+            case "stashroom" -> sender.sendMessage(army.buildStashRoom());
+            case "autowork" -> sender.sendMessage("Auto work " + toggleKey(args, "auto-work", true) + ".");
+            case "autospy" -> sender.sendMessage("Auto spy " + toggleKey(args, "auto-spy", true) + ".");
             default -> sender.sendMessage(OFFLINE_HELP);
         }
         return true;
     }
 
+    /** on | off | toggle for a boolean config key. Returns the new state as enabled or disabled. */
+    private String toggleKey(String[] args, String key, boolean fallback) {
+        String sub = args.length > 1 ? args[1].toLowerCase() : "toggle";
+        boolean current = getConfig().getBoolean(key, fallback);
+        boolean next = switch (sub) {
+            case "on" -> true;
+            case "off" -> false;
+            default -> !current;
+        };
+        getConfig().set(key, next);
+        saveConfig();
+        return next ? "enabled" : "disabled";
+    }
+
     private static final String OFFLINE_HELP = ChatColor.GRAY + "Owner is offline. Console orders: "
-            + "summon [n], build <kind> (Nether only), chests place <kind> (look at a block), strike <player> (the Breach), orbital <player> (Nuke), stabshot <player>, mobcannon <player> [n], team list|add|remove <player>, dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle";
+            + "summon [n], build <kind> (Nether only), chests place <kind> (look at a block), strike <player> (the Breach), orbital <player> (Nuke), stabshot <player>, mobcannon <player> [n], team list|add|remove <player>, dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle, stashroom, autowork on|off|toggle, autospy on|off|toggle";
 
     private void offlineMode(CommandSender sender, NullArmy.Mode mode) {
         sender.sendMessage(army.setModeOffline(mode)

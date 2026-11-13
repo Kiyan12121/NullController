@@ -2433,6 +2433,11 @@ public final class NullArmy {
      * on the same floor. Nether only. Returns a line for the owner.
      */
     public String buildStashRoom(Player owner) {
+        return buildStashRoom();
+    }
+
+    /** The stash room, without an owner online. Used by the console orders too. */
+    public String buildStashRoom() {
         Location base = configLoc("nether-base");
         if (base == null) return "Set the base first: stand at the base and run /nullrod base set.";
         World w = base.getWorld();
