@@ -1147,6 +1147,10 @@ public final class NullArmy {
             lastScanCycle = cycle;
         }
         if (workTargets.isEmpty()) return false;
+        // Hold the right tool for the job: a sword doesn't mine stone or ore, and the drops depend on it.
+        var held = npc.getOrAddTrait(Equipment.class).get(Equipment.EquipmentSlot.HAND);
+        ItemStack tool = gearForKind(autoKind);
+        if (held == null || held.getType() != tool.getType()) setHeldItem(npc, tool);
         workTick(npc, owner, autoKind, index, leash);
         return true;
     }
