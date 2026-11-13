@@ -114,3 +114,7 @@ allies: []
 # The Commander's voice: type "null <message>" in chat. Needs a Groq API key. Keep the key private.
 groq-api-key: ""
 groq-model: "llama-3.3-70b-versatile"
+
+# The Commander's build designer. Biggest build allowed (blocks), and blocks placed per batch.
+build-max-volume: 2000000
+build-placements-per-tick: 300

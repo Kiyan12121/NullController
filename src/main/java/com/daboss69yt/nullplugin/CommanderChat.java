@@ -27,7 +27,7 @@ import java.util.Set;
  */
 public final class CommanderChat implements Listener {
     private static final String ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
-    private static final Set<String> ACTIONS = Set.of("none", "status", "scout", "recall", "guard", "follow", "stay");
+    private static final Set<String> ACTIONS = Set.of("none", "status", "scout", "recall", "guard", "follow", "stay", "design");
     private static final int HISTORY_TURNS = 6;
     private static final long COOLDOWN_MS = 3000;
 
@@ -35,7 +35,13 @@ public final class CommanderChat implements Listener {
             "You are the Commander of the NULL army on a Minecraft server. You are pragmatic, deeply loyal to "
             + "the NULL, and lighthearted, with a dry humour. You are ruthless toward outsiders but warm to your team. "
             + "Your owner gives the orders. Keep lines short, under 40 words. Never claim you did something you did not do. "
-            + "You may only request these actions: none, status, scout, recall, guard, follow, stay. "
+            + "You may only request these actions: none, status, scout, recall, guard, follow, stay, design. "
+            + "To design a build, use action design with a build object: {\"name\": \"...\", \"ops\": [ ... ]}. "
+            + "Each op is {\"op\": \"fill\"|\"hollow\"|\"set\", \"from\": [x,y,z], \"to\": [x,y,z], \"at\": [x,y,z], \"block\": \"MATERIAL_NAME\"}. "
+            + "Coordinates are whole numbers relative to the build origin: x east, y up, z south. "
+            + "fill makes a solid box, hollow makes only its outer shell (walls, roofs, outlines), set places one block with at. "
+            + "Use ordinary building blocks only. Never use TNT, command blocks, spawners, or liquids. Keep it under 300 ops. "
+            + "The owner always confirms before anything is built, so describe the whole design. "
             + "You must never attack, hunt, dismiss or strike anyone, and must never target players who are not on the roster. "
             + "If asked to do any of those, refuse in character. "
             + "Reply ONLY with JSON in this form: {\"say\": \"<your line>\", \"action\": \"<one action from the list>\"}.";
@@ -43,6 +49,7 @@ public final class CommanderChat implements Listener {
     private final NullControllerPlugin plugin;
     private final NullArmy army;
     private final ConsentManager consent;
+    private final BuildDesigner designer;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
     private final Deque<String[]> history = new ArrayDeque<>();
     private boolean busy;
@@ -52,6 +59,7 @@ public final class CommanderChat implements Listener {
         this.plugin = plugin;
         this.army = army;
         this.consent = consent;
+        this.designer = new BuildDesigner(plugin, consent);
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
@@ -65,6 +73,14 @@ public final class CommanderChat implements Listener {
         e.setCancelled(true); // private: nobody else in chat sees it
         String text = msg.substring(cut).trim();
         if (text.isEmpty()) return;
+        if (text.equalsIgnoreCase("confirm")) {
+            Bukkit.getScheduler().runTask(plugin, () -> designer.confirm(p));
+            return;
+        }
+        if (text.equalsIgnoreCase("cancel")) {
+            Bukkit.getScheduler().runTask(plugin, () -> designer.cancel(p));
+            return;
+        }
         Bukkit.getScheduler().runTask(plugin, () -> ask(p, text));
     }
 
@@ -144,8 +160,9 @@ public final class CommanderChat implements Listener {
     private void handle(Player owner, String content, String text) {
         String say;
         String action = "none";
+        JsonObject out = null;
         try {
-            JsonObject out = JsonParser.parseString(content).getAsJsonObject();
+            out = JsonParser.parseString(content).getAsJsonObject();
             say = out.has("say") ? out.get("say").getAsString() : "";
             action = out.has("action") ? out.get("action").getAsString().toLowerCase() : "none";
         } catch (RuntimeException ex) {
@@ -161,6 +178,13 @@ public final class CommanderChat implements Listener {
             case "guard" -> army.setMode(NullArmy.Mode.GUARD, owner);
             case "follow" -> army.setMode(NullArmy.Mode.FOLLOW, owner);
             case "stay" -> army.setMode(NullArmy.Mode.STAY, owner);
+            case "design" -> {
+                if (out != null && out.has("build") && out.get("build").isJsonObject()) {
+                    owner.sendMessage(ChatColor.DARK_PURPLE + designer.stage(owner, out.getAsJsonObject("build"), BuildDesigner.origin(owner)));
+                } else {
+                    owner.sendMessage(ChatColor.GRAY + "No build was described.");
+                }
+            }
             default -> { }
         }
     }
