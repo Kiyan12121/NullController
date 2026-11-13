@@ -31,6 +31,7 @@ import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Arrow;
 import org.bukkit.entity.TNTPrimed;
 import org.bukkit.entity.minecart.ExplosiveMinecart;
 import org.bukkit.entity.Monster;
@@ -150,7 +151,13 @@ public final class NullArmy {
     private long nextRestock;
     private long nextAutoStrike;
     /** Learned per player: how hard the Nulls have been hit by them. Raises the damage the Nulls deal back. */
-    private final Map<UUID, Double> threat = new HashMap<>();
+    private final Map<UUID, Double> threat;
+    /** Fight threat and login habits, saved to memory.yml. */
+    private final Memory memory;
+    /** Per archer: when it last loosed an arrow. */
+    private final Map<NPC, Long> lastShot = new HashMap<>();
+    /** Per player: the hour a predicted-login alert was last sent. */
+    private final Map<UUID, Integer> predictedAlert = new HashMap<>();
     private final Map<NPC, Long> potCooldown = new HashMap<>();
     /** Learned from losses: where Nulls have gone down. The most recent twenty. */
     private final List<Location> dangerSpots = new ArrayList<>();
@@ -170,6 +177,22 @@ public final class NullArmy {
     public NullArmy(NullControllerPlugin plugin, ConsentManager consent) {
         this.plugin = plugin;
         this.consent = consent;
+        this.memory = new Memory(plugin.getDataFolder());
+        this.threat = memory.threat();
+    }
+
+    /** Called when a roster player joins: learns when they usually come online. */
+    public void recordLogin(UUID id) {
+        memory.recordLogin(id, currentHour());
+    }
+
+    private int currentHour() {
+        String zone = plugin.getConfig().getString("timezone", "Europe/London");
+        try {
+            return java.time.ZonedDateTime.now(java.time.ZoneId.of(zone)).getHour();
+        } catch (java.time.DateTimeException e) {
+            return java.time.LocalTime.now().getHour();
+        }
     }
 
     public void startTicker() {
@@ -184,6 +207,7 @@ public final class NullArmy {
     public void shutdown() {
         stopSwinging();
         removeAll();
+        memory.save();
     }
 
     // ---------- Commands ----------
@@ -997,6 +1021,8 @@ public final class NullArmy {
             Vector off = here.toVector().subtract(tl.toVector());
             if (off.lengthSquared() < 0.01) off = new Vector(1, 0, 0);
             npc.getNavigator().setTarget(here.clone().add(off.normalize().multiply(10)));
+        } else if (ranks.getOrDefault(npc, 'D') == 'A' && npc.getEntity() instanceof LivingEntity archer && archerFire(npc, archer, here, target)) {
+            // Archer: shot fired from range; it steps back if the player closes in.
         } else if (here.distance(tl) > ATTACK_REACH) {
             // Flank: each Null comes in from its own side, so the group surrounds the target.
             // Pincer: even Nulls come round one side of the target, odd Nulls the other.
@@ -1005,6 +1031,8 @@ public final class NullArmy {
             Location flank = here.distance(tl) > 6 ? tl.clone().add(Math.cos(ang) * 3, 0, Math.sin(ang) * 3) : tl;
             char role = ranks.getOrDefault(npc, 'D');
             if (role == 'R' || role == 'A') flank = tl; // the leader and officers push straight in
+            // Counter-play: a player healing on gapples or regeneration gets pressed, not given time.
+            if (healing(target)) flank = tl;
             // Adapt to the player: shield users get hit from behind, archers get rushed.
             if (target.isBlocking()) flank = tl.clone().add(target.getLocation().getDirection().multiply(-2.5));
             else if (holdsRanged(target)) flank = tl;
@@ -1816,11 +1844,16 @@ public final class NullArmy {
      */
     private void tickDefence() {
         int minutes = plugin.getConfig().getInt("defence-minutes", 3);
+        predictLogins();
         for (Player p : Bukkit.getOnlinePlayers()) {
             if (!consent.canTarget(p)) continue;
-            if (p.getWorld().getEnvironment() != World.Environment.THE_END) continue; // elsewhere, only on the owner's order
+            boolean end = p.getWorld().getEnvironment() == World.Environment.THE_END;
+            boolean nether = p.getWorld().getEnvironment() == World.Environment.NETHER
+                    && plugin.getConfig().getBoolean("nether-autonomy", true);
+            if (!end && !nether) continue; // elsewhere, only on the owner's order
             Location pl = p.getLocation();
-            boolean near = false;
+            // In the Nether a roster player who enters at all is attacked; in The End only when they come near.
+            boolean near = nether;
             for (NPC npc : nulls) {
                 Location here = npc.getStoredLocation();
                 if (npc.isSpawned() && !hunters.containsKey(npc) && !spies.containsKey(npc)
@@ -1839,6 +1872,22 @@ public final class NullArmy {
             NPC npc = createNull(spot, gearForMode(Mode.HUNT), false);
             hunters.put(npc, new Hunt(p.getUniqueId(), expires));
             plugin.alert("Defence: " + p.getName() + " came near the Nulls. A Null is hunting them for " + minutes + " min.");
+        }
+    }
+
+    /**
+     * Login prediction, owner offline: when a roster player usually comes online this hour and isn't
+     * on yet, the console is told once. Nothing is attacked for this alone.
+     */
+    private void predictLogins() {
+        int hour = currentHour();
+        for (UUID id : memory.known()) {
+            if (!consent.isConsented(id) || Bukkit.getPlayer(id) != null) continue;
+            if (!memory.usuallyOnlineAt(id, hour)) continue;
+            if (predictedAlert.getOrDefault(id, -1) == hour) continue;
+            predictedAlert.put(id, hour);
+            String name = Bukkit.getOfflinePlayer(id).getName();
+            plugin.alert("Expected login: " + (name == null ? id : name) + " usually comes online around now.");
         }
     }
 
@@ -2120,6 +2169,36 @@ public final class NullArmy {
         }
     }
 
+    private static boolean healing(Player p) {
+        return p.hasPotionEffect(PotionEffectType.REGENERATION) || p.hasPotionEffect(PotionEffectType.ABSORPTION);
+    }
+
+    /**
+     * Archers keep their distance: at four to sixteen blocks they loose an arrow every 2.5 seconds,
+     * and inside four blocks they back off instead. Returns true when the archer acted this tick.
+     */
+    private boolean archerFire(NPC npc, LivingEntity archer, Location here, Player target) {
+        Location tl = target.getLocation();
+        double d = here.distance(tl);
+        if (d < 4) {
+            Vector off = here.toVector().subtract(tl.toVector());
+            if (off.lengthSquared() < 0.01) off = new Vector(1, 0, 0);
+            npc.getNavigator().setTarget(here.clone().add(off.normalize().multiply(4)));
+            return true;
+        }
+        if (d > 16) return false;
+        long now = System.currentTimeMillis();
+        if (now - lastShot.getOrDefault(npc, 0L) < 2500L) return true;
+        lastShot.put(npc, now);
+        Location eye = archer.getEyeLocation();
+        Vector dir = target.getEyeLocation().toVector().subtract(eye.toVector());
+        if (dir.lengthSquared() < 0.01) return true;
+        Arrow arrow = archer.launchProjectile(Arrow.class, dir.normalize().multiply(2.2));
+        arrow.setDamage(4.0);
+        swing(npc);
+        return true;
+    }
+
     private boolean holdsRanged(Player p) {
         Material main = p.getInventory().getItemInMainHand().getType();
         Material off = p.getInventory().getItemInOffHand().getType();
@@ -2133,7 +2212,7 @@ public final class NullArmy {
 
     /** Adaptive combat: three or more hunters down around one roster player calls in the Orbital Nuke, if auto-strike is on. */
     private void checkPinned() {
-        if (!plugin.getConfig().getBoolean("auto-strike", false)) return;
+        boolean auto = plugin.getConfig().getBoolean("auto-strike", false);
         long now = System.currentTimeMillis();
         if (now < nextAutoStrike) return;
         Map<UUID, Integer> down = new HashMap<>();
@@ -2145,6 +2224,10 @@ public final class NullArmy {
             Player t = Bukkit.getPlayer(e.getKey());
             if (t == null || !consent.canTarget(t)) continue;
             nextAutoStrike = now + 10 * 60_000L;
+            if (!auto) {
+                plugin.alert("Suggestion: " + t.getName() + " is pinning the squad. Say 'orbital " + t.getName() + "' to confirm a strike.");
+                return;
+            }
             plugin.alert("Adaptive combat: " + t.getName() + " is pinning the squad. " + orbitalNukeAt(t.getLocation()));
             return;
         }
