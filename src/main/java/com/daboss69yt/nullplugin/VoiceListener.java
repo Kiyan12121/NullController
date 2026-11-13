@@ -55,8 +55,9 @@ public final class VoiceListener implements VoicechatPlugin {
         if (api == null || pcm.length == 0) return;
         var connection = api.getConnectionOf(owner);
         if (connection == null) return;
-        var channel = api.createStaticAudioChannel(UUID.randomUUID(), connection);
+        var channel = api.createStaticAudioChannel(UUID.randomUUID());
         if (channel == null) return;
+        channel.addTarget(connection);
         var player = api.createAudioPlayer(channel, api.createEncoder(), pcm);
         player.startPlaying();
     }
