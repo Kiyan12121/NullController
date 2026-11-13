@@ -134,6 +134,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             return true;
         });
         getServer().getPluginManager().registerEvents(netherLaw, this);
+        getServer().getPluginManager().registerEvents(new CommanderChat(this, army, consent), this);
         getCommand("nullnether").setExecutor(netherLaw);
         getCommand("nullnether").setTabCompleter(netherLaw);
         getServer().getPluginManager().registerEvents(this, this);

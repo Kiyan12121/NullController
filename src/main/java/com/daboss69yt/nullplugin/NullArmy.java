@@ -648,6 +648,25 @@ public final class NullArmy {
         }
     }
 
+    /** A short, plain summary of the army for the Commander's chat, so he knows what is going on. */
+    public String chatContext(Player owner) {
+        Map<Character, Integer> counts = new HashMap<>();
+        for (char c : ranks.values()) counts.merge(c, 1, Integer::sum);
+        StringBuilder roster = new StringBuilder();
+        for (Player p : org.bukkit.Bukkit.getOnlinePlayers()) {
+            if (consent.canTarget(p)) roster.append(p.getName()).append(' ');
+        }
+        return "Nulls: " + nulls.size() + "/" + armyCap()
+                + ". Ranks: ward R=" + counts.getOrDefault('R', 0)
+                + ", commander A=" + counts.getOrDefault('A', 0)
+                + ", general I=" + counts.getOrDefault('I', 0)
+                + ", soldier D=" + counts.getOrDefault('D', 0)
+                + ". Army mode: " + mode.name()
+                + ". Owner " + owner.getName() + " is in " + owner.getWorld().getEnvironment().name().toLowerCase()
+                + " at " + coordsOf(owner.getLocation())
+                + ". Roster players online: " + (roster.length() == 0 ? "none" : roster.toString().trim()) + ".";
+    }
+
     public void status(Player owner) {
         owner.sendMessage(ChatColor.DARK_PURPLE + "=== Null Army ===");
         owner.sendMessage(ChatColor.GRAY + "Nulls: " + ChatColor.WHITE + nulls.size() + "/" + armyCap());
