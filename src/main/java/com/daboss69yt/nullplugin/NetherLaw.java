@@ -95,6 +95,7 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
 
     /** Starts the prison watch: rations and escape checks. */
     public void start() {
+        army.setPrisonGuardNeeded(anyPrisoner()); // prisoners held before a restart keep their guard
         new BukkitRunnable() {
             @Override
             public void run() {
@@ -243,6 +244,14 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
             }
         }
         return out;
+    }
+
+    /** True while any roster player is held in the prison. */
+    boolean anyPrisoner() {
+        for (Record r : records.values()) {
+            if (r.prisoner) return true;
+        }
+        return false;
     }
 
     private boolean isOffender(Player p) {
@@ -555,6 +564,7 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
             return;
         }
         r.prisoner = true;
+        army.setPrisonGuardNeeded(anyPrisoner());
         r.stripped = false;
         save();
         if (p != null) {
@@ -617,6 +627,7 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
                     }
                     case "release" -> {
                         r.prisoner = false;
+                        army.setPrisonGuardNeeded(anyPrisoner());
                         r.strikes = 0;
                         save();
                         owner.sendMessage(ChatColor.DARK_PURPLE + args[1] + " released. Clean slate. Gear is still stashed.");

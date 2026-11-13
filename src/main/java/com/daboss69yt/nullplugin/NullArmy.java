@@ -185,6 +185,39 @@ public final class NullArmy {
         this.threat = memory.threat();
     }
 
+    /** The guard Null stationed at the prison while anyone is held there. Kept out of the normal army loops. */
+    private NPC prisonGuard;
+    private boolean prisonGuardNeeded;
+
+    /** Called by the Nether law whenever prisoners are added or released. */
+    public void setPrisonGuardNeeded(boolean needed) {
+        prisonGuardNeeded = needed;
+        if (!needed && prisonGuard != null) {
+            prisonGuard.destroy();
+            prisonGuard = null;
+        }
+    }
+
+    /** Keeps one Null at the prison while there's a prisoner: respawned if lost, held there if moved. */
+    private void tickPrisonGuard() {
+        if (!prisonGuardNeeded) return;
+        Location prison = configLoc("prison");
+        if (prison == null) return;
+        if (prisonGuard == null || !prisonGuard.isSpawned()) {
+            if (prisonGuard != null) prisonGuard.destroy();
+            NPC npc = createNull(prison.clone().add(0, 1, 0), gearForMode(Mode.GUARD), false);
+            nulls.remove(npc); // not part of the normal army loops
+            prisonGuard = npc;
+            return;
+        }
+        Location here = prisonGuard.getStoredLocation();
+        if (here == null || !sameWorld(here, prison) || here.distance(prison) > TELEPORT_OVER) {
+            teleport(prisonGuard, prison.clone().add(0, 1, 0));
+        } else if (here.distance(prison) > 4) {
+            prisonGuard.getNavigator().setTarget(prison.clone().add(0, 1, 0));
+        }
+    }
+
     /** The owner placed a block: idle Nulls guard them for the next minute. */
     public void noteBuilding(Player p) {
         if (consent.isOwner(p)) lastBuildingAt = System.currentTimeMillis();
@@ -860,6 +893,7 @@ public final class NullArmy {
     // ---------- Per-tick behaviour ----------
 
     private void tick() {
+        tickPrisonGuard();
         Player owner = findOwner();
         if (owner == null) {
             expireHunters();
