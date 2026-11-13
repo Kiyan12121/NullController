@@ -105,6 +105,50 @@ public final class Structures {
         return out;
     }
 
+    /**
+     * Prison: 13x9 walled block with a sealed roof. Three cells on each side are split off by iron
+     * bars, a central corridor runs between them with pressure plates on its floor, and corner
+     * battlements sit on top. The only gap is the south door, so prisoners have one way out.
+     */
+    public static List<Placement> prison(Location base) {
+        World w = base.getWorld();
+        int bx = base.getBlockX(), by = base.getBlockY(), bz = base.getBlockZ();
+        int halfX = 6, halfZ = 4, wallH = 4;
+        List<Placement> out = new ArrayList<>();
+        // Floor
+        for (int x = -halfX; x <= halfX; x++)
+            for (int z = -halfZ; z <= halfZ; z++)
+                out.add(at(w, bx, by, bz, x, 0, z, Material.SMOOTH_STONE));
+        // Walls, corners in crying obsidian so they can't be mined through easily
+        for (int y = 1; y <= wallH; y++)
+            for (int x = -halfX; x <= halfX; x++)
+                for (int z = -halfZ; z <= halfZ; z++) {
+                    boolean edge = Math.abs(x) == halfX || Math.abs(z) == halfZ;
+                    if (!edge) continue;
+                    boolean corner = Math.abs(x) == halfX && Math.abs(z) == halfZ;
+                    Material m = corner ? Material.CRYING_OBSIDIAN : Material.DEEPSLATE_BRICKS;
+                    // Door gap: the south wall centre, two high
+                    if (z == halfZ && x == 0 && y <= 2) continue;
+                    out.add(at(w, bx, by, bz, x, y, z, m));
+                }
+        // Roof, sealed
+        for (int x = -halfX; x <= halfX; x++)
+            for (int z = -halfZ; z <= halfZ; z++)
+                out.add(at(w, bx, by, bz, x, wallH + 1, z, Material.DEEPSLATE_BRICKS));
+        // Cell partitions in iron bars, at x = -2 and x = 2, from wall to wall, leaving the corridor open
+        for (int y = 1; y <= wallH; y++)
+            for (int z = -halfZ + 1; z <= halfZ - 1; z++) {
+                out.add(at(w, bx, by, bz, -2, y, z, Material.IRON_BARS));
+                out.add(at(w, bx, by, bz, 2, y, z, Material.IRON_BARS));
+            }
+        // Pressure plates in the corridor: a step on one is an alarm for the Nulls
+        for (int z = -halfZ + 1; z <= halfZ - 1; z += 2)
+            out.add(at(w, bx, by, bz, 0, 1, z, Material.POLISHED_BLACKSTONE_PRESSURE_PLATE));
+        // Guard post: a barrel for the Nulls' gear, inside the south-east corner
+        out.add(at(w, bx, by, bz, halfX - 1, 1, halfZ - 1, Material.BARREL));
+        return out;
+    }
+
     /** 9x7 single-storey barracks: floor, walls, a door gap, and chests for gear. Roof is a dark block. */
     public static List<Placement> barracks(Location base) {
         World w = base.getWorld();

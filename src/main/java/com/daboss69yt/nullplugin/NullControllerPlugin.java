@@ -212,7 +212,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             }
             case "build" -> {
                 if (args.length < 2) {
-                    sender.sendMessage("Usage: build <citadel|bridge|watchtower|barracks|forgegate|spire|collector|smelter|door|melonfarm>");
+                    sender.sendMessage("Usage: build <citadel|bridge|watchtower|barracks|forgegate|spire|collector|smelter|door|melonfarm|prison>");
                 } else {
                     Location site = army.offlineSite();
                     if (site == null) {

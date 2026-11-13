@@ -234,6 +234,12 @@ public final class Builders {
             case "smelter" -> new Plan("Auto-Smelter Bank", Machines.smelterBank(base));
             case "door" -> new Plan("Iron Door Gate", Machines.ironDoor(base));
             case "melonfarm" -> new Plan("Melon Farm", Machines.melonFarm(base));
+            case "prison" -> {
+                plugin.getConfig().set("prison", base.getWorld().getName() + "," + base.getBlockX() + ","
+                        + base.getBlockY() + "," + base.getBlockZ());
+                plugin.saveConfig();
+                yield new Plan("Prison", Structures.prison(base));
+            }
             case "bridge" -> {
                 Location start = base.clone().add(dir[0] * 2, 0, dir[1] * 2);
                 yield new Plan("Bridge", Structures.bridge(start, dir[0], dir[1], BRIDGE_LENGTH));
