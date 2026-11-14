@@ -1428,6 +1428,107 @@ public final class NullArmy {
     }
 
     /** Console hunt: hunters on a roster player, with no owner standing by. */
+    /** Owner and Commander practice fight. The Commander fights with his own tools; the owner is never the target of anyone else. */
+    private final Map<UUID, Boolean> duels = new HashMap<>();
+
+    /** Practice duel: the Commander comes at the owner with his attacks, pearls and rockets. Ends at three hearts or the timer. */
+    public String duel(Player owner, int minutes) {
+        if (leader == null || !leader.isSpawned()) return "The Commander is not here. Summon the army first.";
+        if (duels.containsKey(owner.getUniqueId())) return "You are already in a duel.";
+        duels.put(owner.getUniqueId(), true);
+        long until = System.currentTimeMillis() + Math.max(1, minutes) * 60_000L;
+        owner.sendMessage(ChatColor.DARK_RED + "Practice duel. Hit back. I stop at three hearts or when the timer runs out.");
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                NPC cmd = leader;
+                boolean over = !owner.isOnline() || cmd == null || !cmd.isSpawned()
+                        || System.currentTimeMillis() >= until || owner.getHealth() <= 6;
+                if (over) {
+                    duels.remove(owner.getUniqueId());
+                    if (owner.isOnline()) owner.sendMessage(ChatColor.DARK_RED + "Practice over. Well fought.");
+                    cancel();
+                    return;
+                }
+                if (!(cmd.getEntity() instanceof LivingEntity body)) return;
+                Location here = cmd.getStoredLocation();
+                Location tl = owner.getLocation();
+                if (here != null && here.getWorld() == tl.getWorld() && here.distance(tl) > 3.2) {
+                    if (!commanderTools(cmd, here, tl)) cmd.getNavigator().setTarget(owner, true);
+                } else {
+                    attack(cmd, owner);
+                }
+                if (body.getWorld() != owner.getWorld()) teleport(cmd, tl.clone().add(2, 0, 0));
+            }
+        }.runTaskTimer(plugin, 0L, 10L);
+        return "Duel started.";
+    }
+
+    /** Trial loot: the nearest trial chamber, the chests within reach emptied, and the loot brought back to the owner. */
+    private final Map<UUID, List<ItemStack>> heldLoot = new HashMap<>();
+
+    public String trialLoot(Player owner) {
+        World w = owner.getWorld();
+        org.bukkit.generator.structure.Structure trial = org.bukkit.Registry.STRUCTURE.get(org.bukkit.NamespacedKey.minecraft("trial_chambers"));
+        if (trial == null) return "This server doesn't know trial chambers.";
+        org.bukkit.generator.structure.StructureSearchResult found = w.locateNearestStructure(owner.getLocation(), trial, 100, true);
+        if (found == null) return "No trial chamber near you within reach.";
+        Location site = found.getLocation();
+        List<NPC> team = new ArrayList<>();
+        for (NPC npc : nulls) {
+            if (team.size() >= 4) break;
+            if (npc.isSpawned() && !hunters.containsKey(npc) && !arriving.contains(npc)) team.add(npc);
+        }
+        if (team.isEmpty()) return "No Nulls free to go.";
+        for (int i = 0; i < team.size(); i++) teleport(team.get(i), site.clone().add(i * 1.5, 1, 0));
+        owner.sendMessage(ChatColor.DARK_PURPLE + "Trial chamber at " + coordsOf(site) + ". " + team.size()
+                + " Nulls are going in for the chests. Back in about 30 seconds.");
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                List<ItemStack> loot = new ArrayList<>();
+                int cx = site.getBlockX() >> 4, cz = site.getBlockZ() >> 4;
+                for (int dx = -3; dx <= 3; dx++)
+                    for (int dz = -3; dz <= 3; dz++) {
+                        org.bukkit.Chunk chunk = w.getChunkAt(cx + dx, cz + dz);
+                        for (org.bukkit.block.BlockState bs : chunk.getTileEntities()) {
+                            if (!(bs instanceof org.bukkit.block.Container box) || bs.getLocation().distance(site) > 48) continue;
+                            for (ItemStack item : box.getInventory().getContents()) {
+                                if (item != null && !item.getType().isAir()) loot.add(item.clone());
+                            }
+                            box.getInventory().clear();
+                        }
+                    }
+                heldLoot.computeIfAbsent(owner.getUniqueId(), k -> new ArrayList<>()).addAll(loot);
+            }
+        }.runTaskLater(plugin, 20L);
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                for (NPC npc : team) if (npc.isSpawned()) teleport(npc, owner.getLocation().clone().add(1.5, 0, 1.5));
+                if (!owner.isOnline()) {
+                    owner.sendMessage(ChatColor.DARK_PURPLE + "The loot is waiting for you.");
+                    return;
+                }
+                deliverLoot(owner);
+            }
+        }.runTaskLater(plugin, 30L * 20L);
+        return "Going in.";
+    }
+
+    /** Hands the owner what the Nulls brought back. Anything that doesn't fit drops at their feet. */
+    public void deliverLoot(Player owner) {
+        List<ItemStack> loot = heldLoot.remove(owner.getUniqueId());
+        if (loot == null || loot.isEmpty()) {
+            owner.sendMessage(ChatColor.GRAY + "Nothing to bring back.");
+            return;
+        }
+        for (ItemStack left : owner.getInventory().addItem(loot.toArray(new ItemStack[0])).values()) {
+            owner.getWorld().dropItemNaturally(owner.getLocation(), left);
+        }
+        owner.sendMessage(ChatColor.DARK_PURPLE + "Loot in: " + loot.size() + " stacks from the trial chamber.");
+    }
+
     /** Where each fetched player was standing, so a return trip can send them back. */
     private final Map<UUID, Location> fetchedFrom = new HashMap<>();
 
