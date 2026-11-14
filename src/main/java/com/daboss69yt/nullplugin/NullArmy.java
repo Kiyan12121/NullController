@@ -665,6 +665,25 @@ public final class NullArmy {
         return "Equipped " + count + " " + rankName(rank) + " Nulls with the " + key + ".";
     }
 
+    /** Reports the nearest chest of each kind to the owner: how many item stacks it holds. */
+    public void chestReport(Player owner) {
+        owner.sendMessage(ChatColor.DARK_PURPLE + "=== Chests ===");
+        for (Chests.Kind kind : Chests.Kind.values()) {
+            org.bukkit.block.Container c = chests().nearest(kind, owner.getLocation());
+            String label = kind.name().toLowerCase();
+            if (c == null) {
+                owner.sendMessage(ChatColor.GRAY + label + ": " + ChatColor.WHITE + "none placed");
+                continue;
+            }
+            int stacks = 0;
+            for (ItemStack item : c.getInventory().getContents()) {
+                if (item != null && !item.getType().isAir()) stacks++;
+            }
+            owner.sendMessage(ChatColor.GRAY + label + ": " + ChatColor.WHITE + stacks + " stacks"
+                    + ChatColor.GRAY + " at " + coordsOf(c.getLocation()));
+        }
+    }
+
     /** A short, plain summary of the army for the Commander's chat, so he knows what is going on. */
     public String chatContext(Player owner) {
         Map<Character, Integer> counts = new HashMap<>();

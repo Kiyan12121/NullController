@@ -32,7 +32,7 @@ public final class CommanderChat implements Listener {
     private static final String ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
     private static final Set<String> ACTIONS = Set.of("none", "status", "scout", "recall", "guard", "follow", "stay", "design",
             "hunt", "portal", "weapon", "bring", "mine", "lumber", "farm", "patrol", "stashroom",
-            "ambush", "stabshot", "orbital", "mobcannon", "ranks", "forge", "explore", "totem", "pearl");
+            "ambush", "stabshot", "orbital", "mobcannon", "ranks", "forge", "explore", "totem", "pearl", "chests");
     private static final int HISTORY_TURNS = 6;
     private static final long COOLDOWN_MS = 3000;
 
@@ -44,7 +44,7 @@ public final class CommanderChat implements Listener {
             + "hunt sends the Nulls after one roster player named in \"target\"; the owner must confirm first, so say so. "
             + "portal opens a real nether portal in front of the owner. "
             + "bring opens a portal to a roster player who is in the Nether, named in \"target\". "
-            + "mine, lumber, farm, patrol, forge and explore set the army to work. ranks reports each rank. totem hands the owner a totem. pearl fires a pearl at the spot the owner is looking at. stashroom builds the stash room. "
+            + "mine, lumber, farm, patrol, forge and explore set the army to work. ranks reports each rank. chests reports the nearest chests. totem hands the owner a totem. pearl fires a pearl at the spot the owner is looking at. stashroom builds the stash room. "
             + "ambush, stabshot, orbital and mobcannon strike a roster player named in \"target\"; the owner confirms first. "
             + "weapon hands the owner one weapon named in \"key\" (blade, axe, mace, spear, bow, crossbow). "
             + "To design a build, use action design with a build object: {\"name\": \"...\", \"ops\": [ ... ]}. "
@@ -135,6 +135,28 @@ public final class CommanderChat implements Listener {
     public void setTotems(TotemManager totems) {
         this.totems = totems;
     }
+
+    /**
+     * Once a day, at the time set by daily-report-time (HH:mm, in the timezone setting), the Commander
+     * sends the owner a short report of the army. Checked once a minute.
+     */
+    public void startDailyReport() {
+        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            String at = plugin.getConfig().getString("daily-report-time", "21:00");
+            String zone = plugin.getConfig().getString("timezone", "Europe/London");
+            java.time.ZonedDateTime now = java.time.ZonedDateTime.now(java.time.ZoneId.of(zone));
+            String stamp = now.toLocalDate() + " " + String.format("%02d:%02d", now.getHour(), now.getMinute());
+            if (!now.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")).equals(at) || stamp.equals(lastReport)) return;
+            lastReport = stamp;
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                if (consent.isOwner(p)) {
+                    army.commanderSay(p, "Daily report. " + army.chatContext(p));
+                }
+            }
+        }, 20L * 30, 20L * 60);
+    }
+
+    private String lastReport = "";
 
     /** Lets the Commander answer out loud, once voice chat is running. */
     public void setVoice(VoiceListener voice) {
@@ -292,6 +314,7 @@ public final class CommanderChat implements Listener {
             }
             case "portal" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.buildPortal(owner));
             case "ranks" -> army.showRanks(owner);
+            case "chests" -> army.chestReport(owner);
             case "totem" -> {
                 if (totems == null) owner.sendMessage(ChatColor.GRAY + "Totems aren't ready yet.");
                 else totems.giveTotem(owner);

@@ -122,3 +122,6 @@ build-placements-per-tick: 300
 # The Commander's voice out loud (needs Simple Voice Chat). Orpheus voices: autumn, diana, hannah, austin, daniel, troy.
 groq-tts-model: "canopylabs/orpheus-v1-english"
 groq-tts-voice: "troy"
+
+# The Commander reports to the owner once a day at this time (HH:mm, in the timezone above).
+daily-report-time: "21:00"
