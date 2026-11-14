@@ -19,6 +19,7 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.FallingBlock;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -99,6 +100,32 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         load();
     }
 
+    /** Each plate's last anvil drop, so one plate can't be spammed. */
+    private final Map<Location, Long> trapCooldown = new HashMap<>();
+
+    /**
+     * Anvils fall from the roof onto whoever is on the plate. Each plate drops once every fifteen seconds,
+     * and some of the anvils miss, so it hurts without being certain.
+     */
+    private void dropAnvils(Player who, Block plate) {
+        long now = System.currentTimeMillis();
+        Long last = trapCooldown.get(plate.getLocation());
+        if (last != null && now - last < 15_000L) return;
+        trapCooldown.put(plate.getLocation(), now);
+        Location at = who.getLocation();
+        World w = at.getWorld();
+        if (w == null) return;
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if (Math.random() < 0.4) continue;
+                FallingBlock anvil = w.spawnFallingBlock(at.clone().add(dx, 6, dz), Material.ANVIL.createBlockData());
+                anvil.setDropItem(false);
+                anvil.setHurtEntities(true);
+            }
+        }
+        who.sendMessage(ChatColor.DARK_RED + "Something falls from the roof.");
+    }
+
     /** A step on a prison plate raises the alarm. The owner is told, and roster players who step on one are hunted. */
     @EventHandler
     public void onPrisonPlate(org.bukkit.event.player.PlayerInteractEvent e) {
@@ -108,7 +135,8 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         if (configLoc("prison") == null || !inPrison(plate.getLocation())) return;
         Player who = e.getPlayer();
         Player owner = Bukkit.getPlayerExact(ConsentManager.OWNER_NAME);
-        if (owner == null || consent.isOwner(who)) return;
+        if (owner == null || consent.isOwner(who) || consent.isTeam(who)) return;
+        dropAnvils(who, plate);
         owner.sendMessage(ChatColor.DARK_RED + "PRISON ALARM: " + who.getName() + " stepped on a plate.");
         if (consent.canTarget(who)) army.ambush(owner, who, 6, 5);
     }
