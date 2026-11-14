@@ -31,6 +31,7 @@ import org.bukkit.block.data.Orientable;
 import org.bukkit.Axis;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.EnderPearl;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Arrow;
@@ -150,6 +151,10 @@ public final class NullArmy {
     private record Wait(UUID target, long expiresAt) {}
     private final Map<NPC, Wait> waits = new HashMap<>();
     private static final double WAIT_TRIGGER = 14;
+    private static final long PEARL_COOLDOWN_MS = 15_000L;
+    private static final long DASH_COOLDOWN_MS = 6_000L;
+    private final Map<NPC, Long> lastPearl = new HashMap<>();
+    private final Map<NPC, Long> lastDash = new HashMap<>();
     /** The Null the owner is looking through, and the owner's game mode to restore. */
     private NPC viewing;
     private GameMode viewRestore = GameMode.SURVIVAL;
@@ -1279,6 +1284,35 @@ public final class NullArmy {
         return opened.size() + " portals opened behind you. The squad stepped out of all of them together and holds this ground.";
     }
 
+    /**
+     * The Commander's chase tools. Far away he throws an ender pearl at the target so it lands near them;
+     * close in, he fires a rocket dash at them. Each has its own cooldown. Returns true if one was used.
+     */
+    private boolean commanderTools(NPC npc, Location here, Location tl) {
+        if (!(npc.getEntity() instanceof LivingEntity body)) return false;
+        long now = System.currentTimeMillis();
+        double d = here.distance(tl);
+        if (d >= 12 && d <= 30 && now - lastPearl.getOrDefault(npc, 0L) > PEARL_COOLDOWN_MS) {
+            Location eye = body.getEyeLocation();
+            Vector aim = tl.toVector().subtract(eye.toVector()).normalize().multiply(1.4);
+            EnderPearl pearl = here.getWorld().spawn(eye, EnderPearl.class);
+            pearl.setShooter(body);
+            pearl.setVelocity(aim);
+            lastPearl.put(npc, now);
+            return true;
+        }
+        if (d >= 3 && d <= 10 && now - lastDash.getOrDefault(npc, 0L) > DASH_COOLDOWN_MS) {
+            Vector dash = tl.toVector().subtract(here.toVector()).setY(0).normalize().multiply(1.3);
+            dash.setY(0.25);
+            body.setVelocity(dash);
+            here.getWorld().spawnParticle(Particle.FIREWORK, here.clone().add(0, 1, 0), 40, 0.3, 0.3, 0.3, 0.1);
+            here.getWorld().playSound(here, Sound.ENTITY_FIREWORK_ROCKET_LAUNCH, 1.0f, 1.0f);
+            lastDash.put(npc, now);
+            return true;
+        }
+        return false;
+    }
+
     private void checkAlarm(Player owner) {
         long now = System.currentTimeMillis();
         if (now < nextAlarm) return;
@@ -1824,11 +1858,13 @@ public final class NullArmy {
         if (npc.getEntity() instanceof LivingEntity fighter) {
             // Fight buffs, refreshed every tick while the hunt lasts.
             char rank = ranks.getOrDefault(npc, 'D');
-            int strength = rank == 'R' ? 2 : rank == 'A' ? 1 : 0;
+            int strength = rank == 'R' ? 2 : rank == 'A' ? 2 : 0;
             fighter.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 100, strength, false, false));
-            fighter.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 100, 0, false, false));
+            fighter.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 100, rank == 'A' ? 1 : 0, false, false));
             fighter.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 100, rank == 'R' ? 1 : 0, false, false));
         }
+        // Hunters run: the Null's walk is quicker while it chases. The Commander is quickest.
+        npc.getNavigator().getDefaultParameters().speedModifier(ranks.getOrDefault(npc, 'D') == 'A' || isCommander(npc) ? 1.7f : 1.4f);
         if (!consent.canTarget(target)) {
             dropNpc(npc); // consent revoked: stop immediately
             return;
@@ -1851,6 +1887,8 @@ public final class NullArmy {
             Vector off = here.toVector().subtract(tl.toVector());
             if (off.lengthSquared() < 0.01) off = new Vector(1, 0, 0);
             npc.getNavigator().setTarget(here.clone().add(off.normalize().multiply(10)));
+        } else if ((isCommander(npc) || ranks.getOrDefault(npc, 'D') == 'A') && commanderTools(npc, here, tl)) {
+            // The Commander used a pearl or a rocket dash; the next cycle picks up the chase again.
         } else if (ranks.getOrDefault(npc, 'D') == 'A' && npc.getEntity() instanceof LivingEntity archer && archerFire(npc, archer, here, target)) {
             // Archer: shot fired from range; it steps back if the player closes in.
         } else if (here.distance(tl) > ATTACK_REACH) {
@@ -2114,7 +2152,8 @@ public final class NullArmy {
 
     private void attack(NPC npc, LivingEntity target) {
         Integer last = lastAttack.get(npc);
-        if (last != null && cycle - last < ATTACK_COOLDOWN_CYCLES) return;
+        int cooldown = isCommander(npc) || ranks.getOrDefault(npc, 'D') == 'A' ? 1 : ATTACK_COOLDOWN_CYCLES;
+        if (last != null && cycle - last < cooldown) return;
         lastAttack.put(npc, cycle);
         double damage = plugin.getConfig().getDouble("combat-damage", 8) * rankScale(npc);
         if (target instanceof Player p) {
