@@ -1181,6 +1181,7 @@ public final class NullArmy {
             lastScanCycle = cycle;
         }
 
+        tickFood();
         for (NPC npc : new ArrayList<>(nulls)) {
             if (!npc.isSpawned() || arriving.contains(npc)) continue;
             if (spies.containsKey(npc)) continue;
@@ -1571,6 +1572,24 @@ public final class NullArmy {
             case SKELETON, STRAY, WITHER_SKELETON -> 2;
             default -> 3;
         };
+    }
+
+    private final Map<NPC, Long> lastMeal = new HashMap<>();
+
+    /** A Null that is getting hungry eats cooked beef from its pack. Checked once per cycle, with a cooldown. */
+    private void tickFood() {
+        long now = System.currentTimeMillis();
+        for (NPC npc : nulls) {
+            if (!npc.isSpawned() || now - lastMeal.getOrDefault(npc, 0L) < 20_000L) continue;
+            if (!(npc.getEntity() instanceof org.bukkit.entity.HumanEntity human)) continue;
+            if (human.getFoodLevel() >= 14) continue;
+            Inventory pack = packs.get(npc);
+            if (pack == null || !pack.contains(Material.COOKED_BEEF)) continue;
+            pack.removeItem(new ItemStack(Material.COOKED_BEEF, 1));
+            human.setFoodLevel(Math.min(20, human.getFoodLevel() + 8));
+            human.setSaturation(Math.min(20f, human.getSaturation() + 6f));
+            lastMeal.put(npc, now);
+        }
     }
 
     /** Wounded Nulls get regeneration while they fall back to the group. */
