@@ -224,8 +224,12 @@ public final class CommanderChat implements Listener {
             try {
                 reply = call(key, body);
             } catch (Exception ex) {
-                plugin.getLogger().warning("Commander chat failed: " + ex);
-                reply = null;
+                reply = salvage(ex.getMessage());
+                if (reply == null) {
+                    plugin.getLogger().warning("Commander chat failed: " + ex);
+                } else {
+                    plugin.getLogger().warning("Commander answered in plain text; speaking it anyway.");
+                }
             }
             String result = reply;
             Bukkit.getScheduler().runTask(plugin, () -> {
@@ -259,6 +263,26 @@ public final class CommanderChat implements Listener {
         m.addProperty("role", role);
         m.addProperty("content", content);
         return m;
+    }
+
+    /**
+     * When JSON mode fails, Groq returns the model's plain-text answer in failed_generation.
+     * Wrap that text as a say-only reply so the Commander still speaks instead of going silent.
+     */
+    private static String salvage(String errorMessage) {
+        if (errorMessage == null || !errorMessage.contains("failed_generation")) return null;
+        try {
+            int brace = errorMessage.indexOf('{');
+            JsonObject err = JsonParser.parseString(errorMessage.substring(brace)).getAsJsonObject()
+                    .getAsJsonObject("error");
+            String said = err.get("failed_generation").getAsString().trim();
+            if (said.isEmpty()) return null;
+            JsonObject reply = new JsonObject();
+            reply.addProperty("say", said);
+            return reply.toString();
+        } catch (RuntimeException ex) {
+            return null;
+        }
     }
 
     private String call(String key, String body) throws Exception {

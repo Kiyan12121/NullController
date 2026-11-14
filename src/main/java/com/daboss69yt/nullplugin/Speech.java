@@ -55,7 +55,9 @@ public final class Speech {
                 .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
                 .build();
         HttpResponse<byte[]> resp = HTTP.send(req, HttpResponse.BodyHandlers.ofByteArray());
-        if (resp.statusCode() != 200) throw new IllegalStateException("HTTP " + resp.statusCode());
+        if (resp.statusCode() != 200) {
+            throw new IllegalStateException("HTTP " + resp.statusCode() + ": " + new String(resp.body(), java.nio.charset.StandardCharsets.UTF_8));
+        }
         return resp.body();
     }
 
