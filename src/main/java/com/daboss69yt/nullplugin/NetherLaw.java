@@ -599,6 +599,13 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
     }
 
     /** Strips the prisoner: everything including armour goes to the stash, and a wooden pickaxe is issued. */
+    private static boolean hasLoot(Player p) {
+        for (ItemStack s : p.getInventory().getContents()) {
+            if (s != null && !s.getType().isAir() && s.getType() != Material.BREAD) return true;
+        }
+        return false;
+    }
+
     private void strip(Player p, Record r) {
         Container stashChest = army.nearestChest(Chests.Kind.STASH, p.getLocation());
         for (ItemStack s : p.getInventory().getContents()) {
@@ -662,6 +669,8 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         notifyOwner(ChatColor.DARK_RED + "[Prison] " + p.getName() + " escaped. Six Nulls and the Commander are hunting.");
         army.spawnHunters(owner(), p, p.getLocation(), 6, (int) huntMinutes());
         p.setGliding(false); // no flight in the middle of the chase
+        strip(p, r); // whatever they're carrying goes to the stash
+        p.sendMessage(ChatColor.DARK_RED + "Your gear went to the stash.");
         army.beginPursuit(p, (int) huntMinutes());
         save();
     }
@@ -796,6 +805,9 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
             if (!r.prisoner || !r.stripped) continue;
             Player p = Bukkit.getPlayer(e.getKey());
             if (p == null) continue;
+
+            // Anything a prisoner picks up goes to the stash, bread aside (that's their ration).
+            if (hasLoot(p)) strip(p, r);
 
             if (now - r.lastRation >= rationMs()) {
                 r.lastRation = now;
