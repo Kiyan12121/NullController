@@ -116,11 +116,16 @@ public final class Structures {
         int bx = base.getBlockX(), by = base.getBlockY(), bz = base.getBlockZ();
         int halfX = 30, halfZ = 22, wallH = 8;
         List<Placement> out = new ArrayList<>();
-        // Floor
+
+        // Floor. The far column on each side is a trap hall: magma underfoot and cobwebs at the feet.
         for (int x = -halfX; x <= halfX; x++)
-            for (int z = -halfZ; z <= halfZ; z++)
-                out.add(at(w, bx, by, bz, x, 0, z, Material.SMOOTH_STONE));
-        // Double outer wall: obsidian on the outside ring, deepslate brick on the inside ring
+            for (int z = -halfZ; z <= halfZ; z++) {
+                boolean trapHall = Math.abs(x) >= 23;
+                out.add(at(w, bx, by, bz, x, 0, z, trapHall ? Material.MAGMA_BLOCK : Material.SMOOTH_STONE));
+                if (trapHall && (x + z) % 5 == 0) out.add(at(w, bx, by, bz, x, 1, z, Material.COBWEB));
+            }
+
+        // Double outer wall, with no door: nothing walks in. Obsidian outside, deepslate brick inside.
         for (int y = 1; y <= wallH; y++)
             for (int x = -halfX; x <= halfX; x++)
                 for (int z = -halfZ; z <= halfZ; z++) {
@@ -130,14 +135,14 @@ public final class Structures {
                     boolean corner = Math.abs(x) >= halfX - 1 && Math.abs(z) >= halfZ - 1;
                     Material m = outer ? Material.OBSIDIAN : Material.DEEPSLATE_BRICKS;
                     if (corner && outer) m = Material.CRYING_OBSIDIAN;
-                    // Door: the south wall centre, three high, leaving the outer and inner rings open
-                    if (z >= halfZ - 1 && x >= -1 && x <= 1 && y <= 3) continue;
                     out.add(at(w, bx, by, bz, x, y, z, m));
                 }
+
         // Sealed roof
         for (int x = -halfX; x <= halfX; x++)
             for (int z = -halfZ; z <= halfZ; z++)
                 out.add(at(w, bx, by, bz, x, wallH + 1, z, Material.OBSIDIAN));
+
         // Four corner watch towers, 3x3, rising four above the roof
         int[][] corners = {{-halfX, -halfZ}, {halfX - 2, -halfZ}, {-halfX, halfZ - 2}, {halfX - 2, halfZ - 2}};
         for (int[] c : corners)
@@ -147,16 +152,59 @@ public final class Structures {
                         boolean ring = dx == 0 || dx == 2 || dz == 0 || dz == 2;
                         if (ring) out.add(at(w, bx, by, bz, c[0] + dx, y, c[1] + dz, Material.CRYING_OBSIDIAN));
                     }
-        // Cell rows: iron bar partitions running north-south at x = -6, -2, 2, 6 with a gap every four blocks
-        for (int y = 1; y <= wallH; y++)
-            for (int x : new int[]{-24, -18, -12, -6, 6, 12, 18, 24})
+
+        // Cell blocks. Each side: a corridor, bars at x = +-4 with a cell door at each room, then three
+        // columns of rooms (near, middle, far) and a trap hall beyond them.
+        int[] wallZ = {-14, -7, 0, 7, 14};        // solid walls splitting each column into rooms
+        int[] doorZ = {-18, -11, -4, 4, 11, 18};  // the middle of each room, where its door is
+        int[][] wallX = {{-10, -16, -22}, {10, 16, 22}};
+        for (int side : new int[]{-1, 1}) {
+            // Bars facing the corridor, with a gap at every cell door
+            for (int y = 1; y <= wallH; y++)
                 for (int z = -halfZ + 2; z <= halfZ - 2; z++) {
-                    if (z % 4 == 0) continue; // a cell door every four blocks
-                    out.add(at(w, bx, by, bz, x, y, z, Material.IRON_BARS));
+                    if (contains(doorZ, z)) continue;
+                    out.add(at(w, bx, by, bz, side * 4, y, z, Material.IRON_BARS));
                 }
-        // Corridor pressure plates: a step on one is an alarm for the Nulls
-        for (int z = -halfZ + 2; z <= halfZ - 2; z += 2)
+            // Pressure plate in each doorway: stepping through a door is an alarm
+            for (int z : doorZ) out.add(at(w, bx, by, bz, side * 3, 1, z, Material.POLISHED_BLACKSTONE_PRESSURE_PLATE));
+            // Solid walls between the columns
+            for (int wx : wallX[side == -1 ? 0 : 1])
+                for (int y = 1; y <= wallH - 1; y++)
+                    for (int z = -halfZ + 2; z <= halfZ - 2; z++)
+                        out.add(at(w, bx, by, bz, wx, y, z, Material.DEEPSLATE_BRICKS));
+            // Walls splitting each column into rooms
+            int[][] columns = side == -1 ? new int[][]{{-9, -5}, {-15, -11}, {-21, -17}}
+                    : new int[][]{{5, 9}, {11, 15}, {17, 21}};
+            for (int[] col : columns)
+                for (int wz : wallZ)
+                    for (int y = 1; y <= wallH - 1; y++)
+                        for (int x = col[0]; x <= col[1]; x++)
+                            out.add(at(w, bx, by, bz, x, y, wz, Material.DEEPSLATE_BRICKS));
+            // Furniture: bedding, a lantern and a barrel in each room
+            for (int[] col : columns) {
+                for (int i = 0; i < doorZ.length; i++) {
+                    int z0 = doorZ[i] - 2, zMid = doorZ[i];
+                    out.add(at(w, bx, by, bz, col[0], 1, z0, Material.WHITE_WOOL));
+                    out.add(at(w, bx, by, bz, col[0] + 1, 1, z0, Material.WHITE_WOOL));
+                    out.add(at(w, bx, by, bz, (col[0] + col[1]) / 2, 1, zMid + 1, Material.LANTERN));
+                    out.add(at(w, bx, by, bz, col[1], 1, zMid + 2, Material.BARREL));
+                }
+            }
+        }
+
+        // Corridor pressure plates along the middle: a step on one is an alarm for the Nulls
+        for (int z = -halfZ + 2; z <= 12; z += 2)
             out.add(at(w, bx, by, bz, 0, 1, z, Material.POLISHED_BLACKSTONE_PRESSURE_PLATE));
+
+        // Visit frame at the south end of the corridor: an obsidian portal frame, no door.
+        // A player lights it with flint and steel, and it opens into the Nether to visit.
+        int fz = 17;
+        for (int y = 0; y <= 4; y++)
+            for (int x = -2; x <= 1; x++) {
+                boolean interior = x >= -1 && x <= 0 && y >= 1 && y <= 3;
+                if (!interior) out.add(at(w, bx, by, bz, x, y, fz, Material.OBSIDIAN));
+            }
+
         // Gear vault outside the north wall: obsidian box, barrel inside, roof hatch for the Nulls
         int vx = -1, vz = -halfZ - 5;
         for (int y = 0; y <= 4; y++)
@@ -168,6 +216,11 @@ public final class Structures {
         out.add(at(w, bx, by, bz, vx, 1, vz, Material.BARREL));
         out.add(at(w, bx, by, bz, vx, 4, vz, Material.IRON_TRAPDOOR));
         return out;
+    }
+
+    private static boolean contains(int[] values, int v) {
+        for (int x : values) if (x == v) return true;
+        return false;
     }
 
     /** 9x7 single-storey barracks: floor, walls, a door gap, and chests for gear. Roof is a dark block. */
