@@ -21,6 +21,7 @@ import org.bukkit.command.TabCompleter;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.entity.EntityToggleGlideEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
