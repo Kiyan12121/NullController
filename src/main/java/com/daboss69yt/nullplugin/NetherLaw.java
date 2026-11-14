@@ -22,6 +22,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.event.entity.EntityToggleGlideEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
@@ -460,6 +461,27 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         escape(p, r);
     }
 
+    /** A prisoner can't glide: no elytra flight, in the prison or out of it. */
+    @EventHandler
+    public void onPrisonerGlide(EntityToggleGlideEvent event) {
+        if (!(event.getEntity() instanceof Player p) || !event.isGliding()) return;
+        Record r = records.get(p.getUniqueId());
+        if (r == null || !r.prisoner || !r.stripped) return;
+        event.setCancelled(true);
+        p.sendMessage(ChatColor.DARK_RED + "No wings for prisoners.");
+    }
+
+    /** A prisoner can't boost with a firework rocket, which would be a way to fly. */
+    @EventHandler
+    public void onPrisonerRocket(PlayerInteractEvent event) {
+        if (event.getItem() == null || event.getItem().getType() != Material.FIREWORK_ROCKET) return;
+        Player p = event.getPlayer();
+        Record r = records.get(p.getUniqueId());
+        if (r == null || !r.prisoner || !r.stripped) return;
+        event.setCancelled(true);
+        p.sendMessage(ChatColor.DARK_RED + "No rockets for prisoners.");
+    }
+
     @EventHandler
     public void onWorldChange(PlayerChangedWorldEvent event) {
         Player p = event.getPlayer();
@@ -638,6 +660,7 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         warn(p, ChatColor.DARK_RED + "ESCAPE", "The whole squad is on you.");
         notifyOwner(ChatColor.DARK_RED + "[Prison] " + p.getName() + " escaped. Six Nulls and the Commander are hunting.");
         army.spawnHunters(owner(), p, p.getLocation(), 6, (int) huntMinutes());
+        p.setGliding(false); // no flight in the middle of the chase
         army.beginPursuit(p, (int) huntMinutes());
         save();
     }
