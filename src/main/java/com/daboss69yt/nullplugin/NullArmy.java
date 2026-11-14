@@ -705,6 +705,7 @@ public final class NullArmy {
             NPC npc = createNull(spot, gearForMode(Mode.HUNT), false);
             if (!npc.isSpawned()) npc.spawn(spot);
             waitFor(npc, target, expires);
+            ambushers.add(npc);
         }
         if (owner != null) owner.sendMessage(ChatColor.DARK_RED + count + " Nulls are waiting by the portal for "
                 + target.getName() + ".");
@@ -1256,6 +1257,8 @@ public final class NullArmy {
 
     /** When each target was last shocked by an ambush, so one ambush doesn't keep re-shocking. */
     private final Map<UUID, Long> shocked = new HashMap<>();
+    /** Nulls placed by an ambush. Only these shock the target on reveal; escape hunters do not. */
+    private final Set<NPC> ambushers = new HashSet<>();
 
     private void tickWaits() {
         long now = System.currentTimeMillis();
@@ -1278,7 +1281,7 @@ public final class NullArmy {
                 waits.remove(npc);
                 reveal(npc);
                 // The first Null out shocks the target and webs their feet, so the squad lands its first hits on a stuck target.
-                if (!shocked.containsKey(wait.target()) || now - shocked.get(wait.target()) > 15_000L) {
+                if (ambushers.remove(npc) && (!shocked.containsKey(wait.target()) || now - shocked.get(wait.target()) > 15_000L)) {
                     shocked.put(wait.target(), now);
                     target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 60, 2, false, true));
                     target.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 40, 0, false, true));
