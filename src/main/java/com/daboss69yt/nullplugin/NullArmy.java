@@ -1428,25 +1428,147 @@ public final class NullArmy {
     }
 
     /** Console hunt: hunters on a roster player, with no owner standing by. */
-    /** Brings a roster player to the owner: the Nulls close in, the target is held in slowness and blindness, then taken to the owner. */
+    /** Where each fetched player was standing, so a return trip can send them back. */
+    private final Map<UUID, Location> fetchedFrom = new HashMap<>();
+
+    /**
+     * Fetch: a real portal opens three blocks from the target. Two Nulls step out at two seconds, one leaves a sign
+     * beside the target, and at six seconds the Nulls take the target through the portal to the owner.
+     */
     public void fetchPlayer(Player owner, Player target) {
-        target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 80, 3, false, true));
-        target.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 80, 0, false, true));
-        target.sendMessage(ChatColor.DARK_PURPLE + "The Nulls are bringing you to " + owner.getName() + ".");
-        sendTo(owner.getLocation());
-        owner.sendMessage(ChatColor.DARK_PURPLE + "Nulls are bringing " + target.getName() + " to you.");
+        fetchedFrom.put(target.getUniqueId(), target.getLocation().clone());
+        String[] sign = {owner.getName() + " would like", "you to come see", "him.", "- The Nulls"};
+        escort(owner, target, target.getLocation(), () -> owner.getLocation().clone(), sign,
+                "The Nulls are bringing you to " + owner.getName() + ".", "Bringing " + target.getName() + " to you.");
+    }
+
+    /** Return: the same escort, but the portal drops the target back where they were before the fetch. */
+    public void returnPlayer(Player owner, Player target) {
+        Location origin = fetchedFrom.remove(target.getUniqueId());
+        if (origin == null || origin.getWorld() == null) {
+            owner.sendMessage(ChatColor.GRAY + "I don't know where " + target.getName() + " came from. Use a fetch first.");
+            return;
+        }
+        String[] sign = {"Off you go,", "back to where", "you came from.", "- The Nulls"};
+        escort(owner, target, target.getLocation(), () -> origin.clone(), sign,
+                "The Nulls are taking you back.", "Sending " + target.getName() + " back.");
+    }
+
+    /** The shared escort: portal, two Nulls, sign, then the target goes through. Stops if consent is revoked. */
+    private void escort(Player owner, Player target, Location from, java.util.function.Supplier<Location> destination,
+                        String[] signLines, String targetMessage, String ownerMessage) {
+        World w = from.getWorld();
+        if (w == null || w.getEnvironment() == World.Environment.THE_END) {
+            owner.sendMessage(ChatColor.GRAY + "Nothing to open a portal to here.");
+            return;
+        }
+        int dx = 3; // the portal stands three blocks off, so the target isn't inside it when the Nulls arrive
+        int bx = from.getBlockX() + dx, by = from.getBlockY(), bz = from.getBlockZ();
+        List<Block> built = new ArrayList<>();
+        for (int a = -2; a <= 1; a++)
+            for (int y = by - 1; y <= by + 3; y++) {
+                boolean interior = a >= -1 && a <= 0 && y >= by && y <= by + 2;
+                Block b = w.getBlockAt(bx, y, bz + a);
+                if (interior) {
+                    Orientable axis = (Orientable) Material.NETHER_PORTAL.createBlockData();
+                    axis.setAxis(Axis.Z);
+                    b.setBlockData(axis, false);
+                } else {
+                    b.setType(Material.OBSIDIAN, false);
+                }
+                built.add(b);
+            }
+        Location portal = new Location(w, bx + 0.5, by, bz + 0.5);
+        w.playSound(portal, org.bukkit.Sound.BLOCK_PORTAL_TRIGGER, 1f, 1f);
+        w.spawnParticle(Particle.PORTAL, portal, 120, 0.8, 1.2, 0.8, 0.3);
+        target.sendMessage(ChatColor.DARK_PURPLE + targetMessage);
+        owner.sendMessage(ChatColor.DARK_PURPLE + ownerMessage);
+        List<NPC> escorts = new ArrayList<>();
         new BukkitRunnable() {
             @Override
             public void run() {
-                if (!target.isOnline() || !owner.isOnline()) return;
-                if (!consent.canTarget(target)) return; // consent revoked mid-escort: let them go
-                Location dest = owner.getLocation().clone().add(1.5, 0, 1.5);
+                if (!target.isOnline() || !consent.canTarget(target)) return;
+                for (int i = 0; i < 2; i++) {
+                    Location exit = portal.clone().add(i == 0 ? -1.2 : 1.2, 0, 0);
+                    NPC npc = createNull(exit, gearForMode(Mode.HUNT), false);
+                    escorts.add(npc);
+                    npc.getNavigator().setTarget(target, false);
+                }
+            }
+        }.runTaskLater(plugin, 40L);
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (!target.isOnline() || !consent.canTarget(target)) {
+                    releaseEscorts(escorts);
+                    return;
+                }
+                placeSign(target, signLines);
+            }
+        }.runTaskLater(plugin, 70L);
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                releaseEscorts(escorts);
+                if (!target.isOnline() || !consent.canTarget(target)) return;
+                Location dest = destination.get();
+                if (dest == null || dest.getWorld() == null) return;
                 target.getWorld().spawnParticle(Particle.PORTAL, target.getLocation(), 60, 0.4, 0.8, 0.4, 0.2);
                 target.teleport(dest);
                 dest.getWorld().spawnParticle(Particle.PORTAL, dest, 60, 0.4, 0.8, 0.4, 0.2);
-                owner.sendMessage(ChatColor.DARK_PURPLE + target.getName() + " is with you.");
+                target.sendMessage(ChatColor.DARK_PURPLE + "You are here.");
             }
-        }.runTaskLater(plugin, 60L);
+        }.runTaskLater(plugin, 120L);
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                for (Block b : built) {
+                    if (b.getType() == Material.NETHER_PORTAL || b.getType() == Material.OBSIDIAN) b.setType(Material.AIR, false);
+                }
+            }
+        }.runTaskLater(plugin, 20L * 15);
+    }
+
+    /** Puts a sign on a free spot beside the target: air at feet and head, solid ground under. Two minutes, then it's gone. */
+    private void placeSign(Player target, String[] lines) {
+        Location at = target.getLocation();
+        World w = at.getWorld();
+        if (w == null) return;
+        int[][] around = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        for (int[] d : around) {
+            Block feet = w.getBlockAt(at.getBlockX() + d[0], at.getBlockY(), at.getBlockZ() + d[1]);
+            Block head = feet.getRelative(0, 1, 0);
+            Block floor = feet.getRelative(0, -1, 0);
+            if (!feet.getType().isAir() || !head.getType().isAir() || !floor.getType().isSolid()) continue;
+            feet.setType(Material.OAK_SIGN, false);
+            if (feet.getState() instanceof org.bukkit.block.Sign sign) {
+                for (int i = 0; i < lines.length && i < 4; i++) {
+                    sign.getSide(org.bukkit.block.sign.Side.FRONT).line(i, net.kyori.adventure.text.Component.text(lines[i]));
+                }
+                sign.update(true, false);
+            }
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    if (feet.getType() == Material.OAK_SIGN) feet.setType(Material.AIR, false);
+                }
+            }.runTaskLater(plugin, 20L * 120);
+            return;
+        }
+    }
+
+    /** Takes the escorts away quietly: no gear dropped, they were only ever messengers. */
+    private void releaseEscorts(List<NPC> escorts) {
+        for (NPC npc : escorts) {
+            if (npc == null) continue;
+            nulls.remove(npc);
+            packs.remove(npc);
+            ranks.remove(npc);
+            hunters.remove(npc);
+            npc.destroy();
+        }
+        recomputeRanks();
+        escorts.clear();
     }
 
     public String huntOffline(Player target, int count, int minutes) {
