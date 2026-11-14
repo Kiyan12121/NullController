@@ -344,7 +344,7 @@ public final class CommanderChat implements Listener {
             return;
         }
         long now = System.currentTimeMillis();
-        if (busy || now - lastAsk < COOLDOWN_MS) {
+        if (busy) {
             owner.sendMessage(ChatColor.GRAY + "Give him a moment.");
             return;
         }

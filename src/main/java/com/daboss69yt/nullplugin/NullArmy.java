@@ -342,12 +342,7 @@ public final class NullArmy {
     // ---------- Commands ----------
 
     public void summon(Player owner, int requested) {
-        long now = System.currentTimeMillis();
-        if (now < cooldownUntil) {
-            long minutesLeft = (cooldownUntil - now) / 60_000L + 1;
-            owner.sendMessage(ChatColor.RED + "The army is regrouping. Available again in about " + minutesLeft + " min.");
-            return;
-        }
+        autoSuppressed = false;
         int toSpawn = Math.min(requested, armyCap() - nulls.size());
         if (toSpawn <= 0) {
             owner.sendMessage(ChatColor.RED + "Army cap reached (" + armyCap() + "). Raise max-nulls in config.yml to add more.");
@@ -401,7 +396,7 @@ public final class NullArmy {
      * or -1 while the army is regrouping.
      */
     public int summonOffline(int requested) {
-        if (System.currentTimeMillis() < cooldownUntil) return -1;
+        autoSuppressed = false;
         int toSpawn = Math.min(requested, armyCap() - nulls.size());
         if (toSpawn <= 0) return 0;
         Location anchor = offlineAnchor();
@@ -430,6 +425,7 @@ public final class NullArmy {
 
     public void dismissAll(Player owner) {
         int count = nulls.size();
+        autoSuppressed = true; // dismissed means dismissed: no self-summoning until you summon again
         removeAll();
         owner.sendMessage(ChatColor.DARK_PURPLE + "Dismissed " + count + " Nulls.");
     }
@@ -1079,16 +1075,31 @@ public final class NullArmy {
     }
 
     /** Alarm: when hostile mobs crowd the owner, the army rallies with doubled reach for 30 seconds. */
-    private long emergencyUntil;
+    /** Set by dismiss, cleared by summon: stops the army summoning itself back. */
+    private boolean autoSuppressed;
+    /** True while the owner is low; the emergency fires once per low spell, and re-arms after they recover. */
+    private boolean emergencyLatched;
+
+    /** The army keeps itself at a floor while the owner is online, so the owner never has to summon by hand. */
+    private void autoReinforce(Player owner) {
+        if (autoSuppressed) return;
+        int floor = Math.min(armyCap(), plugin.getConfig().getInt("auto-army-floor", 10));
+        for (int added = 0; added < 2 && nulls.size() < floor; added++) {
+            createNull(formationPoint(owner, nulls.size()), gearForMode(mode), true);
+        }
+    }
 
     /**
      * Owner low on health (under 8): restock. One portal opens beside them and a Null steps out, and healing
-     * and food go into their hands. If four or more mobs are on them, a ring of four portals opens instead.
+     * and food go into their hands. If four or more mobs are on them, a ring of portals opens instead.
      */
     private void checkEmergency(Player owner) {
-        long now = System.currentTimeMillis();
-        if (owner.getHealth() >= 8 || now < emergencyUntil) return;
-        emergencyUntil = now + 90_000L;
+        if (owner.getHealth() >= 8) {
+            emergencyLatched = false;
+            return;
+        }
+        if (emergencyLatched) return;
+        emergencyLatched = true;
 
         int foes = 0;
         for (Entity e : owner.getNearbyEntities(10, 6, 10)) {
@@ -1112,16 +1123,22 @@ public final class NullArmy {
         }
     }
 
-    /** Four nether portals in a square around the owner, one per side, with a Null stepping out of each. */
+    /** A ring of twelve nether portals around the owner, eight blocks out, with a Null stepping out of each. */
     private void ringPortals(Player owner) {
         Location c = owner.getLocation();
-        Location[] spots = {c.clone().add(3, 0, 0), c.clone().add(-3, 0, 0), c.clone().add(0, 0, 3), c.clone().add(0, 0, -3)};
-        boolean[] alongZ = {true, true, false, false};
-        for (int i = 0; i < spots.length; i++) {
-            String made = buildPortalAt(owner, spots[i], alongZ[i]);
+        int count = 12;
+        double radius = 8;
+        for (int i = 0; i < count; i++) {
+            double a = 2 * Math.PI * i / count;
+            double dx = Math.cos(a) * radius;
+            double dz = Math.sin(a) * radius;
+            Location spot = c.clone().add(dx, 0, dz);
+            // A portal on the east or west side runs north-south, and the reverse on the north and south sides.
+            boolean alongZ = Math.abs(dx) >= Math.abs(dz);
+            String made = buildPortalAt(owner, spot, alongZ);
             if (!made.contains("open at")) continue;
             if (nulls.size() >= armyCap()) break;
-            createNull(spots[i].clone().add(0.5, 0, 0.5), gearForMode(mode), false);
+            createNull(spot.clone().add(0.5, 0, 0.5), gearForMode(mode), false);
         }
     }
 
@@ -1248,6 +1265,7 @@ public final class NullArmy {
         expireHunters();
         checkAlarm(owner);
         checkEmergency(owner);
+        autoReinforce(owner);
         tickSpies();
         checkPinned();
 
