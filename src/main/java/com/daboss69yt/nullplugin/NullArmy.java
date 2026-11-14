@@ -1480,40 +1480,173 @@ public final class NullArmy {
             if (npc.isSpawned() && !hunters.containsKey(npc) && !arriving.contains(npc)) team.add(npc);
         }
         if (team.isEmpty()) return "No Nulls free to go.";
-        for (int i = 0; i < team.size(); i++) teleport(team.get(i), site.clone().add(i * 1.5, 1, 0));
-        owner.sendMessage(ChatColor.DARK_PURPLE + "Trial chamber at " + coordsOf(site) + ". " + team.size()
-                + " Nulls are going in for the chests. Back in about 30 seconds.");
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                List<ItemStack> loot = new ArrayList<>();
-                int cx = site.getBlockX() >> 4, cz = site.getBlockZ() >> 4;
-                for (int dx = -3; dx <= 3; dx++)
-                    for (int dz = -3; dz <= 3; dz++) {
-                        org.bukkit.Chunk chunk = w.getChunkAt(cx + dx, cz + dz);
-                        for (org.bukkit.block.BlockState bs : chunk.getTileEntities()) {
-                            if (!(bs instanceof org.bukkit.block.Container box) || bs.getLocation().distance(site) > 48) continue;
-                            for (ItemStack item : box.getInventory().getContents()) {
-                                if (item != null && !item.getType().isAir()) loot.add(item.clone());
-                            }
-                            box.getInventory().clear();
+        List<org.bukkit.block.Block> spawners = new ArrayList<>();
+        List<org.bukkit.block.Block> vaults = new ArrayList<>();
+        List<ItemStack> chestLoot = new ArrayList<>();
+        int cx = site.getBlockX() >> 4, cz = site.getBlockZ() >> 4;
+        for (int dx = -3; dx <= 3; dx++)
+            for (int dz = -3; dz <= 3; dz++) {
+                org.bukkit.Chunk chunk = w.getChunkAt(cx + dx, cz + dz);
+                for (org.bukkit.block.BlockState bs : chunk.getTileEntities()) {
+                    if (bs.getLocation().distance(site) > 48) continue;
+                    Material t = bs.getType();
+                    if (t == Material.TRIAL_SPAWNER || t == Material.OMINOUS_TRIAL_SPAWNER) {
+                        spawners.add(bs.getBlock());
+                    } else if (t == Material.VAULT) {
+                        vaults.add(bs.getBlock());
+                    } else if (bs instanceof org.bukkit.block.Container box) {
+                        for (ItemStack item : box.getInventory().getContents()) {
+                            if (item != null && !item.getType().isAir()) chestLoot.add(item.clone());
                         }
+                        box.getInventory().clear();
                     }
-                heldLoot.computeIfAbsent(owner.getUniqueId(), k -> new ArrayList<>()).addAll(loot);
-            }
-        }.runTaskLater(plugin, 20L);
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                for (NPC npc : team) if (npc.isSpawned()) teleport(npc, owner.getLocation().clone().add(1.5, 0, 1.5));
-                if (!owner.isOnline()) {
-                    owner.sendMessage(ChatColor.DARK_PURPLE + "The loot is waiting for you.");
-                    return;
                 }
-                deliverLoot(owner);
             }
-        }.runTaskLater(plugin, 30L * 20L);
+        heldLoot.computeIfAbsent(owner.getUniqueId(), k -> new ArrayList<>()).addAll(chestLoot);
+        for (int i = 0; i < team.size(); i++) teleport(team.get(i), site.clone().add(i * 1.5, 1, 0));
+        owner.sendMessage(ChatColor.DARK_PURPLE + "Trial chamber at " + coordsOf(site) + ". "
+                + spawners.size() + " spawner" + (spawners.size() == 1 ? "" : "s") + ", "
+                + vaults.size() + " vault" + (vaults.size() == 1 ? "" : "s") + ". The Nulls are going in.");
+        new TrialRun(owner, team, w, site, spawners, vaults).runTaskTimer(plugin, 20L, 10L);
         return "Going in.";
+    }
+
+    /** One trial chamber run: fight the spawner waves, pick up the keys they drop, open the vaults, then come home. */
+    private final class TrialRun extends BukkitRunnable {
+        private static final int FIGHT_TICKS = 1200;
+        private static final int VAULT_TICKS = 400;
+        private final Player owner;
+        private final List<NPC> team;
+        private final World w;
+        private final Location site;
+        private final List<org.bukkit.block.Block> spawners;
+        private final List<org.bukkit.block.Block> vaults;
+        private final List<ItemStack> keys = new ArrayList<>();
+        private int phase; // 0 fight, 1 vaults, 2 home
+        private int phaseTicks;
+        private int quietTicks;
+        private int vaultIdx;
+        private int opened;
+
+        TrialRun(Player owner, List<NPC> team, World w, Location site, List<org.bukkit.block.Block> spawners, List<org.bukkit.block.Block> vaults) {
+            this.owner = owner;
+            this.team = team;
+            this.w = w;
+            this.site = site;
+            this.spawners = spawners;
+            this.vaults = vaults;
+        }
+
+        @Override
+        public void run() {
+            if (!owner.isOnline()) phase = 2;
+            phaseTicks += 10;
+            if (phase == 0) fight();
+            if (phase == 1) vaults();
+            if (phase == 2) {
+                home();
+                cancel();
+            }
+        }
+
+        private void fight() {
+            boolean hostileNear = !w.getNearbyEntities(site, 24, 24, 24, e -> e instanceof Monster).isEmpty();
+            quietTicks = hostileNear ? 0 : quietTicks + 10;
+            if (phaseTicks >= FIGHT_TICKS || (phaseTicks > 100 && quietTicks >= 200)) {
+                collectKeys();
+                phase = 1;
+                phaseTicks = 0;
+                return;
+            }
+            for (NPC npc : team) {
+                if (!npc.isSpawned()) continue;
+                Location here = npc.getStoredLocation();
+                if (here == null) continue;
+                Monster m = nearestMonster(here);
+                if (m != null) {
+                    npc.getNavigator().setTarget(m, true);
+                    if (here.distance(m.getLocation()) < 3) attack(npc, m);
+                } else if (!spawners.isEmpty()) {
+                    org.bukkit.block.Block spawner = spawners.get(0);
+                    npc.getNavigator().setTarget(spawner.getLocation().add(0.5, 1, 0.5));
+                }
+            }
+        }
+
+        private Monster nearestMonster(Location at) {
+            Monster best = null;
+            double bestDist = 16 * 16;
+            for (org.bukkit.entity.Entity e : w.getNearbyEntities(at, 16, 16, 16, e -> e instanceof Monster)) {
+                double d = e.getLocation().distanceSquared(at);
+                if (d < bestDist) {
+                    bestDist = d;
+                    best = (Monster) e;
+                }
+            }
+            return best;
+        }
+
+        private void collectKeys() {
+            for (org.bukkit.entity.Entity e : w.getNearbyEntities(site, 24, 24, 24, e -> e instanceof org.bukkit.entity.Item)) {
+                org.bukkit.entity.Item item = (org.bukkit.entity.Item) e;
+                ItemStack stack = item.getItemStack();
+                if (stack.getType() == Material.TRIAL_KEY || stack.getType() == Material.OMINOUS_TRIAL_KEY) {
+                    keys.add(stack.clone());
+                    item.remove();
+                }
+            }
+            owner.sendMessage(ChatColor.DARK_PURPLE + "Fight's over. " + keys.size() + " key" + (keys.size() == 1 ? "" : "s") + " picked up.");
+        }
+
+        private void vaults() {
+            if (vaultIdx >= vaults.size() || keys.isEmpty() || team.isEmpty()) {
+                phase = 2;
+                return;
+            }
+            if (phaseTicks > VAULT_TICKS) {
+                vaultIdx++;
+                phaseTicks = 0;
+                return;
+            }
+            NPC opener = team.get(0);
+            if (!opener.isSpawned()) {
+                phase = 2;
+                return;
+            }
+            Location v = vaults.get(vaultIdx).getLocation().add(0.5, 0, 0.5);
+            opener.getNavigator().setTarget(v);
+            Location here = opener.getStoredLocation();
+            if (here != null && here.getWorld() == w && here.distance(v) <= 3) {
+                keys.remove(0);
+                openVault(v);
+                vaultIdx++;
+                opened++;
+                phaseTicks = 0;
+            }
+        }
+
+        /** Rolls the trial chamber reward table at the vault. The vault block itself is left as it is. */
+        private void openVault(Location v) {
+            org.bukkit.loot.LootTable table = org.bukkit.Registry.LOOT_TABLES.get(org.bukkit.NamespacedKey.minecraft("chests/trial_chambers/reward"));
+            if (table != null) {
+                java.util.Collection<ItemStack> rewards = table.populateLoot(java.util.concurrent.ThreadLocalRandom.current(),
+                        new org.bukkit.loot.LootContext.Builder(v).build());
+                heldLoot.computeIfAbsent(owner.getUniqueId(), k -> new ArrayList<>()).addAll(rewards);
+            }
+            w.spawnParticle(Particle.TOTEM_OF_UNDYING, v, 40, 0.6, 0.8, 0.6, 0.1);
+            w.playSound(v, Sound.BLOCK_VAULT_OPEN_SHUTTER, 1f, 1f);
+        }
+
+        private void home() {
+            if (owner.isOnline()) {
+                for (NPC npc : team) if (npc.isSpawned()) teleport(npc, owner.getLocation().clone().add(1.5, 0, 1.5));
+                owner.sendMessage(ChatColor.DARK_PURPLE + "Back from the trial chamber. " + opened + " vault"
+                        + (opened == 1 ? "" : "s") + " opened, " + keys.size() + " key" + (keys.size() == 1 ? "" : "s") + " left unused.");
+                deliverLoot(owner);
+            } else {
+                for (NPC npc : team) if (npc.isSpawned()) teleport(npc, site);
+            }
+        }
     }
 
     /** Hands the owner what the Nulls brought back. Anything that doesn't fit drops at their feet. */
