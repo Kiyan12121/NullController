@@ -2384,7 +2384,7 @@ public final class NullArmy {
     public void spy(Player owner, Player target) {
         Location loc = cornerSpot(target.getLocation());
         NPC npc = createNull(loc, gearForMode(Mode.FOLLOW), false);
-        if (npc.getEntity() instanceof LivingEntity living) living.setInvisible(true);
+        hide(npc);
         spies.put(npc, new Spy(target.getUniqueId(), new long[]{0L}));
         owner.sendMessage(ChatColor.DARK_PURPLE + "Spy on " + target.getName() + " set. Reports every minute.");
     }
@@ -2483,6 +2483,14 @@ public final class NullArmy {
     }
 
     /** Hunters appear around a corner and chase. No portal, no flash, no teleport onto the player. */
+    /** Makes a spy invisible for as long as it lasts: the body and name tag stay hidden. */
+    private static void hide(NPC npc) {
+        if (npc.getEntity() instanceof LivingEntity living) {
+            living.setInvisible(true);
+            living.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, Integer.MAX_VALUE, 0, false, false));
+        }
+    }
+
     /** A ground spot the given distance behind the target, out of the way of where they are looking. */
     private Location behindSpot(Player target, double dist) {
         Location tl = target.getLocation();
@@ -2996,7 +3004,7 @@ public final class NullArmy {
     public void markRejoin(UUID id, Location where, String name) {
         releaseRejoin(id);
         NPC npc = createNull(where, gearForMode(Mode.HUNT), false);
-        if (npc.getEntity() instanceof LivingEntity living) living.setInvisible(true);
+        hide(npc);
         spies.put(npc, new Spy(id, new long[]{0L}));
         lurkers.put(npc, id);
         plugin.alert("Rejoin watch: a Null waits, hidden, where " + name + " will come back.");
@@ -3143,7 +3151,7 @@ public final class NullArmy {
     public boolean spyOffline(Player target) {
         if (!consent.canTarget(target)) return false;
         NPC npc = createNull(cornerSpot(target.getLocation()), gearForMode(Mode.FOLLOW), false);
-        if (npc.getEntity() instanceof LivingEntity living) living.setInvisible(true);
+        hide(npc);
         spies.put(npc, new Spy(target.getUniqueId(), new long[]{0L}));
         return true;
     }
