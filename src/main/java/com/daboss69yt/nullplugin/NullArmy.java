@@ -1079,6 +1079,52 @@ public final class NullArmy {
     }
 
     /** Alarm: when hostile mobs crowd the owner, the army rallies with doubled reach for 30 seconds. */
+    private long emergencyUntil;
+
+    /**
+     * Owner low on health (under 8): restock. One portal opens beside them and a Null steps out, and healing
+     * and food go into their hands. If four or more mobs are on them, a ring of four portals opens instead.
+     */
+    private void checkEmergency(Player owner) {
+        long now = System.currentTimeMillis();
+        if (owner.getHealth() >= 8 || now < emergencyUntil) return;
+        emergencyUntil = now + 90_000L;
+
+        int foes = 0;
+        for (Entity e : owner.getNearbyEntities(10, 6, 10)) {
+            if (e instanceof Monster) foes++;
+        }
+        owner.addPotionEffect(new PotionEffect(PotionEffectType.INSTANT_HEALTH, 1, 1, false, true));
+        owner.addPotionEffect(new PotionEffect(PotionEffectType.ABSORPTION, 200, 2, false, true));
+        Map<Integer, ItemStack> left = owner.getInventory().addItem(new ItemStack(Material.GOLDEN_APPLE, 4), new ItemStack(Material.COOKED_BEEF, 16));
+        for (ItemStack rest : left.values()) owner.getWorld().dropItemNaturally(owner.getLocation(), rest);
+
+        if (foes >= 4) {
+            owner.sendMessage(ChatColor.RED + "Low and surrounded. Portals are opening around you.");
+            ringPortals(owner);
+        } else {
+            owner.sendMessage(ChatColor.DARK_PURPLE + "Low. Restock portal opening beside you.");
+            Location spot = owner.getLocation().add(owner.getLocation().getDirection().setY(0).normalize().multiply(3));
+            String made = buildPortalAt(owner, spot);
+            if (made.contains("open at") && nulls.size() < armyCap()) {
+                createNull(spot.clone().add(0.5, 0, 0.5), gearForMode(mode), false);
+            }
+        }
+    }
+
+    /** Four nether portals in a square around the owner, one per side, with a Null stepping out of each. */
+    private void ringPortals(Player owner) {
+        Location c = owner.getLocation();
+        Location[] spots = {c.clone().add(3, 0, 0), c.clone().add(-3, 0, 0), c.clone().add(0, 0, 3), c.clone().add(0, 0, -3)};
+        boolean[] alongZ = {true, true, false, false};
+        for (int i = 0; i < spots.length; i++) {
+            String made = buildPortalAt(owner, spots[i], alongZ[i]);
+            if (!made.contains("open at")) continue;
+            if (nulls.size() >= armyCap()) break;
+            createNull(spots[i].clone().add(0.5, 0, 0.5), gearForMode(mode), false);
+        }
+    }
+
     private void checkAlarm(Player owner) {
         long now = System.currentTimeMillis();
         if (now < nextAlarm) return;
@@ -1201,6 +1247,7 @@ public final class NullArmy {
         cycle++;
         expireHunters();
         checkAlarm(owner);
+        checkEmergency(owner);
         tickSpies();
         checkPinned();
 

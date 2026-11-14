@@ -48,7 +48,8 @@ public final class CommanderChat implements Listener {
             + "the NULL, and lighthearted, with a dry humour. You are ruthless toward outsiders but warm to your team. "
             + "Your owner gives the orders. Keep lines short, under 40 words. Never claim you did something you did not do. "
             + "You may only request these actions: none, status, scout, recall, guard, follow, stay, design, hunt, portal, home, buff, give, weapon. "
-            + "buff potion-buffs the owner (for 'pot me up' or 'buff me'). give hands the owner items: set \"key\" to a Minecraft item name such as golden_apple, and \"amount\" up to 64. "
+            + "general gives orders to the ranks under you: set \"key\" to I for generals or D for soldiers, and \"target\" to guard, follow, stay, recall, dismiss or clear. Name the order in your reply too. "
+            + "buff potion-buffs the owner (for 'pot me up' or 'buff me').give hands the owner items: set \"key\" to a Minecraft item name such as golden_apple, and \"amount\" up to 64. "
             + "home opens a portal in front of the owner that takes them to the Nether base, for requests like 'get me home' or 'take me to base'. "
             + "hunt sends the Nulls after one roster player named in \"target\"; the owner must confirm first, so say so. "
             + "portal opens a real nether portal in front of the owner. "
@@ -473,6 +474,15 @@ public final class CommanderChat implements Listener {
             case "home" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.buildPortal(owner) + " " + armBase(owner));
             case "buff" -> buff(owner);
             case "give" -> give(owner, out);
+            case "general" -> {
+                String rk = out == null || !out.has("key") ? "" : out.get("key").getAsString().trim().toUpperCase();
+                String order = out == null || !out.has("target") ? "" : out.get("target").getAsString().trim().toLowerCase();
+                if (rk.isEmpty() || order.isEmpty()) {
+                    owner.sendMessage(ChatColor.GRAY + "Which rank, and what order?");
+                } else {
+                    owner.sendMessage(ChatColor.DARK_PURPLE + army.rankOrder(owner, rk.charAt(0), order));
+                }
+            }
             case "ranks" -> army.showRanks(owner);
             case "chests" -> army.chestReport(owner);
             case "totem" -> {
