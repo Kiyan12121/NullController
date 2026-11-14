@@ -21,6 +21,8 @@ import org.bukkit.event.player.PlayerFishEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.potion.PotionEffect;
+import org.bukkit.entity.LivingEntity;
+import net.citizensnpcs.api.npc.NPC;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
@@ -65,6 +67,10 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
 
     static final String MARK = ChatColor.DARK_GREEN + "Mark Rod";
     static final String FLARE = ChatColor.WHITE + "Flare Rod";
+    static final String BLINK = ChatColor.LIGHT_PURPLE + "Blink Rod";
+    static final String HEAL = ChatColor.GREEN + "Heal Rod";
+    static final String FROST = ChatColor.AQUA + "Frost Rod";
+    static final String RECALL = ChatColor.GOLD + "Recall Rod";
 
     static final String MOB_PREFIX = ChatColor.GREEN + "Mob Rod: ";
     private static final double TNT_SAFE_RADIUS = 12;
@@ -72,7 +78,8 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
             Map.entry("ambush", AMBUSH), Map.entry("stasis", STASIS), Map.entry("tnt", TNT), Map.entry("orbitalnuke", ORBITAL_NUKE), Map.entry("stabshot", STAB_SHOT),
             Map.entry("summon", SUMMON), Map.entry("lightning", LIGHTNING), Map.entry("launch", LAUNCH),
             Map.entry("wither", WITHER), Map.entry("gravity", GRAVITY), Map.entry("orbital", ORBITAL),
-            Map.entry("nuke", NUKE), Map.entry("mark", MARK), Map.entry("flare", FLARE));
+            Map.entry("nuke", NUKE), Map.entry("mark", MARK), Map.entry("flare", FLARE),
+            Map.entry("blink", BLINK), Map.entry("heal", HEAL), Map.entry("frost", FROST), Map.entry("recall", RECALL));
     private static final Map<String, String> KIND_BY_NAME = new HashMap<>();
     static {
         NAME_BY_KIND.forEach((k, v) -> KIND_BY_NAME.put(v, k));
@@ -156,6 +163,10 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
             case "nuke" -> "Land the hook: three big explosions on the spot.";
             case "mark" -> "Land near a roster player: the Nulls hit them much harder for a while.";
             case "flare" -> "Land the hook: roster players within 8 blocks glow for 30 seconds."; 
+            case "blink" -> "Land the hook: you step to that spot, facing the way you were.";
+            case "heal" -> "Land the hook: Nulls within 16 blocks of it regenerate.";
+            case "frost" -> "Land near a roster player: they are slowed and mining-fatigued.";
+            case "recall" -> "Land the hook: the whole army walks to that spot.";
             default -> "";
         };
     }
@@ -215,6 +226,13 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
             case "orbital" -> orbital(p, hook);
             case "mark" -> mark(p, hook);
             case "flare" -> flare(p, hook);
+            case "blink" -> blink(p, hook);
+            case "heal" -> healSquad(p, hook);
+            case "frost" -> frost(p, hook);
+            case "recall" -> {
+                army.sendTo(hook);
+                p.sendMessage(ChatColor.GOLD + "Recall. The army is on its way.");
+            }
             case "nuke" -> nuke(p, hook);
             case "orbitalnuke" -> p.sendMessage(ChatColor.DARK_PURPLE + army.orbitalNukeAt(hook));
             case "stabshot" -> p.sendMessage(ChatColor.DARK_PURPLE + army.stabShotAt(hook));
@@ -434,6 +452,50 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
     }
 
     /** Lights up the landing area: roster players within eight blocks glow for thirty seconds. */
+    private void blink(Player owner, Location hook) {
+        World w = hook.getWorld();
+        if (w == null || w != owner.getWorld() || hook.distance(owner.getLocation()) > 40) {
+            owner.sendMessage(ChatColor.GRAY + "Too far to blink. Keep the hook within 40 blocks.");
+            return;
+        }
+        Location dest = hook.clone().add(0, 1, 0);
+        dest.setYaw(owner.getLocation().getYaw());
+        dest.setPitch(owner.getLocation().getPitch());
+        w.spawnParticle(Particle.PORTAL, owner.getLocation(), 60, 0.4, 0.8, 0.4, 0.2);
+        owner.teleport(dest);
+        w.spawnParticle(Particle.PORTAL, dest, 60, 0.4, 0.8, 0.4, 0.2);
+        owner.sendMessage(ChatColor.LIGHT_PURPLE + "Blinked.");
+    }
+
+    private void healSquad(Player owner, Location hook) {
+        int healed = 0;
+        for (NPC npc : army.squad()) {
+            if (!(npc.getEntity() instanceof LivingEntity body)) continue;
+            if (sameWorldNear(body.getLocation(), hook, 16)) {
+                body.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 120, 2, false, true));
+                healed++;
+            }
+        }
+        if (hook.getWorld() != null) hook.getWorld().spawnParticle(Particle.HEART, hook, 20, 2, 1, 2, 0);
+        owner.sendMessage(ChatColor.GREEN + "Heal. " + healed + " Null" + (healed == 1 ? "" : "s") + " regenerating.");
+    }
+
+    private void frost(Player owner, Location hook) {
+        Player target = nearestRoster(hook, 6);
+        if (target == null) {
+            owner.sendMessage(ChatColor.GRAY + "No roster player near the hook.");
+            return;
+        }
+        target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 120, 3, false, true));
+        target.addPotionEffect(new PotionEffect(PotionEffectType.MINING_FATIGUE, 120, 1, false, true));
+        target.getWorld().spawnParticle(Particle.SNOWFLAKE, target.getLocation().add(0, 1, 0), 60, 0.5, 0.8, 0.5, 0.02);
+        owner.sendMessage(ChatColor.AQUA + "Frost on " + target.getName() + ".");
+    }
+
+    private static boolean sameWorldNear(Location a, Location b, double radius) {
+        return a.getWorld() != null && a.getWorld() == b.getWorld() && a.distance(b) <= radius;
+    }
+
     private void flare(Player owner, Location hook) {
         World w = hook.getWorld();
         if (w == null) return;

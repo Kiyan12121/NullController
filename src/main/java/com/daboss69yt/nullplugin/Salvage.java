@@ -146,6 +146,13 @@ public final class Salvage implements CommandExecutor {
 
     /** Rebuilds a saved blueprint with its lowest corner on the spot you are looking at. */
     private String place(Player owner, String raw) {
+        Block aim = owner.getTargetBlockExact(60);
+        if (aim == null) return "Look at the spot to rebuild on.";
+        return placeAt(raw, aim.getLocation().add(0, 1, 0), owner);
+    }
+
+    /** Rebuilds a blueprint with its lowest corner at origin. The notify sender hears when it is done. */
+    private String placeAt(String raw, Location origin, CommandSender notify) {
         String name = cleanName(raw);
         if (name == null) return "Name it with letters, numbers, - or _.";
         JsonObject bp;
@@ -155,9 +162,6 @@ public final class Salvage implements CommandExecutor {
             return "No blueprint called " + name + ". Run /nullsalvage list.";
         }
         if (queue.isBusy()) return "The Nulls are busy with another job. Wait for it to finish.";
-        Block aim = owner.getTargetBlockExact(60);
-        if (aim == null) return "Look at the spot to rebuild on.";
-        Location origin = aim.getLocation().add(0, 1, 0);
 
         List<BuildQueue.Placement> plan = new ArrayList<>();
         for (JsonElement el : bp.getAsJsonArray("entries")) {
@@ -175,11 +179,39 @@ public final class Salvage implements CommandExecutor {
         plan.sort(Comparator.comparingInt(p -> p.location().getBlockY())); // bottom-up, so nothing floats
 
         boolean started = queue.start("rebuilding " + name, plan, PLACE_PER_TICK,
-                () -> owner.sendMessage(ChatColor.DARK_PURPLE + name + " is rebuilt."));
+                () -> notify.sendMessage(ChatColor.DARK_PURPLE + name + " is rebuilt."));
         if (!started) return "The Nulls are busy with another job. Wait for it to finish.";
         army.sendTo(origin.clone().add(-2, 0, -2));
-        return "Rebuilding " + name + " here: " + plan.size() + " blocks. The Nulls are on it"
-                + (origin.getWorld().getEnvironment() == World.Environment.NETHER ? " in the Nether." : ".");
+        boolean nether = origin.getWorld() != null && origin.getWorld().getEnvironment() == World.Environment.NETHER;
+        return "Rebuilding " + name + " here: " + plan.size() + " blocks. The Nulls are on it" + (nether ? " in the Nether." : ".");
+    }
+
+    /** Console use: list, delete, and place at coordinates. Marking and taking need the owner standing there. */
+    public String consoleCommand(String[] args) {
+        String usage = "Usage: salvage list | delete <name> | place <name> <world> <x> <y> <z>";
+        if (args.length < 2) return usage;
+        switch (args[1].toLowerCase()) {
+            case "list" -> {
+                return list();
+            }
+            case "delete" -> {
+                return args.length < 3 ? "Usage: salvage delete <name>" : delete(args[2]);
+            }
+            case "place" -> {
+                if (args.length < 7) return "Usage: salvage place <name> <world> <x> <y> <z>";
+                World w = Bukkit.getWorld(args[3]);
+                if (w == null) return "No world called " + args[3] + ".";
+                try {
+                    Location at = new Location(w, Double.parseDouble(args[4]), Double.parseDouble(args[5]), Double.parseDouble(args[6]));
+                    return placeAt(args[2], at, Bukkit.getConsoleSender());
+                } catch (NumberFormatException ex) {
+                    return "Coordinates must be numbers.";
+                }
+            }
+            default -> {
+                return usage;
+            }
+        }
     }
 
     private String list() {

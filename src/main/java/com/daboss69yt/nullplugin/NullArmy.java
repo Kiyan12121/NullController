@@ -1335,6 +1335,14 @@ public final class NullArmy {
         }
     }
 
+    /** Console hunt: hunters on a roster player, with no owner standing by. */
+    public String huntOffline(Player target, int count, int minutes) {
+        if (target == null) return "That player is not online.";
+        if (!consent.canTarget(target)) return "Roster only. " + target.getName() + " is not on it.";
+        return spawnHunters(null, target, target.getLocation(), count, minutes)
+                ? "Hunters sent for " + target.getName() + "." : "Not enough room under the army cap.";
+    }
+
     /** The Commander joins a pursuit. He chases the target with his pearls and dashes until the time runs out. */
     public boolean commanderPursue(Player target, int minutes) {
         if (leader == null || !leader.isSpawned()) return false;
@@ -1570,7 +1578,7 @@ public final class NullArmy {
         }
     }
 
-    public void showRanks(Player owner) {
+    public void showRanks(org.bukkit.command.CommandSender owner) {
         if (nulls.isEmpty()) {
             owner.sendMessage(ChatColor.GRAY + "No Nulls on the field.");
             return;

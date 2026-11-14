@@ -782,7 +782,12 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         owner.sendMessage(ChatColor.DARK_PURPLE + "Collected " + items + " items from " + name + ".");
     }
 
-    private void status(Player owner) {
+    /** Prisoners and strikes, for the console. */
+    public void consoleStatus(CommandSender sender) {
+        status(sender);
+    }
+
+    private void status(CommandSender owner) {
         owner.sendMessage(ChatColor.DARK_PURPLE + "--- Nether law ---");
         Location prison = configLoc("prison");
         owner.sendMessage(ChatColor.GRAY + "Prison: " + (prison == null ? "not set" : coords(prison)));

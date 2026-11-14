@@ -62,6 +62,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     private TotemManager totems;
     private NetherLaw netherLaw;
     private final List<String> alerts = new ArrayList<>();
+    private Salvage salvage;
     private final Map<Integer, String[]> menuActions = new HashMap<>();
 
     @Override
@@ -103,7 +104,8 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         base.start();
         getCommand("nullbase").setExecutor(base);
         getCommand("nullbase").setTabCompleter(base);
-        getCommand("nullsalvage").setExecutor(new Salvage(this, army, consent));
+        salvage = new Salvage(this, army, consent);
+        getCommand("nullsalvage").setExecutor(salvage);
         getCommand("nullalerts").setExecutor((sender, cmd, label, args) -> {
             Player p = ownerFor(sender);
             if (p == null || !consent.isOwner(p)) {
@@ -243,6 +245,44 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         }
         switch (args[0].toLowerCase()) {
             case "squad" -> army.showSquad(sender);
+            case "ranks" -> army.showRanks(sender);
+            case "prisoners" -> netherLaw.consoleStatus(sender);
+            case "salvage" -> sender.sendMessage(salvage.consoleCommand(args));
+            case "alerts" -> {
+                synchronized (alerts) {
+                    if (alerts.isEmpty()) sender.sendMessage("No alerts yet.");
+                    for (String a : alerts) sender.sendMessage(a);
+                }
+            }
+            case "hunt" -> {
+                if (args.length < 2) {
+                    sender.sendMessage("Usage: hunt <roster player> [count] [minutes]");
+                } else {
+                    sender.sendMessage(army.huntOffline(Bukkit.getPlayerExact(args[1]),
+                            args.length > 2 ? parseInt(args[2], 3) : 3, args.length > 3 ? parseInt(args[3], 5) : 5));
+                }
+            }
+            case "pounce" -> {
+                Player t = args.length < 2 ? null : Bukkit.getPlayerExact(args[1]);
+                if (args.length < 2) sender.sendMessage("Usage: pounce <roster player>");
+                else if (t == null) sender.sendMessage("That player is not online.");
+                else if (!consent.canTarget(t)) sender.sendMessage("Roster only. " + t.getName() + " is not on it.");
+                else {
+                    army.ambush(null, t, 6, 5);
+                    sender.sendMessage("Ambush sent for " + t.getName() + ".");
+                }
+            }
+            case "pursue" -> {
+                Player t = args.length < 2 ? null : Bukkit.getPlayerExact(args[1]);
+                if (args.length < 2) sender.sendMessage("Usage: pursue <roster player> [minutes]");
+                else if (t == null) sender.sendMessage("That player is not online.");
+                else if (!consent.canTarget(t)) sender.sendMessage("Roster only. " + t.getName() + " is not on it.");
+                else {
+                    int minutes = args.length > 2 ? parseInt(args[2], 5) : 5;
+                    army.beginPursuit(t, minutes);
+                    sender.sendMessage("Pursuing " + t.getName() + " for " + minutes + " minutes.");
+                }
+            }
             case "solo" -> {
                 if (args.length >= 2 && args[1].equalsIgnoreCase("clear")) {
                     sender.sendMessage(army.clearSolo(args.length > 2 ? args[2] : "all"));
@@ -367,7 +407,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     }
 
     private static final String OFFLINE_HELP = ChatColor.GRAY + "Owner is offline. Console orders: "
-            + "summon [n], build <kind> (Nether only), chests place <kind> (look at a block), strike <player> (the Breach), orbital <player> (Nuke), stabshot <player>, mobcannon <player> [n], team list|add|remove <player>, dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle, stashroom, autowork on|off|toggle, autospy on|off|toggle, squad, solo <n> <order>, solo clear [n|all]";
+            + "summon [n], build <kind> (Nether only), chests place <kind> (look at a block), strike <player> (the Breach), orbital <player> (Nuke), stabshot <player>, mobcannon <player> [n], team list|add|remove <player>, dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle, stashroom, autowork on|off|toggle, autospy on|off|toggle, squad, solo <n> <order>, solo clear [n|all], ranks, prisoners, alerts, salvage list|delete <name>|place <name> <world> <x> <y> <z>, hunt <player> [count] [minutes], pounce <player>, pursue <player> [minutes]";
 
     private void offlineMode(CommandSender sender, NullArmy.Mode mode) {
         sender.sendMessage(army.setModeOffline(mode)
