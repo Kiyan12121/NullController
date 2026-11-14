@@ -174,6 +174,14 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
         };
     }
 
+    /** Gives the owner the rod for a kind, for the Commander. Unknown kinds are refused. */
+    public String giveKind(Player owner, String kind) {
+        String name = NAME_BY_KIND.get(kind);
+        if (name == null) return "No rod called " + kind + ".";
+        give(owner, name, lore(kind));
+        return null;
+    }
+
     private void give(Player owner, String name, String lore) {
         ItemStack rod = new ItemStack(Material.FISHING_ROD);
         ItemMeta meta = rod.getItemMeta();

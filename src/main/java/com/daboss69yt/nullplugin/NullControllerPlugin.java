@@ -433,6 +433,37 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     }
 
     /** Shared by /nullcmd and the GUI so both do exactly the same thing. */
+    /** Commands the Commander may run for the owner. Never cmd, remote, event, or anything that runs server commands. */
+    private static final java.util.Set<String> COMMANDER_OPEN = java.util.Set.of(
+            "summon", "dismiss", "recall", "guard", "follow", "hunt", "stay", "auto", "status", "ranks", "squad",
+            "takeover", "solo", "view", "help", "goto", "mine", "lumber", "farm", "forge", "chest", "patrol", "build",
+            "fortify", "cage", "ambush", "team", "chests", "stashroom", "autowork", "autospy", "orbital", "scout",
+            "portal", "weapon", "arm", "rank", "pearl", "stabshot", "totem", "succession", "rod");
+    /** Commands that change a lot or hit roster players: the owner confirms these first. */
+    private static final java.util.Set<String> COMMANDER_CONFIRM = java.util.Set.of(
+            "dismiss", "takeover", "build", "cage", "ambush", "orbital", "stabshot", "succession");
+
+    public boolean commanderMayRun(String word) {
+        return COMMANDER_OPEN.contains(word.toLowerCase(java.util.Locale.ROOT));
+    }
+
+    public boolean commanderNeedsConfirm(String word) {
+        return COMMANDER_CONFIRM.contains(word.toLowerCase(java.util.Locale.ROOT));
+    }
+
+    /** Runs one of the allowed owner commands on the owner's behalf. The Commander never gets raw server commands. */
+    public String runForCommander(Player owner, String[] args) {
+        String[] lower = args.clone();
+        lower[0] = args[0].toLowerCase(java.util.Locale.ROOT);
+        if (lower[0].equals("rod")) {
+            if (args.length < 2) return "Which rod?";
+            String refused = rods.giveKind(owner, args[1].toLowerCase(java.util.Locale.ROOT));
+            return refused == null ? "Rod given." : refused;
+        }
+        dispatch(owner, lower);
+        return null;
+    }
+
     private void dispatch(Player owner, String[] args) {
         switch (args[0].toLowerCase()) {
             case "summon" -> army.summon(owner, args.length > 1 ? parseInt(args[1], 5) : 5);
