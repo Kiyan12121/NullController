@@ -1284,6 +1284,13 @@ public final class NullArmy {
         return opened.size() + " portals opened behind you. The squad stepped out of all of them together and holds this ground.";
     }
 
+    /** The Commander joins a pursuit. He chases the target with his pearls and dashes until the time runs out. */
+    public boolean commanderPursue(Player target, int minutes) {
+        if (leader == null || !leader.isSpawned()) return false;
+        hunters.put(leader, new Hunt(target.getUniqueId(), System.currentTimeMillis() + minutes * 60_000L));
+        return true;
+    }
+
     /**
      * The Commander's chase tools. Far away he throws an ender pearl at the target so it lands near them;
      * close in, he fires a rocket dash at them. Each has its own cooldown. Returns true if one was used.

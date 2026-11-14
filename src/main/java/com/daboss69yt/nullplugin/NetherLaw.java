@@ -21,6 +21,8 @@ import org.bukkit.command.TabCompleter;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
@@ -435,6 +437,29 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         }, 20L);
     }
 
+    /** A prisoner can't pearl or portal out of the prison: the move is cancelled and the escape alarm goes up. */
+    @EventHandler
+    public void onPrisonerTeleport(PlayerTeleportEvent event) {
+        Player p = event.getPlayer();
+        Record r = records.get(p.getUniqueId());
+        if (r == null || !r.prisoner || !r.stripped || configLoc("prison") == null) return;
+        if (!inPrison(event.getFrom()) || inPrison(event.getTo())) return;
+        event.setCancelled(true);
+        p.sendMessage(ChatColor.DARK_RED + "The prison holds your pearls and portals too.");
+        escape(p, r);
+    }
+
+    @EventHandler
+    public void onPrisonerPortal(PlayerPortalEvent event) {
+        Player p = event.getPlayer();
+        Record r = records.get(p.getUniqueId());
+        if (r == null || !r.prisoner || !r.stripped || configLoc("prison") == null) return;
+        if (!inPrison(p.getLocation()) || (event.getTo() != null && inPrison(event.getTo()))) return;
+        event.setCancelled(true);
+        p.sendMessage(ChatColor.DARK_RED + "The prison holds your pearls and portals too.");
+        escape(p, r);
+    }
+
     @EventHandler
     public void onWorldChange(PlayerChangedWorldEvent event) {
         Player p = event.getPlayer();
@@ -610,9 +635,10 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         long now = System.currentTimeMillis();
         if (now - r.lastEscape < 60_000L) return;
         r.lastEscape = now;
-        warn(p, ChatColor.DARK_RED + "ESCAPE", "The Nulls are on you.");
-        notifyOwner(ChatColor.DARK_RED + "[Prison] " + p.getName() + " escaped. Hunters sent.");
-        army.spawnHunters(owner(), p, p.getLocation(), 3, (int) huntMinutes());
+        warn(p, ChatColor.DARK_RED + "ESCAPE", "The whole squad is on you.");
+        notifyOwner(ChatColor.DARK_RED + "[Prison] " + p.getName() + " escaped. Six Nulls and the Commander are hunting.");
+        army.spawnHunters(owner(), p, p.getLocation(), 6, (int) huntMinutes());
+        army.commanderPursue(p, (int) huntMinutes());
         save();
     }
 
