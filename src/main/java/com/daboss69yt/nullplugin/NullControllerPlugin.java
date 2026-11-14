@@ -45,13 +45,15 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
 
     private static final List<String> SUBCOMMANDS = List.of("summon", "dismiss", "recall", "guard", "follow",
             "hunt", "stay", "auto", "goto", "status", "ranks", "mine", "lumber", "farm", "forge", "chest", "patrol", "stashroom", "autowork", "autospy",
-            "build", "fortify", "cage", "invade", "ambush", "totem", "succession", "event", "remote", "team", "orbital", "stabshot", "chests", "pearl", "scout", "rank", "portal", "weapon", "arm", "help");
+            "build", "fortify", "cage", "invade", "ambush", "totem", "succession", "event", "remote", "team", "orbital", "stabshot", "chests", "pearl", "scout", "rank", "portal", "weapon", "arm", "squad", "solo", "view", "help");
     private static final List<String> BUILDS = List.of("citadel", "bridge", "watchtower", "barracks",
             "forgegate", "spire", "city", "metropolis", "collector", "smelter", "door", "melonfarm", "prison", "cancel", "undo", "preview");
     private static final List<String> EVENTS = List.of("forge", "capital", "end", "clash");
     private static final String REMOTE_NAME = ChatColor.DARK_PURPLE + "Null Remote";
 
     private static final String MENU_TITLE = ChatColor.DARK_PURPLE + "" + ChatColor.BOLD + "The Null: Control";
+    private static final String MENU_TITLE_RODS = ChatColor.GOLD + "" + ChatColor.BOLD + "The Null: Rods & Base";
+    private static final String MENU_TITLE_SQUAD = ChatColor.AQUA + "" + ChatColor.BOLD + "The Null: Squad";
 
     private ConsentManager consent;
     private NullArmy army;
@@ -391,6 +393,9 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             case "auto" -> army.setMode(NullArmy.Mode.AUTO, owner);
             case "status" -> army.status(owner);
             case "ranks" -> army.showRanks(owner);
+            case "squad" -> army.showSquad(owner);
+            case "solo" -> handleSolo(owner, args);
+            case "view" -> handleView(owner, args);
             case "help" -> sendHelp(owner);
             case "goto" -> handleGoto(owner, args);
             case "mine" -> army.setMode(NullArmy.Mode.MINE, owner);
@@ -474,6 +479,33 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         } catch (NumberFormatException ex) {
             owner.sendMessage(ChatColor.RED + "Coordinates must be numbers.");
         }
+    }
+
+    /** /nullcmd solo <n> <order> | solo clear [n|all] */
+    private void handleSolo(Player owner, String[] args) {
+        if (args.length >= 2 && args[1].equalsIgnoreCase("clear")) {
+            owner.sendMessage(ChatColor.DARK_PURPLE + army.clearSolo(args.length > 2 ? args[2] : "all"));
+            return;
+        }
+        if (args.length < 3) {
+            owner.sendMessage(ChatColor.GRAY + "Usage: solo <n> <order>, solo clear [n|all]. See the numbers with squad.");
+            return;
+        }
+        owner.sendMessage(ChatColor.DARK_PURPLE + army.setSolo(parseInt(args[1], -1), args[2].toLowerCase()));
+    }
+
+    /** /nullcmd view <n> | view attack | view stop */
+    private void handleView(Player owner, String[] args) {
+        if (args.length < 2) {
+            owner.sendMessage(ChatColor.GRAY + "Usage: view <n>, view attack, view stop. See the numbers with squad.");
+            return;
+        }
+        String message = switch (args[1].toLowerCase()) {
+            case "stop" -> army.viewStop(owner);
+            case "attack" -> army.viewAttack(owner);
+            default -> army.view(owner, parseInt(args[1], -1));
+        };
+        owner.sendMessage(ChatColor.DARK_PURPLE + message);
     }
 
     private void handleForge(Player owner, String[] args) {
@@ -812,6 +844,8 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         owner.sendMessage(ChatColor.GRAY + "Builds: " + ChatColor.WHITE + "build <citadel|bridge|watchtower|barracks|forgegate|spire|cancel|undo|preview <type>>, fortify");
         owner.sendMessage(ChatColor.GRAY + "Roster only: " + ChatColor.WHITE + "cage <player>, invade <player>, ambush on|off");
         owner.sendMessage(ChatColor.GRAY + "Totem: " + ChatColor.WHITE + "totem, succession");
+        owner.sendMessage(ChatColor.GRAY + "One by one: " + ChatColor.WHITE + "squad, solo <n> <guard|follow|hunt|stay|mine|lumber|farm|patrol|forge|auto>, solo clear [n|all]");
+        owner.sendMessage(ChatColor.GRAY + "Look through: " + ChatColor.WHITE + "view <n>, view attack (hits what it looks at), view stop");
         owner.sendMessage(ChatColor.GRAY + "Machines: " + ChatColor.WHITE + "build collector|smelter|door|melonfarm; remote [link]");
         owner.sendMessage(ChatColor.GRAY + "Events: " + ChatColor.WHITE + "event <forge|capital|end|clash>");
         owner.sendMessage(ChatColor.GRAY + "Or open " + ChatColor.WHITE + "/nullui" + ChatColor.GRAY + " for the panel.");
@@ -867,84 +901,154 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     // ---------- GUI ----------
 
     private Inventory buildMenu() {
+        return buildMenu("main");
+    }
+
+    /** The control panel. "main" is the army and builds; "rods" is rods, base machines and events. */
+    private Inventory buildMenu(String page) {
         menuActions.clear();
         MenuHolder holder = new MenuHolder();
-        Inventory inv = getServer().createInventory(holder, 54, MENU_TITLE);
+        boolean rods = page.equals("rods");
+        boolean squad = page.equals("squad");
+        String title = rods ? MENU_TITLE_RODS : squad ? MENU_TITLE_SQUAD : MENU_TITLE;
+        Inventory inv = getServer().createInventory(holder, 54, title);
         holder.bind(inv);
+        ItemStack filler = new ItemStack(Material.PURPLE_STAINED_GLASS_PANE);
+        ItemMeta fm = filler.getItemMeta();
+        if (fm != null) {
+            fm.setDisplayName(" ");
+            filler.setItemMeta(fm);
+        }
+        for (int i = 0; i < 54; i++) inv.setItem(i, filler);
 
-        button(inv, 10, Material.WITHER_SKELETON_SKULL, "Summon 5 Nulls", "Adds a squad around you", "summon", "5");
-        button(inv, 11, Material.PLAYER_HEAD, "Summon 10 Nulls", "Adds a larger squad", "summon", "10");
-        button(inv, 12, Material.BARRIER, "Dismiss All", "Removes every Null", "dismiss");
-        button(inv, 13, Material.ENDER_PEARL, "Recall", "Brings the army to you", "recall");
-        button(inv, 14, Material.BOOK, "Status", "Army count, mode, and destinations", "status");
-        button(inv, 15, Material.MAP, "Add Patrol Point", "Adds your position to the route", "patrol", "add");
-        button(inv, 16, Material.PAPER, "Clear Patrol", "Empties the patrol route", "patrol", "clear");
-        button(inv, 17, Material.BLAZE_ROD, "Mark Rod", "Look at a roster player: the Nulls hit them harder", "cmd", "nullrod", "mark");
+        if (squad) {
+            button(inv, 45, Material.ARROW, "Back", "Return to the main panel", "menu", "main");
+            List<NPC> roster = army.squad();
+            if (roster.isEmpty()) {
+                button(inv, 22, Material.GRAY_DYE, "No Nulls", "Summon some from the main panel", "menu", "main");
+            }
+            for (int i = 0; i < Math.min(roster.size(), 36); i++) {
+                NPC npc = roster.get(i);
+                ItemStack head = new ItemStack(Material.PLAYER_HEAD);
+                ItemMeta meta = head.getItemMeta();
+                if (meta != null) {
+                    meta.setDisplayName(ChatColor.LIGHT_PURPLE + "" + ChatColor.BOLD + "#" + (i + 1) + " " + npc.getName());
+                    meta.setLore(List.of(ChatColor.GRAY + "Rank " + army.rankOf(npc) + ", " + army.squadState(npc),
+                            ChatColor.YELLOW + "Click to look through its eyes"));
+                    head.setItemMeta(meta);
+                }
+                int slot = 9 + i;
+                inv.setItem(slot, head);
+                menuActions.put(slot, new String[] {"cmd", "nullcmd", "view", String.valueOf(i + 1)});
+            }
+            button(inv, 46, Material.ENDER_EYE, "Stop Looking", "Back in your own eyes", "cmd", "nullcmd", "view", "stop");
+            button(inv, 47, Material.IRON_SWORD, "Attack From Its Eyes", "Strikes what it is looking at", "cmd", "nullcmd", "view", "attack");
+            button(inv, 48, Material.BARRIER, "Clear Solo Orders", "Every Null back on the army order", "cmd", "nullcmd", "solo", "clear", "all");
+            button(inv, 49, Material.BOOK, "Squad List", "Numbers and jobs in chat", "cmd", "nullcmd", "squad");
+            button(inv, 53, Material.RED_CONCRETE, "Close", "Close the panel", "close");
+            return inv;
+        }
 
-        button(inv, 19, Material.SHIELD, "GUARD Mode", "Form a perimeter, fight mobs near you", "guard");
-        button(inv, 20, Material.LEAD, "FOLLOW Mode", "Walk with you", "follow");
-        button(inv, 21, Material.NETHERITE_SWORD, "HUNT Mode", "Pursue roster players only", "hunt");
-        button(inv, 22, Material.IRON_BLOCK, "STAY Mode", "Hold position", "stay");
-        button(inv, 23, Material.DIAMOND_PICKAXE, "AUTO-MINE Mode", "Ores and stone within 16 blocks", "mine");
-        button(inv, 24, Material.NETHERITE_AXE, "LUMBERJACK Mode", "Chops logs within 16 blocks", "lumber");
-        button(inv, 25, Material.COMPASS, "PATROL Mode", "Walks the saved route", "patrol", "start");
+        if (rods) {
+            button(inv, 0, Material.ARROW, "Back", "Return to the main panel", "menu", "main");
+            header(inv, 9, "ROD STRIKES");
+            button(inv, 10, Material.CRYING_OBSIDIAN, "Ambush Rod", "Portals open around a roster player", "cmd", "nullrod", "ambush");
+            button(inv, 11, Material.BLUE_ICE, "Stasis Rod", "Pull a roster player to the base and freeze them", "cmd", "nullrod", "stasis");
+            button(inv, 12, Material.TNT, "TNT Rod", "TNT from the sky onto the landing spot", "cmd", "nullrod", "tnt");
+            button(inv, 13, Material.BELL, "Summon Rod", "The army walks to the hook", "cmd", "nullrod", "summon");
+            button(inv, 14, Material.LIGHTNING_ROD, "Lightning Rod", "Bolt on the nearest roster player", "cmd", "nullrod", "lightning");
+            button(inv, 15, Material.FEATHER, "Launch Rod", "Throws the nearest roster player up", "cmd", "nullrod", "launch");
+            button(inv, 16, Material.WITHER_ROSE, "Wither Rod", "Wither, slowness and blindness", "cmd", "nullrod", "wither");
+            button(inv, 19, Material.ENDER_EYE, "Gravity Rod", "Pulls roster players in", "cmd", "nullrod", "gravity");
+            button(inv, 20, Material.BEACON, "Orbital Rod", "Eight lightning bolts over the spot", "cmd", "nullrod", "orbital");
+            button(inv, 21, Material.DRAGON_BREATH, "Nuke Rod", "Three big explosions on the spot", "cmd", "nullrod", "nuke");
+            button(inv, 22, Material.SPYGLASS, "Mark Rod", "The Nulls hit the nearest roster player harder", "cmd", "nullrod", "mark");
+            button(inv, 23, Material.GLOWSTONE, "Flare Rod", "Lights roster players within 8 blocks", "cmd", "nullrod", "flare");
+            button(inv, 24, Material.TNT_MINECART, "Orbital Nuke Rod", "A 7 by 7 carpet of TNT on the aim spot", "cmd", "nullrod", "orbitalnuke");
+            button(inv, 25, Material.IRON_SWORD, "Stab Shot Rod", "A column of explosions down to bedrock", "cmd", "nullrod", "stabshot");
+            header(inv, 27, "NETHER BASE");
+            button(inv, 28, Material.TURTLE_HELMET, "Turret", "Arrow turret at the base", "cmd", "nullbase", "build", "turret");
+            button(inv, 29, Material.IRON_BARS, "Trap", "Floor that drops under roster players", "cmd", "nullbase", "build", "trap");
+            button(inv, 30, Material.REDSTONE_LAMP, "Alarm", "Lamps and bell when roster players come", "cmd", "nullbase", "build", "alarm");
+            button(inv, 31, Material.IRON_PICKAXE, "Drill", "Mines the shaft under the base", "cmd", "nullbase", "build", "drill");
+            button(inv, 32, Material.ANCIENT_DEBRIS, "Debris Drill", "Digs up debris within 12 blocks", "cmd", "nullbase", "build", "debrisdrill");
+            button(inv, 33, Material.FURNACE, "Crafting Line", "Smelts debris into scrap from the chest", "cmd", "nullbase", "build", "craft");
+            button(inv, 34, Material.DEEPSLATE_BRICKS, "Stash Room", "Six stash chests at the Nether base", "cmd", "nullcmd", "stashroom");
+            header(inv, 36, "EVENTS");
+            button(inv, 37, Material.CRIMSON_FUNGUS, "Forge Awakening", "Squad of 5 mobilises at the Forge", "event", "forge");
+            button(inv, 38, Material.GOLD_BLOCK, "Capital Defense", "Squad of 8 guards, watchtower built", "event", "capital");
+            button(inv, 39, Material.END_STONE, "End Command Post", "Squad of 5 and barracks, End only", "event", "end");
+            button(inv, 40, Material.IRON_SWORD, "Clash", "Two armies face off", "event", "clash");
+            button(inv, 41, Material.OBSERVER, "Alerts", "The last 30 alarms and finds", "cmd", "nullalerts");
+            button(inv, 42, Material.NETHERITE_INGOT, "Nether Law", "Strikes, prisoners and the prison", "cmd", "nullnether", "status");
+            return inv;
+        }
 
-        button(inv, 28, Material.OBSIDIAN, "Build Void Citadel", "17x17 fortress, 22 tall", "build", "citadel");
-        button(inv, 29, Material.NETHERITE_BLOCK, "Build Bridge", "5 wide, 50 long, faces you", "build", "bridge");
-        button(inv, 30, Material.DEEPSLATE_BRICKS, "Build Watchtower", "Tall lookout with beacon", "build", "watchtower");
-        button(inv, 31, Material.CHEST, "Build Barracks", "Sleeping and armory block", "build", "barracks");
-        button(inv, 32, Material.LODESTONE, "Build Forge Gate", "Gate around a Forge block", "build", "forgegate");
-        button(inv, 33, Material.BEACON, "Build Beacon Spire", "Territory marker spire", "build", "spire");
-        button(inv, 34, Material.BARRIER, "Cancel Build", "Stops the current build", "build", "cancel");
-        button(inv, 35, Material.END_STONE_BRICKS, "Build Null Civilisation", "End only: walled city, your Hall, Null quarters", "build", "city");
-
-        button(inv, 37, Material.WHEAT, "FARM Mode", "Harvests and replants mature crops", "farm");
-        button(inv, 38, Material.IRON_PICKAXE, "Fortify", "Re-places missing blocks from the last build", "fortify");
-        button(inv, 39, Material.LODESTONE, "FORGE DUTY", "Hold near the Forge (set with /nullcmd forge set)", "forge");
-        button(inv, 40, Material.RED_NETHER_BRICKS, "Nether Ambush: toggle", "Two hunters for roster players entering the Nether", "ambush", "toggle");
-        button(inv, 41, Material.TOTEM_OF_UNDYING, "Get Totem of NULL", "Issues your active totem", "totem");
-        button(inv, 42, Material.NETHER_STAR, "Succession", "Mints a new totem and voids the old ones", "succession");
-        button(inv, 43, Material.SPYGLASS, "Ranks", "Every Null's rank, health and state", "ranks");
-        button(inv, 44, Material.WRITABLE_BOOK, "Help", "Lists every command", "help");
-
-        // One-click rods along the top row, and the Nether base machines and panels along the bottom.
-        button(inv, 0, Material.CRYING_OBSIDIAN, "Ambush Rod", "Portals open around a roster player", "cmd", "nullrod", "ambush");
-        button(inv, 1, Material.BLUE_ICE, "Stasis Rod", "Pull a roster player to the base and freeze them", "cmd", "nullrod", "stasis");
-        button(inv, 2, Material.TNT, "TNT Rod", "TNT from the sky onto the landing spot", "cmd", "nullrod", "tnt");
-        button(inv, 3, Material.BELL, "Summon Rod", "The army walks to the hook", "cmd", "nullrod", "summon");
-        button(inv, 4, Material.LIGHTNING_ROD, "Lightning Rod", "Bolt on the nearest roster player", "cmd", "nullrod", "lightning");
-        button(inv, 5, Material.FEATHER, "Launch Rod", "Throws the nearest roster player up", "cmd", "nullrod", "launch");
-        button(inv, 6, Material.WITHER_ROSE, "Wither Rod", "Wither, slowness and blindness", "cmd", "nullrod", "wither");
-        button(inv, 7, Material.ENDER_EYE, "Gravity Rod", "Pulls roster players in", "cmd", "nullrod", "gravity");
-        button(inv, 8, Material.BEACON, "Orbital Rod", "Eight lightning bolts over the spot", "cmd", "nullrod", "orbital");
-        button(inv, 26, Material.DRAGON_BREATH, "Nuke Rod", "Three big explosions on the spot", "cmd", "nullrod", "nuke");
-        button(inv, 9, Material.TURTLE_HELMET, "Base: Turret", "Arrow turret at the base", "cmd", "nullbase", "build", "turret");
-        button(inv, 18, Material.IRON_BARS, "Base: Trap", "Floor that drops under roster players", "cmd", "nullbase", "build", "trap");
-        button(inv, 36, Material.REDSTONE_LAMP, "Base: Alarm", "Lamps and bell when roster players come", "cmd", "nullbase", "build", "alarm");
-        button(inv, 45, Material.IRON_PICKAXE, "Base: Drill", "Mines the shaft under the base", "cmd", "nullbase", "build", "drill");
-        button(inv, 50, Material.ANCIENT_DEBRIS, "Base: Debris Drill", "Digs up debris within 12 blocks", "cmd", "nullbase", "build", "debrisdrill");
-        button(inv, 51, Material.FURNACE, "Base: Crafting Line", "Smelts debris into scrap from the chest", "cmd", "nullbase", "build", "craft");
-        button(inv, 52, Material.OBSERVER, "Alerts", "The last 30 alarms and finds", "cmd", "nullalerts");
-        button(inv, 53, Material.NETHERITE_INGOT, "Nether Law", "Strikes, prisoners and the prison", "cmd", "nullnether", "status");
-        button(inv, 27, Material.GLOWSTONE, "Flare Rod", "Lights roster players within 8 blocks", "cmd", "nullrod", "flare");
-        button(inv, 46, Material.DEEPSLATE_BRICKS, "Build Stash Room", "Six stash chests at the Nether base", "cmd", "nullcmd", "stashroom");
-        button(inv, 47, Material.OBSIDIAN, "Build Prison", "Walled cell block at this spot, Nether only", "build", "prison");
-        button(inv, 48, Material.CLOCK, "Auto Work: toggle", "Idle Nulls mine and chop near you", "cmd", "nullcmd", "autowork", "toggle");
-        button(inv, 49, Material.ENDER_EYE, "Auto Spy: toggle", "A hidden spy on roster players who join", "cmd", "nullcmd", "autospy", "toggle");
-
-        button(inv, 46, Material.CRIMSON_FUNGUS, "Event: Forge Awakening", "Squad of 5 mobilises at the Forge", "event", "forge");
-        button(inv, 47, Material.GOLD_BLOCK, "Event: Capital Defense", "Squad of 8 guards, watchtower built", "event", "capital");
-        button(inv, 48, Material.END_STONE, "Event: End Command Post", "Squad of 5 and barracks, End only", "event", "end");
-        button(inv, 49, Material.NETHERITE_SWORD, "Event: Faction Clash", "Squad of 8 engages mobs", "event", "clash");
-
+        button(inv, 4, Material.BOOK, "Army Status", "Count, mode and where they are", "status");
+        header(inv, 9, "ARMY");
+        button(inv, 10, Material.WITHER_SKELETON_SKULL, "Summon 5", "Adds a squad around you", "summon", "5");
+        button(inv, 11, Material.PLAYER_HEAD, "Summon 10", "Adds a larger squad", "summon", "10");
+        button(inv, 12, Material.ENDER_PEARL, "Recall", "Brings the army to you", "recall");
+        button(inv, 13, Material.BARRIER, "Dismiss All", "Removes every Null", "dismiss");
+        button(inv, 14, Material.SPYGLASS, "Ranks", "Every Null's rank, health and state", "ranks");
+        button(inv, 15, Material.TOTEM_OF_UNDYING, "Totem of NULL", "Issues your active totem", "totem");
+        button(inv, 16, Material.NETHER_STAR, "Succession", "Mints a new totem and voids the old ones", "succession");
+        button(inv, 17, Material.WRITABLE_BOOK, "Help", "Lists every command", "help");
+        header(inv, 18, "MODES");
+        button(inv, 19, Material.SHIELD, "Guard", "Form a perimeter and fight mobs near you", "guard");
+        button(inv, 20, Material.LEAD, "Follow", "Walk with you", "follow");
+        button(inv, 21, Material.NETHERITE_SWORD, "Hunt", "Pursue roster players only", "hunt");
+        button(inv, 22, Material.IRON_BLOCK, "Stay", "Hold position", "stay");
+        button(inv, 23, Material.REDSTONE_LAMP, "Automation", "Each Null picks its own job", "auto");
+        button(inv, 24, Material.DIAMOND_PICKAXE, "Mine", "Ores and stone within 16 blocks", "mine");
+        button(inv, 25, Material.NETHERITE_AXE, "Lumberjack", "Chops logs within 16 blocks", "lumber");
+        button(inv, 26, Material.WHEAT, "Farm", "Harvests and replants mature crops", "farm");
+        header(inv, 27, "WORK");
+        button(inv, 28, Material.COMPASS, "Patrol", "Walks the saved route", "patrol", "start");
+        button(inv, 29, Material.MAP, "Add Patrol Point", "Adds your position to the route", "patrol", "add");
+        button(inv, 30, Material.PAPER, "Clear Patrol", "Empties the patrol route", "patrol", "clear");
+        button(inv, 31, Material.LODESTONE, "Forge Duty", "Hold near the Forge", "forge");
+        button(inv, 32, Material.IRON_PICKAXE, "Fortify", "Re-places missing blocks from the last build", "fortify");
+        button(inv, 33, Material.CLOCK, "Auto Work", "Idle Nulls mine and chop near you", "cmd", "nullcmd", "autowork", "toggle");
+        button(inv, 34, Material.ENDER_EYE, "Auto Spy", "A hidden spy on roster players who join", "cmd", "nullcmd", "autospy", "toggle");
+        button(inv, 35, Material.RED_NETHER_BRICKS, "Nether Ambush", "Two hunters for roster players entering the Nether", "ambush", "toggle");
+        header(inv, 36, "BUILD");
+        button(inv, 37, Material.OBSIDIAN, "Void Citadel", "17x17 fortress, 22 tall", "build", "citadel");
+        button(inv, 38, Material.NETHERITE_BLOCK, "Bridge", "5 wide, 50 long, faces you", "build", "bridge");
+        button(inv, 39, Material.DEEPSLATE_BRICKS, "Watchtower", "Tall lookout with beacon", "build", "watchtower");
+        button(inv, 40, Material.CHEST, "Barracks", "Sleeping and armory block", "build", "barracks");
+        button(inv, 41, Material.LODESTONE, "Forge Gate", "Gate around a Forge block", "build", "forgegate");
+        button(inv, 42, Material.BEACON, "Beacon Spire", "Territory marker spire", "build", "spire");
+        button(inv, 43, Material.OBSIDIAN, "Prison", "Walled cell block at this spot, Nether only", "build", "prison");
+        button(inv, 44, Material.BARRIER, "Cancel Build", "Stops the current build", "build", "cancel");
+        header(inv, 45, "MORE");
+        button(inv, 46, Material.NETHERITE_HELMET, "Rods & Base", "Strikes, base machines and events", "menu", "rods");
+        button(inv, 47, Material.BLAZE_ROD, "Portal to Base", "A portal that lands you at the Nether base", "cmd", "nullcmd", "portal", "base");
+        button(inv, 48, Material.PLAYER_HEAD, "Squad", "Look through a Null or give one its own order", "menu", "squad");
+        button(inv, 49, Material.POTION, "Potion Buff", "Regeneration, speed, strength and resistance", "cmd", "nullcmd", "help");
+        button(inv, 50, Material.NETHERITE_INGOT, "Nether Law", "Strikes, prisoners and the prison", "cmd", "nullnether", "status");
+        button(inv, 51, Material.OBSERVER, "Alerts", "The last 30 alarms and finds", "cmd", "nullalerts");
+        button(inv, 52, Material.TOTEM_OF_UNDYING, "Ask the Commander", "Type: null <what you want>", "cmd", "nullcmd", "help");
+        button(inv, 53, Material.RED_CONCRETE, "Close", "Close the panel", "close");
         return inv;
+    }
+
+    /** A non-clickable section label in the panel. */
+    private void header(Inventory inv, int slot, String label) {
+        ItemStack item = new ItemStack(Material.NAME_TAG);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(ChatColor.GOLD + "" + ChatColor.BOLD + label);
+            item.setItemMeta(meta);
+        }
+        inv.setItem(slot, item);
     }
 
     private void button(Inventory inv, int slot, Material mat, String name, String lore, String... action) {
         ItemStack item = new ItemStack(mat);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
-            meta.setDisplayName(ChatColor.DARK_PURPLE + name);
+            meta.setDisplayName(ChatColor.LIGHT_PURPLE + "" + ChatColor.BOLD + name);
             meta.setLore(List.of(ChatColor.GRAY + lore));
             item.setItemMeta(meta);
         }
@@ -962,8 +1066,17 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         if (slot < 0 || slot >= 54) return;
 
         String[] action = menuActions.get(slot);
-        if (action != null) {
+        if (action == null) return;
+        if (action[0].equals("menu")) {
+            p.openInventory(buildMenu(action[1]));
+        } else if (action[0].equals("close")) {
+            p.closeInventory();
+        } else {
             dispatch(p, action);
+            if (action.length > 1 && action[0].equals("cmd") && action[1].equals("nullcmd")
+                    && action.length > 2 && action[2].equals("view")) {
+                p.closeInventory();
+            }
         }
     }
 

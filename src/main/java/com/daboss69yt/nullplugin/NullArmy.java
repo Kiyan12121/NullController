@@ -141,6 +141,14 @@ public final class NullArmy {
     private final Map<NPC, Integer> waypointIndex = new HashMap<>();
 
     private final Map<NPC, Hunt> hunters = new HashMap<>();
+    /** Individual orders. A Null with an entry here ignores its rank order and follows this one. */
+    private final Map<NPC, Mode> soloModes = new HashMap<>();
+    /** A focused attack: one roster player or hostile mob, for a limited time. */
+    private record Focus(UUID target, long expiresAt) {}
+    private final Map<NPC, Focus> focus = new HashMap<>();
+    /** The Null the owner is looking through, and the owner's game mode to restore. */
+    private NPC viewing;
+    private GameMode viewRestore = GameMode.SURVIVAL;
     private final Map<NPC, Integer> lastAttack = new HashMap<>();
     private final Map<NPC, Location> wanderGoals = new HashMap<>();
     private final Map<NPC, Integer> wanderUntil = new HashMap<>();
@@ -442,6 +450,9 @@ public final class NullArmy {
     }
 
     public void dismissAll(Player owner) {
+        viewStop(owner);
+        soloModes.clear();
+        focus.clear();
         int count = nulls.size();
         autoSuppressed = true; // dismissed means dismissed: no self-summoning until you summon again
         removeAll();
@@ -978,6 +989,9 @@ public final class NullArmy {
     }
 
     private void dropNpc(NPC npc) {
+        soloModes.remove(npc);
+        focus.remove(npc);
+        if (npc == viewing) viewing = null;
         Location l = npc.getStoredLocation();
         Inventory pack = packs.get(npc);
         if (l != null && l.getWorld() != null) {
@@ -1174,6 +1188,166 @@ public final class NullArmy {
     }
 
     /** Lists every Null with its rank and health. */
+    /** Every Null in squad order, for the panel. */
+    public List<NPC> squad() {
+        return List.copyOf(nulls);
+    }
+
+    public char rankOf(NPC npc) {
+        return ranks.getOrDefault(npc, 'D');
+    }
+
+    /** The Null at this 1-based squad number, or null. */
+    public NPC nullAt(int n) {
+        if (n < 1 || n > nulls.size()) return null;
+        return nulls.get(n - 1);
+    }
+
+    /** Lists every Null with its number, rank, and whether it has its own order. */
+    public void showSquad(Player owner) {
+        if (nulls.isEmpty()) {
+            owner.sendMessage(ChatColor.GRAY + "No Nulls on the field.");
+            return;
+        }
+        owner.sendMessage(ChatColor.DARK_PURPLE + "Squad (use /nullcmd solo <n> <order>):");
+        for (int i = 0; i < nulls.size(); i++) {
+            NPC npc = nulls.get(i);
+            owner.sendMessage(ChatColor.GRAY + " " + (i + 1) + ". [" + ranks.getOrDefault(npc, 'D') + "] "
+                    + ChatColor.WHITE + npc.getName() + ChatColor.GRAY + " - " + squadState(npc));
+        }
+    }
+
+    /** A short description of one Null's current job, for the squad list and the panel. */
+    public String squadState(NPC npc) {
+        String base = soloModes.containsKey(npc)
+                ? "own order: " + soloModes.get(npc).name().toLowerCase()
+                : "army order";
+        if (npc == viewing) base += ", you're looking through it";
+        if (focus.containsKey(npc)) base += ", attacking";
+        return base;
+    }
+
+    /** Gives one Null its own order. Solo orders last until cleared or the Null is dismissed. */
+    public String setSolo(int n, String order) {
+        NPC npc = nullAt(n);
+        if (npc == null) return "No Null number " + n + ". Run /nullcmd squad to see the numbers.";
+        if (ranks.getOrDefault(npc, 'D') == 'R') return "Wards stay beside you as your bodyguard and take no solo orders.";
+        if (order.equals("clear")) {
+            soloModes.remove(npc);
+            return npc.getName() + " is back on the army order.";
+        }
+        Mode m;
+        try {
+            m = Mode.valueOf(order.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return "Solo orders: guard, follow, hunt, stay, mine, lumber, farm, patrol, forge, auto or clear.";
+        }
+        switch (m) {
+            case GUARD, FOLLOW, HUNT, STAY, MINE, LUMBER, FARM, AUTO -> { }
+            case PATROL -> {
+                if (patrolRoute.isEmpty()) return "No patrol route yet. Stand at each point and run /nullcmd patrol add.";
+            }
+            case FORGE -> {
+                if (configuredBlock("forge-block") == null) return "No Forge block set. Look at one and run /nullcmd forge set.";
+            }
+            default -> {
+                return "Solo orders: guard, follow, hunt, stay, mine, lumber, farm, patrol, forge, auto or clear.";
+            }
+        }
+        soloModes.put(npc, m);
+        return npc.getName() + " now works on its own: " + m.name().toLowerCase() + ".";
+    }
+
+    /** Clears one Null's solo order, or all of them when which is "all". */
+    public String clearSolo(String which) {
+        if (which == null || which.equalsIgnoreCase("all")) {
+            soloModes.clear();
+            return "Every Null is back on the army order.";
+        }
+        int n;
+        try {
+            n = Integer.parseInt(which);
+        } catch (NumberFormatException e) {
+            return "Usage: solo clear [n|all].";
+        }
+        NPC npc = nullAt(n);
+        if (npc == null) return "No Null number " + n + ".";
+        soloModes.remove(npc);
+        return npc.getName() + " is back on the army order.";
+    }
+
+    /** Puts the owner into spectator mode, looking out through this Null's eyes. */
+    public String view(Player owner, int n) {
+        NPC npc = nullAt(n);
+        if (npc == null) return "No Null number " + n + ". Run /nullcmd squad to see the numbers.";
+        if (!npc.isSpawned() || npc.getEntity() == null) return npc.getName() + " isn't spawned right now.";
+        if (viewing == null) viewRestore = owner.getGameMode();
+        viewing = npc;
+        owner.setGameMode(GameMode.SPECTATOR);
+        owner.setSpectatorTarget(npc.getEntity());
+        return "Looking through " + npc.getName() + ". Run /nullcmd view stop to come back.";
+    }
+
+    /** Brings the owner back to their own eyes. */
+    public String viewStop(Player owner) {
+        if (viewing == null) return "You aren't looking through a Null.";
+        owner.setSpectatorTarget(null);
+        owner.setGameMode(viewRestore);
+        viewing = null;
+        return "Back in your own eyes.";
+    }
+
+    /** Attacks whatever the viewed Null is looking at: a roster player or a hostile mob. */
+    public String viewAttack(Player owner) {
+        if (viewing == null || !viewing.isSpawned() || !(viewing.getEntity() instanceof LivingEntity eyes)) {
+            return "Look through a Null first: /nullcmd view <n>.";
+        }
+        Location eye = eyes.getEyeLocation();
+        org.bukkit.util.RayTraceResult hit = eye.getWorld().rayTraceEntities(eye, eye.getDirection(), 40, 0.6,
+                e -> e instanceof LivingEntity living && !living.equals(eyes) && !isNullBody(e)
+                        && (e instanceof Monster || (e instanceof Player p && consent.canTarget(p))));
+        if (hit == null || hit.getHitEntity() == null) return "Nothing it can attack in its sight.";
+        Entity target = hit.getHitEntity();
+        focus.put(viewing, new Focus(target.getUniqueId(), System.currentTimeMillis() + 45_000L));
+        String name = target instanceof Player p ? p.getName() : target.getType().name().toLowerCase();
+        return viewing.getName() + " is attacking " + name + " for 45 seconds.";
+    }
+
+    private boolean isNullBody(Entity e) {
+        for (NPC npc : nulls) {
+            if (npc.getEntity() != null && npc.getEntity().getUniqueId().equals(e.getUniqueId())) return true;
+        }
+        return false;
+    }
+
+    /** Keeps the view honest: if the watched Null is gone, the owner comes back to their own eyes. */
+    private void checkView(Player owner) {
+        if (viewing == null) return;
+        if (!viewing.isSpawned() || !nulls.contains(viewing)) {
+            owner.setSpectatorTarget(null);
+            owner.setGameMode(viewRestore);
+            owner.sendMessage(ChatColor.GRAY + "The Null you were watching is gone. Back in your own eyes.");
+            viewing = null;
+        }
+    }
+
+    /** Walks a focused Null to its target and strikes it, until it dies, leaves, or the time runs out. */
+    private void focusTick(NPC npc, Focus f) {
+        Entity e = Bukkit.getEntity(f.target());
+        if (!(e instanceof LivingEntity target) || target.isDead() || System.currentTimeMillis() >= f.expiresAt()
+                || (target instanceof Player p && !consent.canTarget(p))) {
+            focus.remove(npc);
+            npc.getNavigator().cancelNavigation();
+            return;
+        }
+        if (npc.getEntity() instanceof LivingEntity self && self.getWorld().equals(target.getWorld())
+                && self.getLocation().distance(target.getLocation()) <= 3.2) {
+            attack(npc, target);
+        } else {
+            npc.getNavigator().setTarget(target, true);
+        }
+    }
+
     public void showRanks(Player owner) {
         if (nulls.isEmpty()) {
             owner.sendMessage(ChatColor.GRAY + "No Nulls on the field.");
@@ -1293,6 +1467,7 @@ public final class NullArmy {
             return;
         }
         cycle++;
+        checkView(owner);
         expireHunters();
         checkAlarm(owner);
         checkEmergency(owner);
@@ -1314,6 +1489,11 @@ public final class NullArmy {
         for (NPC npc : new ArrayList<>(nulls)) {
             if (!npc.isSpawned() || arriving.contains(npc)) continue;
             if (spies.containsKey(npc)) continue;
+            Focus focused = focus.get(npc);
+            if (focused != null) {
+                focusTick(npc, focused);
+                continue;
+            }
             Hunt hunt = hunters.get(npc);
             if (hunt != null) {
                 huntTick(npc, hunt);
@@ -1324,7 +1504,8 @@ public final class NullArmy {
                 followOwner(npc, owner, nulls.indexOf(npc), leash);
                 continue;
             }
-            if (isCommander(npc) || ranks.getOrDefault(npc, 'D') == 'A') {
+            boolean solo = soloModes.containsKey(npc);
+            if (!solo && (isCommander(npc) || ranks.getOrDefault(npc, 'D') == 'A')) {
                 // The commander sticks with the owner and only goes out when a hunt is ordered.
                 // He defends the owner: a mob or roster player within six blocks of the owner is engaged.
                 if (defendOwner(npc, owner)) continue;
@@ -1333,7 +1514,7 @@ public final class NullArmy {
             }
             int index = nulls.indexOf(npc);
             char rank = ranks.getOrDefault(npc, 'D');
-            if (rank == 'R') {
+            if (rank == 'R' && !solo) {
                 // Ward: the owner's bodyguard. Roster players and mobs near the owner are engaged;
                 // anyone else near the owner is only reported, never attacked.
                 wardWatch(owner);
@@ -1341,7 +1522,7 @@ public final class NullArmy {
                 followOwner(npc, owner, index, 3);
                 continue;
             }
-            Mode m = rankModes.getOrDefault(rank, mode);
+            Mode m = solo ? soloModes.get(npc) : rankModes.getOrDefault(rank, mode);
             if (m == Mode.AUTO) m = autoPick(npc);
             if (rank == 'D' && m == Mode.FOLLOW && followNearestGeneral(npc, index, leash)) continue;
             if (cycle % 4 == 0 && (m == Mode.GUARD || m == Mode.PATROL)) {
