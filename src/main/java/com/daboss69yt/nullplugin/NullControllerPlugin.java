@@ -1143,6 +1143,13 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     }
 
     /** Keeps the last 30 alerts for /nullalerts and the control panel. */
+    /** The last few alarms, oldest first, for the Commander's briefing. */
+    public List<String> recentAlerts(int n) {
+        synchronized (alerts) {
+            return new ArrayList<>(alerts.subList(Math.max(0, alerts.size() - n), alerts.size()));
+        }
+    }
+
     public void alert(String message) {
         synchronized (alerts) {
             alerts.add(message);

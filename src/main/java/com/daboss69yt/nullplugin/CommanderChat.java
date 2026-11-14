@@ -38,10 +38,10 @@ import java.util.Set;
 public final class CommanderChat implements Listener {
     private static final String ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
     private static final Set<String> ACTIONS = Set.of("none", "status", "scout", "recall", "guard", "follow", "stay", "design",
-            "hunt", "portal", "weapon", "bring", "mine", "lumber", "farm", "patrol", "stashroom",
+            "hunt", "fetch", "portal", "weapon", "bring", "mine", "lumber", "farm", "patrol", "stashroom",
             "ambush", "stabshot", "orbital", "mobcannon", "ranks", "forge", "explore", "totem", "pearl", "chests",
             "squad", "solo", "solo_clear", "view", "view_attack", "view_stop");
-    private static final int HISTORY_TURNS = 6;
+    private static final int HISTORY_TURNS = 10;
     private static final long COOLDOWN_MS = 3000;
 
     private static final String PERSONA =
@@ -55,6 +55,9 @@ public final class CommanderChat implements Listener {
             + "hunt sends the Nulls after one roster player named in \"target\"; the owner must confirm first, so say so. "
             + "portal opens a real nether portal in front of the owner. "
             + "bring opens a portal to a roster player who is in the Nether, named in \"target\". "
+            + "fetch makes the Nulls bring a roster player named in \"target\" to the owner; the owner confirms first. "
+            + "Think before you answer: pick the one action that matches what the owner wants, and ask one short question instead of guessing when it is unclear. "
+            + "Use the recent alarms and roster in the army state to choose tactics, and say briefly what you intend. "
             + "mine, lumber, farm, patrol, forge and explore set the army to work. ranks reports each rank. chests reports the nearest chests. totem hands the owner a totem. pearl fires a pearl at the spot the owner is looking at. stashroom builds the stash room. "
             + "squad lists the Nulls by number. solo with n and order gives one Null its own job (guard, follow, hunt, stay, mine, lumber, farm or auto); solo_clear clears them. view with n looks through Null n; view_attack strikes what it sees; view_stop comes back. "
             + "ambush, stabshot, orbital and mobcannon strike a roster player named in \"target\"; the owner confirms first. "
@@ -474,6 +477,18 @@ public final class CommanderChat implements Listener {
                 } else {
                     awaiting.put(owner.getUniqueId(), () -> army.setHuntTarget(owner, target));
                     owner.sendMessage(ChatColor.DARK_PURPLE + "Send the Nulls after " + target.getName() + "? Say 'null confirm' or 'null cancel'.");
+                }
+            }
+            case "fetch" -> {
+                String name = out == null || !out.has("target") ? "" : out.get("target").getAsString();
+                Player target = name.isEmpty() ? null : Bukkit.getPlayerExact(name);
+                if (target == null) {
+                    owner.sendMessage(ChatColor.GRAY + "I can't find that player online.");
+                } else if (!consent.canTarget(target)) {
+                    owner.sendMessage(ChatColor.RED + "Roster only. " + target.getName() + " is not on it.");
+                } else {
+                    awaiting.put(owner.getUniqueId(), () -> army.fetchPlayer(owner, target));
+                    owner.sendMessage(ChatColor.DARK_PURPLE + "Bring " + target.getName() + " to you? Say 'null confirm' or 'null cancel'.");
                 }
             }
             case "portal" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.buildPortal(owner));

@@ -845,7 +845,9 @@ public final class NullArmy {
                 + ". Army mode: " + mode.name()
                 + ". Owner " + owner.getName() + " is in " + owner.getWorld().getEnvironment().name().toLowerCase()
                 + " at " + coordsOf(owner.getLocation())
-                + ". Roster players online: " + (roster.length() == 0 ? "none" : roster.toString().trim()) + ".";
+                + ". Roster players online: " + (roster.length() == 0 ? "none" : roster.toString().trim())
+                + ". Recent alarms: " + (plugin.recentAlerts(6).isEmpty() ? "none" : String.join(" | ", plugin.recentAlerts(6)))
+                + ". Hunts active: " + (hunters.isEmpty() ? "none" : hunters.size() + " Nulls out after roster players") + ".";
     }
 
     public void status(Player owner) {
@@ -1426,6 +1428,27 @@ public final class NullArmy {
     }
 
     /** Console hunt: hunters on a roster player, with no owner standing by. */
+    /** Brings a roster player to the owner: the Nulls close in, the target is held in slowness and blindness, then taken to the owner. */
+    public void fetchPlayer(Player owner, Player target) {
+        target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 80, 3, false, true));
+        target.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 80, 0, false, true));
+        target.sendMessage(ChatColor.DARK_PURPLE + "The Nulls are bringing you to " + owner.getName() + ".");
+        sendTo(owner.getLocation());
+        owner.sendMessage(ChatColor.DARK_PURPLE + "Nulls are bringing " + target.getName() + " to you.");
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (!target.isOnline() || !owner.isOnline()) return;
+                if (!consent.canTarget(target)) return; // consent revoked mid-escort: let them go
+                Location dest = owner.getLocation().clone().add(1.5, 0, 1.5);
+                target.getWorld().spawnParticle(Particle.PORTAL, target.getLocation(), 60, 0.4, 0.8, 0.4, 0.2);
+                target.teleport(dest);
+                dest.getWorld().spawnParticle(Particle.PORTAL, dest, 60, 0.4, 0.8, 0.4, 0.2);
+                owner.sendMessage(ChatColor.DARK_PURPLE + target.getName() + " is with you.");
+            }
+        }.runTaskLater(plugin, 60L);
+    }
+
     public String huntOffline(Player target, int count, int minutes) {
         if (target == null) return "That player is not online.";
         if (!consent.canTarget(target)) return "Roster only. " + target.getName() + " is not on it.";
