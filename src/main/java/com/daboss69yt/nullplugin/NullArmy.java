@@ -146,6 +146,10 @@ public final class NullArmy {
     /** A focused attack: one roster player or hostile mob, for a limited time. */
     private record Focus(UUID target, long expiresAt) {}
     private final Map<NPC, Focus> focus = new HashMap<>();
+    /** Hidden Nulls lying in wait for a target. They break cover when the target comes within reach. */
+    private record Wait(UUID target, long expiresAt) {}
+    private final Map<NPC, Wait> waits = new HashMap<>();
+    private static final double WAIT_TRIGGER = 14;
     /** The Null the owner is looking through, and the owner's game mode to restore. */
     private NPC viewing;
     private GameMode viewRestore = GameMode.SURVIVAL;
@@ -598,9 +602,10 @@ public final class NullArmy {
         }
         long expires = System.currentTimeMillis() + minutes * 60_000L;
         for (int i = 0; i < count; i++) {
-            Location loc = cornerSpot(target.getLocation());
-            NPC npc = createNull(loc, gearForMode(Mode.HUNT), false);
-            hunters.put(npc, new Hunt(target.getUniqueId(), expires));
+            Location around = center != null ? center : target.getLocation();
+            NPC npc = createNull(ringSpot(around, i, count), gearForMode(Mode.HUNT), false);
+            if (!npc.isSpawned()) npc.spawn(ringSpot(around, i, count));
+            waitFor(npc, target, expires);
         }
         return true;
     }
@@ -644,23 +649,17 @@ public final class NullArmy {
         if (owner != null) owner.sendMessage(ChatColor.DARK_RED + "Portal open at " + coordsOf(centre)
                 + ". Nulls step out for " + target.getName() + ".");
         long expires = System.currentTimeMillis() + minutes * 60_000L;
+        // They wait beside the exit the whole time, hidden. They break cover when the target comes through.
         for (int i = 0; i < count; i++) {
-            final int n = i;
-            new BukkitRunnable() {
-                @Override
-                public void run() {
-                    if (!target.isOnline()) return;
-                    Location out = new Location(w, bx - 0.5, by, bz + 0.5);
-                    w.spawnParticle(Particle.PORTAL, out.clone().add(0, 1, 0), 120, 0.6, 1.0, 0.6, 0.5);
-                    w.playSound(out, Sound.BLOCK_PORTAL_TRAVEL, 0.9f, 0.8f + n * 0.1f);
-                    NPC npc = createNull(out, gearForMode(Mode.HUNT), false);
-                    if (!npc.isSpawned()) npc.spawn(out);
-                    hunters.put(npc, new Hunt(target.getUniqueId(), expires));
-                    if (owner != null) owner.sendMessage(ChatColor.DARK_RED + "Ambush Null " + (n + 1) + " of " + count
-                            + " stepped out for " + target.getName() + ".");
-                }
-            }.runTaskLater(plugin, 20L + n * 25L); // one step out every 1.25 seconds, so they arrive in turns
+            double side = (i % 2 == 0 ? -2.2 : 2.2);
+            double depth = 2.5 + (i / 2) * 1.5;
+            Location spot = new Location(w, bx + 0.5 + side, by, bz + depth);
+            NPC npc = createNull(spot, gearForMode(Mode.HUNT), false);
+            if (!npc.isSpawned()) npc.spawn(spot);
+            waitFor(npc, target, expires);
         }
+        if (owner != null) owner.sendMessage(ChatColor.DARK_RED + count + " Nulls are waiting by the portal for "
+                + target.getName() + ".");
         // The portal closes when the ambush ends.
         new BukkitRunnable() {
             @Override
@@ -1000,6 +999,7 @@ public final class NullArmy {
     }
 
     private void dropNpc(NPC npc) {
+        waits.remove(npc);
         soloModes.remove(npc);
         focus.remove(npc);
         if (npc == viewing) viewing = null;
@@ -1183,6 +1183,100 @@ public final class NullArmy {
             if (nulls.size() >= armyCap()) break;
             createNull(spot.clone().add(0.5, 0, 0.5), gearForMode(mode), false);
         }
+    }
+
+    /** A spot on a ring around a point, for hunters to wait on out of sight. */
+    private Location ringSpot(Location around, int i, int count) {
+        double a = 2 * Math.PI * i / Math.max(1, count);
+        Location spot = around.clone().add(Math.cos(a) * 12, 0, Math.sin(a) * 12);
+        spot.setY(spot.getWorld().getHighestBlockYAt(spot) + 1);
+        return spot;
+    }
+
+    /** Hides a Null and holds it until its target comes within reach. */
+    private void waitFor(NPC npc, Player target, long expires) {
+        hide(npc);
+        waits.put(npc, new Wait(target.getUniqueId(), expires));
+    }
+
+    private static void reveal(NPC npc) {
+        if (npc.getEntity() instanceof LivingEntity living) {
+            living.removePotionEffect(PotionEffectType.INVISIBILITY);
+            living.setInvisible(false);
+        }
+    }
+
+    private void tickWaits() {
+        long now = System.currentTimeMillis();
+        for (Map.Entry<NPC, Wait> entry : new ArrayList<>(waits.entrySet())) {
+            NPC npc = entry.getKey();
+            Wait wait = entry.getValue();
+            if (!npc.isSpawned() || now >= wait.expiresAt()) {
+                dropNpc(npc);
+                continue;
+            }
+            Player target = Bukkit.getPlayer(wait.target());
+            if (target == null) continue; // target offline: keep waiting
+            if (!consent.canTarget(target)) {
+                dropNpc(npc);
+                continue;
+            }
+            Location here = npc.getStoredLocation();
+            Location tl = target.getLocation();
+            if (here != null && sameWorld(here, tl) && here.distance(tl) <= WAIT_TRIGGER) {
+                waits.remove(npc);
+                reveal(npc);
+                hunters.put(npc, new Hunt(wait.target(), wait.expiresAt()));
+            }
+        }
+    }
+
+    /**
+     * Take over: portals open behind the owner, the squad steps out of all of them at the same moment,
+     * and the whole group holds the ground around the owner.
+     */
+    public String takeOver(Player owner) {
+        if (nulls.size() + 4 > armyCap()) return "Not enough room under the army cap (" + armyCap() + ").";
+        Vector dir = owner.getLocation().getDirection().setY(0);
+        if (dir.lengthSquared() < 0.01) dir = new Vector(0, 0, 1);
+        dir.normalize();
+        boolean alongZ = Math.abs(dir.getX()) >= Math.abs(dir.getZ());
+        Vector side = new Vector(-dir.getZ(), 0, dir.getX());
+        World w = owner.getWorld();
+        Location back = owner.getLocation().clone().subtract(dir.clone().multiply(5));
+        List<Location> opened = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            Location spot = back.clone().add(side.clone().multiply(i * 3 - 4.5));
+            if (buildPortalAt(owner, spot, alongZ).contains("open at")) opened.add(spot);
+        }
+        if (opened.isEmpty()) {
+            return "No portal would open behind you. Check the ground is flat and nobody off the roster is near.";
+        }
+        for (Location s : opened) {
+            if (nulls.size() >= armyCap()) break;
+            Location out = s.clone().add(dir.clone().multiply(2.5)).add(0.5, 0, 0.5);
+            w.spawnParticle(Particle.PORTAL, out.clone().add(0, 1, 0), 120, 0.6, 1.0, 0.6, 0.5);
+            w.playSound(out, Sound.BLOCK_PORTAL_TRAVEL, 0.9f, 1.0f);
+            NPC npc = createNull(out, gearForMode(Mode.GUARD), false);
+            if (!npc.isSpawned()) npc.spawn(out);
+        }
+        guardCage(owner.getLocation());
+        // The portals close after a minute; the Nulls stay where they came out.
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                for (Location s : opened) {
+                    for (int a = -1; a <= 0; a++) {
+                        for (int y = s.getBlockY(); y <= s.getBlockY() + 2; y++) {
+                            Block b = alongZ ? w.getBlockAt(s.getBlockX(), y, s.getBlockZ() + a)
+                                    : w.getBlockAt(s.getBlockX() + a, y, s.getBlockZ());
+                            if (b.getType() == Material.NETHER_PORTAL) b.setType(Material.AIR, false);
+                        }
+                    }
+                }
+            }
+        }.runTaskLater(plugin, 1200L);
+        return opened.size() + " portals opened behind you. The squad stepped out of all of them together and holds this ground.";
     }
 
     private void checkAlarm(Player owner) {
@@ -1504,6 +1598,7 @@ public final class NullArmy {
         }
         cycle++;
         checkView(owner);
+        tickWaits();
         expireHunters();
         checkAlarm(owner);
         checkEmergency(owner);
@@ -1525,6 +1620,7 @@ public final class NullArmy {
         for (NPC npc : new ArrayList<>(nulls)) {
             if (!npc.isSpawned() || arriving.contains(npc)) continue;
             if (spies.containsKey(npc)) continue;
+            if (waits.containsKey(npc)) continue;
             Focus focused = focus.get(npc);
             if (focused != null) {
                 focusTick(npc, focused);

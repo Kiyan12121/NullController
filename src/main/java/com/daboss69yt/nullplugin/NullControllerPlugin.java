@@ -45,7 +45,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
 
     private static final List<String> SUBCOMMANDS = List.of("summon", "dismiss", "recall", "guard", "follow",
             "hunt", "stay", "auto", "goto", "status", "ranks", "mine", "lumber", "farm", "forge", "chest", "patrol", "stashroom", "autowork", "autospy",
-            "build", "fortify", "cage", "invade", "ambush", "totem", "succession", "event", "remote", "team", "orbital", "stabshot", "chests", "pearl", "scout", "rank", "portal", "weapon", "arm", "squad", "solo", "view", "help");
+            "build", "fortify", "cage", "invade", "ambush", "totem", "succession", "event", "remote", "team", "orbital", "stabshot", "chests", "pearl", "scout", "rank", "portal", "weapon", "arm", "squad", "solo", "view", "takeover", "help");
     private static final List<String> BUILDS = List.of("citadel", "bridge", "watchtower", "barracks",
             "forgegate", "spire", "city", "metropolis", "collector", "smelter", "door", "melonfarm", "prison", "cancel", "undo", "preview");
     private static final List<String> EVENTS = List.of("forge", "capital", "end", "clash");
@@ -406,6 +406,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             case "status" -> army.status(owner);
             case "ranks" -> army.showRanks(owner);
             case "squad" -> army.showSquad(owner);
+            case "takeover" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.takeOver(owner));
             case "solo" -> handleSolo(owner, args);
             case "view" -> handleView(owner, args);
             case "help" -> sendHelp(owner);
@@ -993,6 +994,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             button(inv, 40, Material.IRON_SWORD, "Clash", "Two armies face off", "event", "clash");
             button(inv, 41, Material.OBSERVER, "Alerts", "The last 30 alarms and finds", "cmd", "nullalerts");
             button(inv, 42, Material.NETHERITE_INGOT, "Nether Law", "Strikes, prisoners and the prison", "cmd", "nullnether", "status");
+            button(inv, 43, Material.TOTEM_OF_UNDYING, "Take Over", "Portals open behind you and the squad holds here", "cmd", "nullcmd", "takeover");
             return inv;
         }
 

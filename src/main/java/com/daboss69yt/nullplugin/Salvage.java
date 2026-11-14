@@ -67,11 +67,12 @@ public final class Salvage implements CommandExecutor {
         String reply = switch (sub) {
             case "mark1" -> mark(owner, 0);
             case "mark2" -> mark(owner, 1);
-            case "take" -> args.length < 2 ? "Usage: /nullsalvage take <name>" : take(owner, args[1]);
+            case "take" -> args.length < 2 ? "Usage: /nullsalvage take <name>" : take(owner, args[1], true);
+            case "copy" -> args.length < 2 ? "Usage: /nullsalvage copy <name>" : take(owner, args[1], false);
             case "place" -> args.length < 2 ? "Usage: /nullsalvage place <name> (look at the spot)" : place(owner, args[1]);
             case "list" -> list();
             case "delete" -> args.length < 2 ? "Usage: /nullsalvage delete <name>" : delete(args[1]);
-            default -> "Usage: mark1, mark2 (look at a corner), take <name>, place <name> (look at the spot), list, delete <name>.";
+            default -> "Usage: mark1, mark2 (look at a corner), take <name> (removes it), copy <name> (keeps it), place <name> (look at the spot), list, delete <name>.";
         };
         owner.sendMessage(ChatColor.DARK_PURPLE + reply);
         return true;
@@ -85,14 +86,14 @@ public final class Salvage implements CommandExecutor {
     }
 
     /** Saves the marked box as a blueprint, then dismantles it top-down while the Nulls stand beside it. */
-    private String take(Player owner, String raw) {
+    private String take(Player owner, String raw, boolean dismantle) {
         String name = cleanName(raw);
         if (name == null) return "Name it with letters, numbers, - or _ (32 at most).";
         Location[] box = marks.get(owner.getUniqueId());
         if (box == null || box[0] == null || box[1] == null) return "Mark both corners first: mark1, mark2.";
         World w = box[0].getWorld();
         if (!w.equals(box[1].getWorld())) return "Both corners must be in the same world.";
-        if (queue.isBusy()) return "The Nulls are busy with another job. Wait for it to finish.";
+        if (dismantle && queue.isBusy()) return "The Nulls are busy with another job. Wait for it to finish.";
 
         int x1 = Math.min(box[0].getBlockX(), box[1].getBlockX()), x2 = Math.max(box[0].getBlockX(), box[1].getBlockX());
         int y1 = Math.min(box[0].getBlockY(), box[1].getBlockY()), y2 = Math.max(box[0].getBlockY(), box[1].getBlockY());
@@ -116,30 +117,31 @@ public final class Salvage implements CommandExecutor {
                     e.add(b.getBlockData().getAsString());
                     entries.add(e);
                     BlockState state = b.getState();
-                    if (state instanceof Container c) {
+                    if (dismantle && state instanceof Container c) {
                         // Contents drop at the site. Clearing after the drop stops a double chest duplicating items.
                         for (ItemStack item : c.getInventory().getContents()) {
                             if (item != null) w.dropItemNaturally(b.getLocation().add(0.5, 0.5, 0.5), item);
                         }
                         c.getInventory().clear();
                     }
-                    clear.add(new BuildQueue.Placement(b.getLocation(), Material.AIR));
+                    if (dismantle) clear.add(new BuildQueue.Placement(b.getLocation(), Material.AIR));
                 }
             }
         }
-        if (clear.isEmpty()) return "Nothing to take apart in that box.";
-
-        boolean started = queue.start("taking " + name + " apart", clear, TAKE_PER_TICK,
-                () -> owner.sendMessage(ChatColor.DARK_PURPLE + name + " is down. Blueprint saved."));
-        if (!started) return "The Nulls are busy with another job. Wait for it to finish.";
+        if (entries.size() == 0) return "Nothing to take in that box.";
         try {
             saveBlueprint(name, w.getName(), entries);
         } catch (IOException ex) {
-            queue.cancel();
             return "Could not save the blueprint: " + ex.getMessage();
         }
+        if (!dismantle) {
+            return "Copied " + entries.size() + " blocks as blueprint " + name + ". Nothing was removed.";
+        }
+        boolean started = queue.start("taking " + name + " apart", clear, TAKE_PER_TICK,
+                () -> owner.sendMessage(ChatColor.DARK_PURPLE + name + " is down. Blueprint saved."));
+        if (!started) return "The Nulls are busy with another job. Wait for it to finish.";
         army.sendTo(new Location(w, x1 - 2, y1, z1 - 2));
-        return "Taking " + name + " apart: " + clear.size() + " blocks saved as a blueprint. The Nulls are on it.";
+        return "Taking " + name + " apart: " + entries.size() + " blocks saved as a blueprint. The Nulls are on it.";
     }
 
     /** Rebuilds a saved blueprint with its lowest corner on the spot you are looking at. */
