@@ -114,7 +114,7 @@ public final class Structures {
     public static List<Placement> prison(Location base) {
         World w = base.getWorld();
         int bx = base.getBlockX(), by = base.getBlockY(), bz = base.getBlockZ();
-        int halfX = 15, halfZ = 10, wallH = 6;
+        int halfX = 30, halfZ = 22, wallH = 8;
         List<Placement> out = new ArrayList<>();
         // Floor
         for (int x = -halfX; x <= halfX; x++)
@@ -149,7 +149,7 @@ public final class Structures {
                     }
         // Cell rows: iron bar partitions running north-south at x = -6, -2, 2, 6 with a gap every four blocks
         for (int y = 1; y <= wallH; y++)
-            for (int x : new int[]{-6, -2, 2, 6})
+            for (int x : new int[]{-24, -18, -12, -6, 6, 12, 18, 24})
                 for (int z = -halfZ + 2; z <= halfZ - 2; z++) {
                     if (z % 4 == 0) continue; // a cell door every four blocks
                     out.add(at(w, bx, by, bz, x, y, z, Material.IRON_BARS));

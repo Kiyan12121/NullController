@@ -95,6 +95,20 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         load();
     }
 
+    /** A step on a prison plate raises the alarm. The owner is told, and roster players who step on one are hunted. */
+    @EventHandler
+    public void onPrisonPlate(org.bukkit.event.player.PlayerInteractEvent e) {
+        if (e.getAction() != org.bukkit.event.block.Action.PHYSICAL) return;
+        Block plate = e.getClickedBlock();
+        if (plate == null || plate.getType() != Material.POLISHED_BLACKSTONE_PRESSURE_PLATE) return;
+        if (configLoc("prison") == null || !inPrison(plate.getLocation())) return;
+        Player who = e.getPlayer();
+        Player owner = Bukkit.getPlayerExact(ConsentManager.OWNER_NAME);
+        if (owner == null || consent.isOwner(who)) return;
+        owner.sendMessage(ChatColor.DARK_RED + "PRISON ALARM: " + who.getName() + " stepped on a plate.");
+        if (consent.canTarget(who)) army.ambush(owner, who, 6, 5);
+    }
+
     /** Starts the prison watch: rations and escape checks. */
     public void start() {
         army.setPrisonGuardNeeded(anyPrisoner()); // prisoners held before a restart keep their guard
@@ -121,7 +135,7 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
     }
 
     private double prisonRadius() {
-        return plugin.getConfig().getDouble("prison-radius", 25);
+        return plugin.getConfig().getDouble("prison-radius", 40);
     }
 
     private List<String> blockedCommands() {

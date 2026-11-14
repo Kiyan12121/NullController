@@ -85,7 +85,7 @@ nether-warning-minutes: 10
 nether-hunt-minutes: 5
 # Prison: set in game with /nullnether prison set. Prisoners must stay inside this radius.
 prison: ""
-prison-radius: 25
+prison-radius: 40
 prison-food-minutes: 5
 prisoner-blocked-commands:
   - home

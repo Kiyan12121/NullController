@@ -74,6 +74,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
 
         consent = new ConsentManager(this);
         army = new NullArmy(this, consent);
+        getServer().getScheduler().runTaskLater(this, army::adoptSurvivors, 60L);
         army.startTicker();
         builders = new Builders(this, army);
         long minutes = Math.max(1, getConfig().getInt("auto-fortify-minutes", 3));

@@ -307,8 +307,36 @@ public final class NullArmy {
 
     public void shutdown() {
         stopSwinging();
-        removeAll();
+        // Despawn but keep the NPCs: Citizens saves them, and adoptSurvivors() brings them back on startup.
+        for (NPC npc : new ArrayList<>(nulls)) {
+            if (npc.isSpawned()) npc.despawn();
+        }
+        resetWork();
         memory.save();
+    }
+
+    /** Citizens tag on every Null, so a restart can find them again. */
+    static final String NULL_TAG = "nullcontroller-null";
+
+    /**
+     * Re-adopts Nulls that Citizens still has after a restart, and spawns them where they were.
+     * Called a few seconds after enable, because Citizens loads its NPCs after NullController enables.
+     */
+    public void adoptSurvivors() {
+        int found = 0;
+        for (NPC npc : CitizensAPI.getNPCRegistry()) {
+            if (!npc.data().has(NULL_TAG) || nulls.contains(npc)) continue;
+            nulls.add(npc);
+            if (LEADER_NAME.equals(npc.getName()) && leader == null) leader = npc;
+            packs.put(npc, Bukkit.createInventory(null, PACK_SIZE, "Null Pack"));
+            Location where = npc.getStoredLocation();
+            if (!npc.isSpawned() && where != null && where.getWorld() != null) npc.spawn(where);
+            found++;
+        }
+        if (found > 0) {
+            recomputeRanks();
+            plugin.getLogger().info("Re-adopted " + found + " Nulls from before the restart.");
+        }
     }
 
     // ---------- Commands ----------
@@ -745,6 +773,7 @@ public final class NullArmy {
     private NPC createNull(Location loc, ItemStack gear, boolean claimLeader) {
         boolean becomesLeader = claimLeader && leader == null;
         NPC npc = CitizensAPI.getNPCRegistry().createNPC(EntityType.PLAYER, becomesLeader ? LEADER_NAME : randomName());
+        npc.data().setPersistent(NULL_TAG, true);
         npc.setProtected(false); // Citizens NPCs are invulnerable by default; Nulls must be hittable
         npc.getNavigator().getDefaultParameters().baseSpeed(1.4f); // Nulls run to their jobs and fights, not stroll
         npc.getOrAddTrait(GameModeTrait.class).setGameMode(GameMode.SURVIVAL); // creative players can't be hurt
