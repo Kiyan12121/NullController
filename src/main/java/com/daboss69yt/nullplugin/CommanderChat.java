@@ -38,7 +38,7 @@ import java.util.Set;
 public final class CommanderChat implements Listener {
     private static final String ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
     private static final Set<String> ACTIONS = Set.of("none", "status", "scout", "recall", "guard", "follow", "stay", "design",
-            "hunt", "fetch", "return", "run", "rod", "send_base", "portal", "weapon", "bring", "mine", "lumber", "farm", "patrol", "stashroom",
+            "hunt", "fetch", "return", "run", "rod", "send_base", "duel", "trial", "loot", "portal", "weapon", "bring", "mine", "lumber", "farm", "patrol", "stashroom",
             "ambush", "stabshot", "orbital", "mobcannon", "ranks", "forge", "explore", "totem", "pearl", "chests",
             "squad", "solo", "solo_clear", "view", "view_attack", "view_stop");
     private static final int HISTORY_TURNS = 10;
@@ -57,7 +57,7 @@ public final class CommanderChat implements Listener {
             + "bring opens a portal to a roster player who is in the Nether, named in \"target\". "
             + "fetch makes the Nulls bring a roster player named in \"target\" to the owner through a real portal, with a sign; the owner confirms first. "
             + "return sends a fetched roster player named in \"target\" back to where they were; the owner confirms first. "
-            + "run runs any one of the owner's own NullController commands, with the words in \"target\" (for example 'summon 10', 'rod blink', 'build watchtower', 'status'); destructive or roster-hitting ones wait for the owner's confirm. Never ask for raw server commands. rod gives the owner a rod: set \"key\" to the rod kind, such as blink, heal, frost, recall, nethertrap, ambush, nuke. send_base sends the Nulls to the Nether base. fetch and bring move roster players, never the Nulls. Think before you answer: pick the one action that matches what the owner wants, and ask one short question instead of guessing when it is unclear. "
+            + "run runs any one of the owner's own NullController commands, with the words in \"target\" (for example 'summon 10', 'rod blink', 'build watchtower', 'status'); destructive or roster-hitting ones wait for the owner's confirm. Never ask for raw server commands. rod gives the owner a rod: set \"key\" to the rod kind, such as blink, heal, frost, recall, nethertrap, ambush, nuke. send_base sends the Nulls to the Nether base. fetch and bring move roster players, never the Nulls. duel is a practice fight between the owner and the Commander, using his attacks, pearls and rockets; it stops at three hearts or when the timer runs out. Set \"n\" to the minutes. trial sends up to four Nulls to the nearest trial chamber to empty its chests, and loot brings the loot back to the owner. The Nulls never open vaults and never break trial spawners. Think before you answer: pick the one action that matches what the owner wants, and ask one short question instead of guessing when it is unclear. "
             + "Use the recent alarms and roster in the army state to choose tactics, and say briefly what you intend. "
             + "mine, lumber, farm, patrol, forge and explore set the army to work. ranks reports each rank. chests reports the nearest chests. totem hands the owner a totem. pearl fires a pearl at the spot the owner is looking at. stashroom builds the stash room. "
             + "squad lists the Nulls by number. solo with n and order gives one Null its own job (guard, follow, hunt, stay, mine, lumber, farm or auto); solo_clear clears them. view with n looks through Null n; view_attack strikes what it sees; view_stop comes back. "
@@ -537,6 +537,9 @@ public final class CommanderChat implements Listener {
                     owner.sendMessage(ChatColor.DARK_PURPLE + "The Nulls are heading to the base.");
                 }
             }
+            case "duel" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.duel(owner, num > 0 ? num : 3));
+            case "trial" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.trialLoot(owner));
+            case "loot" -> army.deliverLoot(owner);
             case "portal" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.buildPortal(owner));
             case "home" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.buildPortal(owner) + " " + armBase(owner));
             case "buff" -> buff(owner);
