@@ -621,6 +621,44 @@ public final class NullArmy {
     }
 
     /** Ambush: portals open around one roster player, and Nulls step out of them after a moment. */
+    /**
+     * Nether trap: a portal opens at the hook in the current world, and hidden Nulls wait on the
+     * far side at the Nether base. They break cover when the owner comes through and gets close.
+     */
+    public String netherWaitAt(Player owner, Location hook, int count, int minutes) {
+        Location base = offlineSite();
+        if (base == null || base.getWorld() == null) return "No Nether base set yet. Set one first.";
+        if (hook.getWorld() == null || hook.getWorld().getEnvironment() == World.Environment.NETHER)
+            return "Cast it in the Overworld: the portal needs to lead to the Nether base.";
+        if (nulls.size() + count > armyCap()) return "Not enough room under the army cap (" + armyCap() + ").";
+        String made = buildPortalAt(owner, hook);
+        if (!made.contains("open at")) return made;
+        long expires = System.currentTimeMillis() + minutes * 60_000L;
+        World nether = base.getWorld();
+        for (int i = 0; i < count; i++) {
+            double side = (i % 2 == 0 ? -2.2 : 2.2);
+            double depth = 2.5 + (i / 2) * 1.5;
+            Location spot = new Location(nether, base.getX() + side, base.getY(), base.getZ() + depth);
+            NPC npc = createNull(spot, gearForMode(Mode.HUNT), false);
+            if (!npc.isSpawned()) npc.spawn(spot);
+            waitFor(npc, owner, expires);
+        }
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                for (int a = -2; a <= 1; a++)
+                    for (int y = hook.getBlockY() - 1; y <= hook.getBlockY() + 3; y++) {
+                        Block b1 = hook.getWorld().getBlockAt(hook.getBlockX() + a, y, hook.getBlockZ());
+                        Block b2 = hook.getWorld().getBlockAt(hook.getBlockX(), y, hook.getBlockZ() + a);
+                        for (Block b : new Block[]{b1, b2}) {
+                            if (b.getType() == Material.NETHER_PORTAL || b.getType() == Material.OBSIDIAN) b.setType(Material.AIR, false);
+                        }
+                    }
+            }
+        }.runTaskLater(plugin, minutes * 60L * 20L);
+        return made + " " + count + " Nulls are waiting in the Nether for " + owner.getName() + ". Walk through when ready.";
+    }
+
     public void ambush(Player owner, Player target, int count, int minutes) {
         if (nulls.size() + count > armyCap()) {
             if (owner != null) owner.sendMessage(ChatColor.RED + "Not enough room under the army cap (" + armyCap() + ").");

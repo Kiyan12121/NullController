@@ -71,6 +71,7 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
     static final String HEAL = ChatColor.GREEN + "Heal Rod";
     static final String FROST = ChatColor.AQUA + "Frost Rod";
     static final String RECALL = ChatColor.GOLD + "Recall Rod";
+    static final String NETHER_TRAP = ChatColor.DARK_PURPLE + "Nether Trap Rod";
 
     static final String MOB_PREFIX = ChatColor.GREEN + "Mob Rod: ";
     private static final double TNT_SAFE_RADIUS = 12;
@@ -79,7 +80,8 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
             Map.entry("summon", SUMMON), Map.entry("lightning", LIGHTNING), Map.entry("launch", LAUNCH),
             Map.entry("wither", WITHER), Map.entry("gravity", GRAVITY), Map.entry("orbital", ORBITAL),
             Map.entry("nuke", NUKE), Map.entry("mark", MARK), Map.entry("flare", FLARE),
-            Map.entry("blink", BLINK), Map.entry("heal", HEAL), Map.entry("frost", FROST), Map.entry("recall", RECALL));
+            Map.entry("blink", BLINK), Map.entry("heal", HEAL), Map.entry("frost", FROST), Map.entry("recall", RECALL),
+            Map.entry("nethertrap", NETHER_TRAP));
     private static final Map<String, String> KIND_BY_NAME = new HashMap<>();
     static {
         NAME_BY_KIND.forEach((k, v) -> KIND_BY_NAME.put(v, k));
@@ -167,6 +169,7 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
             case "heal" -> "Land the hook: Nulls within 16 blocks of it regenerate.";
             case "frost" -> "Land near a roster player: they are slowed and mining-fatigued.";
             case "recall" -> "Land the hook: the whole army walks to that spot.";
+            case "nethertrap" -> "Land the hook: a portal opens here and Nulls wait for you in the Nether.";
             default -> "";
         };
     }
@@ -227,6 +230,7 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
             case "mark" -> mark(p, hook);
             case "flare" -> flare(p, hook);
             case "blink" -> blink(p, hook);
+            case "nethertrap" -> p.sendMessage(ChatColor.DARK_PURPLE + army.netherWaitAt(p, hook, 3, 5));
             case "heal" -> healSquad(p, hook);
             case "frost" -> frost(p, hook);
             case "recall" -> {
