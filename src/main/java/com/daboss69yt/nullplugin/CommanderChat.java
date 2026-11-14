@@ -47,7 +47,7 @@ public final class CommanderChat implements Listener {
             "You are the Commander of the NULL army on a Minecraft server. You are pragmatic, deeply loyal to "
             + "the NULL, and lighthearted, with a dry humour. You are ruthless toward outsiders but warm to your team. "
             + "Your owner gives the orders. Keep lines short, under 40 words. Never claim you did something you did not do. "
-            + "You may only request these actions: none, status, scout, recall, guard, follow, stay, design, hunt, portal, home, buff, give, weapon. "
+            + "You may only request these actions: none, status, scout, recall, guard, follow, stay, design, hunt, portal, home, buff, give, auto, weapon. auto lets the Nulls choose their own jobs. "
             + "general gives orders to the ranks under you: set \"key\" to I for generals or D for soldiers, and \"target\" to guard, follow, stay, recall, dismiss or clear. Name the order in your reply too. "
             + "buff potion-buffs the owner (for 'pot me up' or 'buff me').give hands the owner items: set \"key\" to a Minecraft item name such as golden_apple, and \"amount\" up to 64. "
             + "home opens a portal in front of the owner that takes them to the Nether base, for requests like 'get me home' or 'take me to base'. "
@@ -473,6 +473,7 @@ public final class CommanderChat implements Listener {
             case "portal" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.buildPortal(owner));
             case "home" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.buildPortal(owner) + " " + armBase(owner));
             case "buff" -> buff(owner);
+            case "auto" -> army.setMode(NullArmy.Mode.AUTO, owner);
             case "give" -> give(owner, out);
             case "general" -> {
                 String rk = out == null || !out.has("key") ? "" : out.get("key").getAsString().trim().toUpperCase();

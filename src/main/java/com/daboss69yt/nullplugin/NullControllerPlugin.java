@@ -44,7 +44,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     private Rods rods;
 
     private static final List<String> SUBCOMMANDS = List.of("summon", "dismiss", "recall", "guard", "follow",
-            "hunt", "stay", "goto", "status", "ranks", "mine", "lumber", "farm", "forge", "chest", "patrol", "stashroom", "autowork", "autospy",
+            "hunt", "stay", "auto", "goto", "status", "ranks", "mine", "lumber", "farm", "forge", "chest", "patrol", "stashroom", "autowork", "autospy",
             "build", "fortify", "cage", "invade", "ambush", "totem", "succession", "event", "remote", "team", "orbital", "stabshot", "chests", "pearl", "scout", "rank", "portal", "weapon", "arm", "help");
     private static final List<String> BUILDS = List.of("citadel", "bridge", "watchtower", "barracks",
             "forgegate", "spire", "city", "metropolis", "collector", "smelter", "door", "melonfarm", "prison", "cancel", "undo", "preview");
@@ -388,6 +388,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             case "follow" -> army.setMode(NullArmy.Mode.FOLLOW, owner);
             case "hunt" -> handleHunt(owner, args);
             case "stay" -> army.setMode(NullArmy.Mode.STAY, owner);
+            case "auto" -> army.setMode(NullArmy.Mode.AUTO, owner);
             case "status" -> army.status(owner);
             case "ranks" -> army.showRanks(owner);
             case "help" -> sendHelp(owner);

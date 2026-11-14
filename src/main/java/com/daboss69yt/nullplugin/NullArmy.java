@@ -64,7 +64,25 @@ import java.util.UUID;
 /** Owns every Null NPC, each Null's own pack, the army's mode, combat, hunters, and the behaviour loop. */
 public final class NullArmy {
 
-    public enum Mode { GUARD, FOLLOW, HUNT, GOTO, STAY, MINE, LUMBER, FARM, PATROL, FORGE, EXPLORE, NETHER }
+    public enum Mode { GUARD, FOLLOW, HUNT, GOTO, STAY, MINE, LUMBER, FARM, PATROL, FORGE, EXPLORE, NETHER, AUTO }
+
+    /** A Null's own job in automation mode, and when it picks again. */
+    private record AutoChoice(Mode mode, long until) {
+    }
+
+    private final Map<NPC, AutoChoice> autoChoices = new HashMap<>();
+
+    /** Automation: each Null picks its own job (mostly mining, some patrol, guard and follow) and re-picks in 3-5 minutes. */
+    private Mode autoPick(NPC npc) {
+        long now = System.currentTimeMillis();
+        AutoChoice c = autoChoices.get(npc);
+        if (c != null && c.until() > now) return c.mode();
+        int roll = rng.nextInt(100);
+        Mode pick = roll < 40 ? Mode.MINE : roll < 60 ? Mode.PATROL : roll < 80 ? Mode.GUARD : Mode.FOLLOW;
+        autoChoices.put(npc, new AutoChoice(pick, now + 180_000L + rng.nextInt(120_000)));
+        if (npc.isSpawned()) setHeldItem(npc, gearForMode(pick));
+        return pick;
+    }
 
     enum WorkKind { MINE, LUMBER, FARM }
 
@@ -1285,7 +1303,7 @@ public final class NullArmy {
         double leash = plugin.getConfig().getDouble("leash-distance", 15);
         double huntRange = plugin.getConfig().getDouble("hunt-range", 100);
 
-        WorkKind kind = kindOf(mode);
+        WorkKind kind = kindOf(mode == Mode.AUTO ? Mode.MINE : mode);
         if (kind != null && workTargets.isEmpty() && cycle - lastScanCycle >= SCAN_EVERY_CYCLES) {
             refillTargets(owner, kind);
             lastScanCycle = cycle;
@@ -1324,6 +1342,7 @@ public final class NullArmy {
                 continue;
             }
             Mode m = rankModes.getOrDefault(rank, mode);
+            if (m == Mode.AUTO) m = autoPick(npc);
             if (rank == 'D' && m == Mode.FOLLOW && followNearestGeneral(npc, index, leash)) continue;
             if (cycle % 4 == 0 && (m == Mode.GUARD || m == Mode.PATROL)) {
                 swing(npc); // arms moving on watch
@@ -2391,10 +2410,11 @@ public final class NullArmy {
             }
             Location here = npc.getStoredLocation();
             Location tl = target.getLocation();
-            if (here == null || !sameWorld(here, tl) || here.distance(tl) > 40) {
+            // Keep out of sight: sit 16 to 30 blocks behind the target, never walking up to them.
+            if (here == null || !sameWorld(here, tl) || here.distance(tl) > 60) {
                 appearNear(npc, target);
-            } else if (here.distance(tl) > 14) {
-                npc.getNavigator().setTarget(tl);
+            } else if (here.distance(tl) < 16 || here.distance(tl) > 30) {
+                npc.getNavigator().setTarget(behindSpot(target, 22));
             }
             if (now >= spy.nextReport()[0]) {
                 spy.nextReport()[0] = now + 60_000L;
@@ -2463,8 +2483,19 @@ public final class NullArmy {
     }
 
     /** Hunters appear around a corner and chase. No portal, no flash, no teleport onto the player. */
+    /** A ground spot the given distance behind the target, out of the way of where they are looking. */
+    private Location behindSpot(Player target, double dist) {
+        Location tl = target.getLocation();
+        org.bukkit.util.Vector facing = tl.getDirection().setY(0);
+        if (facing.lengthSquared() < 0.0001) facing = new org.bukkit.util.Vector(1, 0, 0);
+        facing.normalize();
+        Location spot = tl.clone().subtract(facing.multiply(dist));
+        spot.setY(spot.getWorld().getHighestBlockYAt(spot) + 1);
+        return spot;
+    }
+
     private void appearNear(NPC npc, Player target) {
-        Location spot = cornerSpot(target.getLocation());
+        Location spot = behindSpot(target, 22);
         if (npc.getEntity() == null) {
             npc.spawn(spot);
             return;
