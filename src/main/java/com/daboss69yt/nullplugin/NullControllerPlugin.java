@@ -838,6 +838,19 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         }
     }
 
+    /** Anyone who hits the owner, directly or with a projectile, is recorded so the guards hit back. */
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR, ignoreCancelled = true)
+    public void onOwnerHurt(org.bukkit.event.entity.EntityDamageByEntityEvent e) {
+        if (!(e.getEntity() instanceof Player victim) || !consent.isOwner(victim)) return;
+        Player who = null;
+        if (e.getDamager() instanceof Player p) {
+            who = p;
+        } else if (e.getDamager() instanceof org.bukkit.entity.Projectile pr && pr.getShooter() instanceof Player shooter) {
+            who = shooter;
+        }
+        if (who != null) army.recordAttacker(who);
+    }
+
     /** The player behind a command: the sender, or the owner when the console runs it. Null if the owner is offline. */
     public Player ownerFor(CommandSender sender) {
         if (sender instanceof Player p) return p;

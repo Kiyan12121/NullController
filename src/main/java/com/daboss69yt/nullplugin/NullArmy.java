@@ -1192,6 +1192,19 @@ public final class NullArmy {
         return center.clone().add(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
     }
 
+    /** Players who hit the owner recently, and when the record expires. Set by the owner damage listener. */
+    private final Map<UUID, Long> attackers = new HashMap<>();
+
+    /** Records someone who hit the owner. Team and the owner are never recorded. Lasts a minute. */
+    public void recordAttacker(Player who) {
+        if (consent.isOwner(who) || consent.isTeam(who)) return;
+        attackers.put(who.getUniqueId(), System.currentTimeMillis() + 60_000L);
+    }
+
+    private boolean recentAttacker(Player who) {
+        return attackers.getOrDefault(who.getUniqueId(), 0L) > System.currentTimeMillis();
+    }
+
     /** Pulls back when badly hurt, or when already hurt and a crowd is closing in. */
     private boolean isWounded(NPC npc) {
         Entity e = npc.getEntity();
@@ -1317,13 +1330,13 @@ public final class NullArmy {
             }
             switch (m) {
                 case GUARD -> {
-                    if (engageMobs(npc)) continue;
+                    if (defendOwner(npc, owner) || engageMobs(npc)) continue;
                     if (cageGuard != null) guardPoint(npc, index);
                     else if (index % 2 == 1 && isNight(owner)) ringAround(npc, owner.getLocation(), index, 10);
                     else followOwner(npc, owner, index, leash);
                 }
                 case FOLLOW -> {
-                    if (engageMobs(npc)) continue;
+                    if (defendOwner(npc, owner) || engageMobs(npc)) continue;
                     if (autoWork(npc, owner, index, leash)) continue;
                     if (System.currentTimeMillis() - lastBuildingAt < 60_000L) {
                         ringAround(npc, owner.getLocation(), index, 4); // guarding the build
@@ -1601,14 +1614,21 @@ public final class NullArmy {
         Location ol = owner.getLocation();
         if (here == null || !sameWorld(here, ol)) return false;
         LivingEntity best = null;
-        double bestDist = 6;
-        for (Entity e : ol.getWorld().getNearbyEntities(ol, 6, 6, 6)) {
+        double bestDist = 16;
+        for (Entity e : ol.getWorld().getNearbyEntities(ol, 16, 16, 16)) {
             if (e == owner || e.getUniqueId().equals(npc.getEntity() == null ? null : npc.getEntity().getUniqueId())) continue;
             LivingEntity cand = null;
-            if (e instanceof Player p && consent.canTarget(p)) cand = p;
-            else if (e instanceof Monster m && !NETHER_PEACE.contains(m.getType())) cand = m;
+            double d = ol.distance(e.getLocation());
+            if (e instanceof Player p) {
+                // Team and the owner are never hit. Anyone who hit the owner is hit back, wherever they are.
+                // Anyone else who comes within six blocks of the owner is stopped: nobody gets close.
+                if (consent.isOwner(p) || consent.isTeam(p)) continue;
+                if (!(recentAttacker(p) || d <= 6)) continue;
+                cand = p;
+            } else if (e instanceof Monster m && d <= 6 && !NETHER_PEACE.contains(m.getType())) {
+                cand = m;
+            }
             if (cand == null) continue;
-            double d = ol.distance(cand.getLocation());
             if (d < bestDist) {
                 bestDist = d;
                 best = cand;
