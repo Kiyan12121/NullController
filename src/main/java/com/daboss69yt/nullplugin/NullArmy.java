@@ -660,6 +660,10 @@ public final class NullArmy {
     }
 
     public void ambush(Player owner, Player target, int count, int minutes) {
+        ambushAt(owner, target, count, minutes, true);
+    }
+
+    private void ambushAt(Player owner, Player target, int count, int minutes, boolean secondWave) {
         if (nulls.size() + count > armyCap()) {
             if (owner != null) owner.sendMessage(ChatColor.RED + "Not enough room under the army cap (" + armyCap() + ").");
             return;
@@ -677,27 +681,37 @@ public final class NullArmy {
                 return;
             }
         }
+        boolean nether = w.getEnvironment() == World.Environment.NETHER;
         int bx = centre.getBlockX(), by = centre.getBlockY(), bz = centre.getBlockZ();
-        // Portal: two wide, three tall, facing east-west, in a obsidian frame on the ground.
+        // Overworld: the portal walks anyone in. Nether: the Nulls step out of the ground, no portal needed.
         List<Block> built = new ArrayList<>();
-        for (int x = bx - 2; x <= bx + 1; x++)
-            for (int y = by - 1; y <= by + 3; y++) {
-                boolean interior = x >= bx - 1 && x <= bx && y >= by && y <= by + 2;
-                Block b = w.getBlockAt(x, y, bz);
-                if (interior) {
-                    Orientable axis = (Orientable) Material.NETHER_PORTAL.createBlockData();
-                    axis.setAxis(Axis.X);
-                    b.setBlockData(axis, false);
-                } else {
-                    b.setType(Material.OBSIDIAN, false);
+        if (!nether) {
+            for (int x = bx - 2; x <= bx + 1; x++)
+                for (int y = by - 1; y <= by + 3; y++) {
+                    boolean interior = x >= bx - 1 && x <= bx && y >= by && y <= by + 2;
+                    Block b = w.getBlockAt(x, y, bz);
+                    if (interior) {
+                        Orientable axis = (Orientable) Material.NETHER_PORTAL.createBlockData();
+                        axis.setAxis(Axis.X);
+                        b.setBlockData(axis, false);
+                    } else {
+                        b.setType(Material.OBSIDIAN, false);
+                    }
+                    built.add(b);
                 }
-                built.add(b);
-            }
-        w.strikeLightningEffect(centre); // cosmetic only: no damage, no fire
-        if (owner != null) owner.sendMessage(ChatColor.DARK_RED + "Portal open at " + coordsOf(centre)
+            w.strikeLightningEffect(centre); // cosmetic only: no damage, no fire
+            ambushPortals.put(target.getUniqueId(), built);
+        }
+        if (owner != null) owner.sendMessage(ChatColor.DARK_RED + (nether ? "Ambush set" : "Portal open") + " at " + coordsOf(centre)
                 + ". Nulls step out for " + target.getName() + ".");
         long expires = System.currentTimeMillis() + minutes * 60_000L;
-        // They wait beside the exit the whole time, hidden. They break cover when the target comes through.
+        // The Commander leads from the front; the rest wait beside the exit, hidden, and break cover when the target comes close.
+        if (leader != null && leader.isSpawned()) {
+            Location front = new Location(w, bx + 0.5, by, bz + 1.5);
+            teleport(leader, front);
+            waitFor(leader, target, expires);
+            ambushers.add(leader);
+        }
         for (int i = 0; i < count; i++) {
             double side = (i % 2 == 0 ? -2.2 : 2.2);
             double depth = 2.5 + (i / 2) * 1.5;
@@ -707,17 +721,36 @@ public final class NullArmy {
             waitFor(npc, target, expires);
             ambushers.add(npc);
         }
-        if (owner != null) owner.sendMessage(ChatColor.DARK_RED + count + " Nulls are waiting by the portal for "
-                + target.getName() + ".");
+        if (owner != null) owner.sendMessage(ChatColor.DARK_RED + count + " Nulls are waiting for "
+                + target.getName() + (leader != null && leader.isSpawned() ? ", the Commander with them." : "."));
         // The portal closes when the ambush ends.
         new BukkitRunnable() {
             @Override
             public void run() {
-                for (Block b : built) {
-                    if (b.getType() == Material.NETHER_PORTAL || b.getType() == Material.OBSIDIAN) b.setType(Material.AIR, false);
-                }
+                closePortals(target.getUniqueId());
             }
         }.runTaskLater(plugin, minutes * 60L * 20L);
+        // Second wave: if the target has run well clear of the first portal, a fresh squad comes through one beside them.
+        if (secondWave && minutes > 1) {
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    if (!target.isOnline() || target.getWorld() != w) return;
+                    if (target.getLocation().distance(centre) < 15) return;
+                    if (!consent.canTarget(target)) return;
+                    ambushAt(owner, target, Math.max(1, count / 2), minutes - 1, false);
+                }
+            }.runTaskLater(plugin, 60L * 20L);
+        }
+    }
+
+    /** Closes a target's ambush portal, so they can't walk back out of the trap. */
+    private void closePortals(UUID target) {
+        List<Block> blocks = ambushPortals.remove(target);
+        if (blocks == null) return;
+        for (Block b : blocks) {
+            if (b.getType() == Material.NETHER_PORTAL || b.getType() == Material.OBSIDIAN) b.setType(Material.AIR, false);
+        }
     }
 
     /** Totem of NULL ran out of charges: the army disbands and can't be resummoned for a while. */
@@ -1259,6 +1292,8 @@ public final class NullArmy {
     private final Map<UUID, Long> shocked = new HashMap<>();
     /** Nulls placed by an ambush. Only these shock the target on reveal; escape hunters do not. */
     private final Set<NPC> ambushers = new HashSet<>();
+    /** Portal blocks of each ambush, by target, so the portal can close once the target is revealed. */
+    private final Map<UUID, List<Block>> ambushPortals = new HashMap<>();
 
     private void tickWaits() {
         long now = System.currentTimeMillis();
@@ -1281,7 +1316,10 @@ public final class NullArmy {
                 waits.remove(npc);
                 reveal(npc);
                 // The first Null out shocks the target and webs their feet, so the squad lands its first hits on a stuck target.
-                if (ambushers.remove(npc) && (!shocked.containsKey(wait.target()) || now - shocked.get(wait.target()) > 15_000L)) {
+                boolean fromAmbush = ambushers.remove(npc);
+                if (fromAmbush) here.getWorld().spawnParticle(Particle.PORTAL, here, 40, 0.4, 0.8, 0.4, 0.2);
+                if (fromAmbush && (!shocked.containsKey(wait.target()) || now - shocked.get(wait.target()) > 15_000L)) {
+                    closePortals(wait.target()); // the portal shuts behind the target: no walking back out
                     shocked.put(wait.target(), now);
                     target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 60, 2, false, true));
                     target.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 40, 0, false, true));

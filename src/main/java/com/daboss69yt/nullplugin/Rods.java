@@ -283,7 +283,7 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
             owner.sendMessage(ChatColor.GRAY + "No roster player near the hook.");
             return;
         }
-        army.ambush(owner, target, 6, (int) plugin.getConfig().getLong("ambush-minutes", 3));
+        army.ambush(owner, target, 10, (int) plugin.getConfig().getLong("ambush-minutes", 3));
         owner.sendMessage(ChatColor.DARK_PURPLE + "Portals open around " + target.getName() + ".");
     }
 
