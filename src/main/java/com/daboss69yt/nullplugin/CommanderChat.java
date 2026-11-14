@@ -39,7 +39,8 @@ public final class CommanderChat implements Listener {
     private static final String ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
     private static final Set<String> ACTIONS = Set.of("none", "status", "scout", "recall", "guard", "follow", "stay", "design",
             "hunt", "portal", "weapon", "bring", "mine", "lumber", "farm", "patrol", "stashroom",
-            "ambush", "stabshot", "orbital", "mobcannon", "ranks", "forge", "explore", "totem", "pearl", "chests");
+            "ambush", "stabshot", "orbital", "mobcannon", "ranks", "forge", "explore", "totem", "pearl", "chests",
+            "squad", "solo", "solo_clear", "view", "view_attack", "view_stop");
     private static final int HISTORY_TURNS = 6;
     private static final long COOLDOWN_MS = 3000;
 
@@ -55,6 +56,7 @@ public final class CommanderChat implements Listener {
             + "portal opens a real nether portal in front of the owner. "
             + "bring opens a portal to a roster player who is in the Nether, named in \"target\". "
             + "mine, lumber, farm, patrol, forge and explore set the army to work. ranks reports each rank. chests reports the nearest chests. totem hands the owner a totem. pearl fires a pearl at the spot the owner is looking at. stashroom builds the stash room. "
+            + "squad lists the Nulls by number. solo with n and order gives one Null its own job (guard, follow, hunt, stay, mine, lumber, farm or auto); solo_clear clears them. view with n looks through Null n; view_attack strikes what it sees; view_stop comes back. "
             + "ambush, stabshot, orbital and mobcannon strike a roster player named in \"target\"; the owner confirms first. "
             + "weapon hands the owner one weapon named in \"key\" (blade, axe, mace, spear, bow, crossbow). "
             + "To design a build, use action design with a build object: {\"name\": \"...\", \"ops\": [ ... ]}. "
@@ -438,10 +440,14 @@ public final class CommanderChat implements Listener {
         String say;
         String action = "none";
         JsonObject out = null;
+        int num = -1;
+        String order = "";
         try {
             out = JsonParser.parseString(content).getAsJsonObject();
             say = out.has("say") ? out.get("say").getAsString() : "";
             action = out.has("action") ? out.get("action").getAsString().toLowerCase() : "none";
+            if (out.has("n") && out.get("n").isJsonPrimitive()) num = out.get("n").getAsInt();
+            if (out.has("order") && out.get("order").isJsonPrimitive()) order = out.get("order").getAsString().toLowerCase();
         } catch (RuntimeException ex) {
             say = content.trim(); // the model ignored the format; still show what it said
         }
@@ -485,6 +491,12 @@ public final class CommanderChat implements Listener {
                 }
             }
             case "ranks" -> army.showRanks(owner);
+            case "squad" -> army.showSquad(owner);
+            case "solo" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.setSolo(num, order));
+            case "solo_clear" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.clearSolo(num > 0 ? String.valueOf(num) : "all"));
+            case "view" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.view(owner, num));
+            case "view_attack" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.viewAttack(owner));
+            case "view_stop" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.viewStop(owner));
             case "chests" -> army.chestReport(owner);
             case "totem" -> {
                 if (totems == null) owner.sendMessage(ChatColor.GRAY + "Totems aren't ready yet.");

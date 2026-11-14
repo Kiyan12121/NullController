@@ -241,6 +241,17 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             return true;
         }
         switch (args[0].toLowerCase()) {
+            case "squad" -> army.showSquad(sender);
+            case "solo" -> {
+                if (args.length >= 2 && args[1].equalsIgnoreCase("clear")) {
+                    sender.sendMessage(army.clearSolo(args.length > 2 ? args[2] : "all"));
+                } else if (args.length < 3) {
+                    sender.sendMessage("Usage: solo <n> <order>  |  solo clear [n|all]  (see squad)");
+                } else {
+                    sender.sendMessage(army.setSolo(parseInt(args[1], -1), args[2].toLowerCase()));
+                }
+            }
+            case "view" -> sender.sendMessage("Looking through a Null needs you online. Squad and solo orders work from here.");
             case "summon" -> {
                 int requested = args.length > 1 ? parseInt(args[1], 5) : 5;
                 int queued = army.summonOffline(requested);
@@ -355,7 +366,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     }
 
     private static final String OFFLINE_HELP = ChatColor.GRAY + "Owner is offline. Console orders: "
-            + "summon [n], build <kind> (Nether only), chests place <kind> (look at a block), strike <player> (the Breach), orbital <player> (Nuke), stabshot <player>, mobcannon <player> [n], team list|add|remove <player>, dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle, stashroom, autowork on|off|toggle, autospy on|off|toggle";
+            + "summon [n], build <kind> (Nether only), chests place <kind> (look at a block), strike <player> (the Breach), orbital <player> (Nuke), stabshot <player>, mobcannon <player> [n], team list|add|remove <player>, dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle, stashroom, autowork on|off|toggle, autospy on|off|toggle, squad, solo <n> <order>, solo clear [n|all]";
 
     private void offlineMode(CommandSender sender, NullArmy.Mode mode) {
         sender.sendMessage(army.setModeOffline(mode)
@@ -1054,6 +1065,14 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         }
         inv.setItem(slot, item);
         menuActions.put(slot, action);
+    }
+
+    /** While the owner looks through a Null, their WASD movement steers that Null. */
+    @EventHandler
+    public void onOwnerMove(org.bukkit.event.player.PlayerMoveEvent event) {
+        Player p = event.getPlayer();
+        if (p.getGameMode() != org.bukkit.GameMode.SPECTATOR || !consent.isOwner(p) || !army.isViewing()) return;
+        army.steerFromView(p, event.getFrom(), event.getTo());
     }
 
     @EventHandler

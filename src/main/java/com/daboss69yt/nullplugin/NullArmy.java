@@ -528,6 +528,7 @@ public final class NullArmy {
             return false;
         }
         this.mode = newMode;
+        soloModes.clear(); // an army-wide order overrides individual ones
         cageGuard = null;
         huntTarget = null;
         resetWork();
@@ -1204,7 +1205,7 @@ public final class NullArmy {
     }
 
     /** Lists every Null with its number, rank, and whether it has its own order. */
-    public void showSquad(Player owner) {
+    public void showSquad(org.bukkit.command.CommandSender owner) {
         if (nulls.isEmpty()) {
             owner.sendMessage(ChatColor.GRAY + "No Nulls on the field.");
             return;
@@ -1318,6 +1319,31 @@ public final class NullArmy {
             if (npc.getEntity() != null && npc.getEntity().getUniqueId().equals(e.getUniqueId())) return true;
         }
         return false;
+    }
+
+    public boolean isViewing() {
+        return viewing != null;
+    }
+
+    /**
+     * WASD while looking through a Null. Spectator movement is read as intent: the horizontal
+     * direction becomes the Null's walk, and rising sharply (space) makes it jump.
+     */
+    public void steerFromView(Player owner, Location from, Location to) {
+        if (viewing == null || !viewing.isSpawned() || !(viewing.getEntity() instanceof LivingEntity body)) return;
+        if (!body.getWorld().equals(to.getWorld()) || !from.getWorld().equals(to.getWorld())) return;
+        Vector delta = to.toVector().subtract(from.toVector());
+        double horizontal = delta.getX() * delta.getX() + delta.getZ() * delta.getZ();
+        if (horizontal > 0.0025) {
+            Vector step = new Vector(delta.getX(), 0, delta.getZ()).normalize().multiply(6);
+            viewing.getNavigator().setTarget(body.getLocation().add(step));
+        }
+        if (delta.getY() > 0.25 && body.isOnGround()) {
+            body.setVelocity(new Vector(0, 0.42, 0));
+        }
+        if (owner.getSpectatorTarget() == null) {
+            owner.setSpectatorTarget(body); // WASD detaches the camera; hold it on the Null
+        }
     }
 
     /** Keeps the view honest: if the watched Null is gone, the owner comes back to their own eyes. */
