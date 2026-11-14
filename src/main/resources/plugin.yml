@@ -1,5 +1,5 @@
 name: NullController
-version: 5.12.0
+version: 5.13.0
 main: com.daboss69yt.nullplugin.NullControllerPlugin
 api-version: '26.3'
 author: daboss69yt
@@ -27,6 +27,10 @@ commands:
   nullbase:
     description: "Nether base machines: turret, trap, alarm, drill, debris drill, crafting line (owner only)."
     usage: "/nullbase build|clear <kind> | status"
+    permission: nullcontroller.owner
+  nullsalvage:
+    description: "Take a built structure apart and rebuild it anywhere, the Nether included (owner only)."
+    usage: "/nullsalvage mark1|mark2 | take <name> | place <name> | list | delete <name>"
     permission: nullcontroller.owner
   nullalerts:
     description: "The last 30 alarms, escapes and finds (owner only)."

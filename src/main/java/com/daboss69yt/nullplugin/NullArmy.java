@@ -507,6 +507,16 @@ public final class NullArmy {
         }
     }
 
+    /** Sends the whole squad to a spot. Same world: they walk. Another world: they go through a portal. */
+    public void sendTo(Location spot) {
+        for (NPC npc : nulls) {
+            if (!npc.isSpawned()) continue;
+            Location here = npc.getStoredLocation();
+            if (here != null && !sameWorld(here, spot)) teleport(npc, spot);
+            else walkTo(npc, spot.clone());
+        }
+    }
+
     public void recall(Player owner) {
         for (int i = 0; i < nulls.size(); i++) {
             NPC npc = nulls.get(i);

@@ -103,6 +103,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         base.start();
         getCommand("nullbase").setExecutor(base);
         getCommand("nullbase").setTabCompleter(base);
+        getCommand("nullsalvage").setExecutor(new Salvage(this, army, consent));
         getCommand("nullalerts").setExecutor((sender, cmd, label, args) -> {
             Player p = ownerFor(sender);
             if (p == null || !consent.isOwner(p)) {
