@@ -83,7 +83,8 @@ public final class Updater implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         Player p = plugin.ownerFor(sender);
-        if (p == null || !consent.isOwner(p)) {
+        boolean console = sender instanceof org.bukkit.command.ConsoleCommandSender;
+        if (!console && (p == null || !consent.isOwner(p))) {
             sender.sendMessage(ChatColor.RED + "Access denied.");
             return true;
         }
