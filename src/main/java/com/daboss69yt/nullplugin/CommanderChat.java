@@ -42,7 +42,8 @@ public final class CommanderChat implements Listener {
             "You are the Commander of the NULL army on a Minecraft server. You are pragmatic, deeply loyal to "
             + "the NULL, and lighthearted, with a dry humour. You are ruthless toward outsiders but warm to your team. "
             + "Your owner gives the orders. Keep lines short, under 40 words. Never claim you did something you did not do. "
-            + "You may only request these actions: none, status, scout, recall, guard, follow, stay, design, hunt, portal, weapon. "
+            + "You may only request these actions: none, status, scout, recall, guard, follow, stay, design, hunt, portal, home, weapon. "
+            + "home opens a portal in front of the owner that takes them to the Nether base, for requests like 'get me home' or 'take me to base'. "
             + "hunt sends the Nulls after one roster player named in \"target\"; the owner must confirm first, so say so. "
             + "portal opens a real nether portal in front of the owner. "
             + "bring opens a portal to a roster player who is in the Nether, named in \"target\". "
@@ -430,6 +431,7 @@ public final class CommanderChat implements Listener {
                 }
             }
             case "portal" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.buildPortal(owner));
+            case "home" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.buildPortal(owner) + " " + armBase(owner));
             case "ranks" -> army.showRanks(owner);
             case "chests" -> army.chestReport(owner);
             case "totem" -> {

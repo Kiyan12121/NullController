@@ -786,7 +786,7 @@ public final class NullArmy {
         if (becomesLeader) leader = npc;
         recomputeRanks();
         Inventory pack = Bukkit.createInventory(null, PACK_SIZE, "Null Pack");
-        pack.addItem(new ItemStack(Material.GOLDEN_APPLE, 4), new ItemStack(Material.COOKED_BEEF, 16));
+        pack.addItem(new ItemStack(Material.GOLDEN_APPLE, 4), new ItemStack(Material.COOKED_BEEF, 16), new ItemStack(Material.POTION, 2));
         packs.put(npc, pack);
         return npc;
     }
@@ -1135,9 +1135,18 @@ public final class NullArmy {
         return center.clone().add(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
     }
 
+    /** Pulls back when badly hurt, or when already hurt and a crowd is closing in. */
     private boolean isWounded(NPC npc) {
         Entity e = npc.getEntity();
-        return e instanceof LivingEntity living && living.getHealth() < WOUNDED_HP;
+        if (!(e instanceof LivingEntity living)) return false;
+        double hp = living.getHealth();
+        if (hp < WOUNDED_HP) return true;
+        if (hp >= 12) return false;
+        int crowd = 0;
+        for (Entity near : living.getNearbyEntities(8, 4, 8)) {
+            if (near instanceof Monster) crowd++;
+        }
+        return crowd >= 3;
     }
 
     private Location formationPoint(Player owner, int index) {
@@ -1210,6 +1219,7 @@ public final class NullArmy {
             lastScanCycle = cycle;
         }
 
+        refreshLeader();
         tickFood();
         for (NPC npc : new ArrayList<>(nulls)) {
             if (!npc.isSpawned() || arriving.contains(npc)) continue;
@@ -1224,7 +1234,7 @@ public final class NullArmy {
                 followOwner(npc, owner, nulls.indexOf(npc), leash);
                 continue;
             }
-            if (npc == leader || ranks.getOrDefault(npc, 'D') == 'A') {
+            if (isCommander(npc) || ranks.getOrDefault(npc, 'D') == 'A') {
                 // The commander sticks with the owner and only goes out when a hunt is ordered.
                 // He defends the owner: a mob or roster player within six blocks of the owner is engaged.
                 if (defendOwner(npc, owner)) continue;
@@ -1563,6 +1573,8 @@ public final class NullArmy {
     private boolean engageMobs(NPC npc) {
         Location here = npc.getStoredLocation();
         if (here == null || here.getWorld() == null) return false;
+        // Hurt Nulls only take on mobs they can finish quickly; big fights wait until they've healed.
+        double ownHp = npc.getEntity() instanceof LivingEntity self ? self.getHealth() : 20.0;
         double range = plugin.getConfig().getDouble("combat-range", 8) * (System.currentTimeMillis() < alarmUntil ? 2 : 1);
         Monster best = null;
         double bestDist = range;
@@ -1571,6 +1583,7 @@ public final class NullArmy {
         for (Entity e : here.getWorld().getNearbyEntities(here, range, range, range)) {
             if (!(e instanceof Monster m)) continue;
             if (NETHER_PEACE.contains(m.getType())) continue;
+            if (ownHp < 10 && m.getHealth() > 6) continue;
             double d = here.distance(m.getLocation());
             if (d > range) continue;
             int rank = threatRank(m);
@@ -1601,6 +1614,17 @@ public final class NullArmy {
             case SKELETON, STRAY, WITHER_SKELETON -> 2;
             default -> 3;
         };
+    }
+
+    /** The commander is the Null called by the army's title, wherever the reference has drifted to. */
+    private boolean isCommander(NPC npc) {
+        return npc == leader || LEADER_NAME.equals(npc.getName());
+    }
+
+    /** Keeps the leader pointer on a live Null named with the title, after restarts and successions. */
+    private void refreshLeader() {
+        if (leader != null && nulls.contains(leader) && LEADER_NAME.equals(leader.getName())) return;
+        leader = nulls.stream().filter(n -> LEADER_NAME.equals(n.getName())).findFirst().orElse(null);
     }
 
     private final Map<NPC, Long> lastMeal = new HashMap<>();
@@ -1638,10 +1662,24 @@ public final class NullArmy {
     }
 
     private void fieldHeal(NPC npc) {
+        drinkPotion(npc);
         eatApple(npc);
         Entity e = npc.getEntity();
         if (e instanceof LivingEntity living) {
             living.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 60, 1, false, false));
+        }
+    }
+
+    /** A hurt Null drinks a healing potion from its pack. Same cooldown as apples, so they don't stack. */
+    private void drinkPotion(NPC npc) {
+        long now = System.currentTimeMillis();
+        if (now - lastApple.getOrDefault(npc, 0L) < 15_000L) return;
+        Inventory pack = packs.get(npc);
+        if (pack == null || !pack.contains(Material.POTION)) return;
+        pack.removeItem(new ItemStack(Material.POTION, 1));
+        lastApple.put(npc, now);
+        if (npc.getEntity() instanceof LivingEntity living) {
+            living.addPotionEffect(new PotionEffect(PotionEffectType.INSTANT_HEALTH, 1, 1, false, true));
         }
     }
 
@@ -1781,7 +1819,8 @@ public final class NullArmy {
         if (here == null || !sameWorld(here, spot) || here.distance(spot) > TELEPORT_OVER) {
             walkTo(npc, spot.clone().add(0, 1, 0));
         } else if (here.distance(spot) > REACH) {
-            npc.getNavigator().setTarget(spot);
+            if (kind == WorkKind.MINE && !exposed(target)) tunnelStep(npc, here, target);
+            else npc.getNavigator().setTarget(spot);
         } else {
             Inventory pack = packs.get(npc);
             if (pack != null && !fitsInPack(pack, target, kind)) {
@@ -1795,6 +1834,42 @@ public final class NullArmy {
             swing(npc);
             claimed.remove(npc);
         }
+    }
+
+    /** True when a block touches open air, so a Null can walk up to it without digging. */
+    private static boolean exposed(Block b) {
+        for (BlockFace f : new BlockFace[]{BlockFace.UP, BlockFace.DOWN, BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST}) {
+            if (b.getRelative(f).getType().isAir()) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Digs one block toward a buried target, then steps into the gap. Repeated each cycle this makes a tunnel:
+     * it goes down when the target is below and sideways when it is level. Bedrock is never dug.
+     */
+    private void tunnelStep(NPC npc, Location here, Block target) {
+        World w = target.getWorld();
+        int dx = target.getX() - here.getBlockX();
+        int dy = target.getY() - here.getBlockY();
+        int dz = target.getZ() - here.getBlockZ();
+        Block next;
+        if (Math.abs(dy) >= Math.max(Math.abs(dx), Math.abs(dz))) {
+            next = w.getBlockAt(here.getBlockX(), here.getBlockY() + Integer.signum(dy), here.getBlockZ());
+        } else if (Math.abs(dx) >= Math.abs(dz)) {
+            next = w.getBlockAt(here.getBlockX() + Integer.signum(dx), here.getBlockY(), here.getBlockZ());
+        } else {
+            next = w.getBlockAt(here.getBlockX(), here.getBlockY(), here.getBlockZ() + Integer.signum(dz));
+        }
+        if (next.getType() == Material.BEDROCK) {
+            claimed.remove(npc); // can't dig through; pick another target next cycle
+            return;
+        }
+        if (!next.getType().isAir()) {
+            breakTarget(next, npc, WorkKind.MINE);
+            swing(npc);
+        }
+        npc.getNavigator().setTarget(next.getLocation().add(0.5, 0, 0.5));
     }
 
     private void depositTick(NPC npc, Player owner, int index, double leash) {
