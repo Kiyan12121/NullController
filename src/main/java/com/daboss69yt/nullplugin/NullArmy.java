@@ -1254,6 +1254,9 @@ public final class NullArmy {
         }
     }
 
+    /** When each target was last shocked by an ambush, so one ambush doesn't keep re-shocking. */
+    private final Map<UUID, Long> shocked = new HashMap<>();
+
     private void tickWaits() {
         long now = System.currentTimeMillis();
         for (Map.Entry<NPC, Wait> entry : new ArrayList<>(waits.entrySet())) {
@@ -1274,6 +1277,14 @@ public final class NullArmy {
             if (here != null && sameWorld(here, tl) && here.distance(tl) <= WAIT_TRIGGER) {
                 waits.remove(npc);
                 reveal(npc);
+                // The first Null out shocks the target and webs their feet, so the squad lands its first hits on a stuck target.
+                if (!shocked.containsKey(wait.target()) || now - shocked.get(wait.target()) > 15_000L) {
+                    shocked.put(wait.target(), now);
+                    target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 60, 2, false, true));
+                    target.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 40, 0, false, true));
+                    target.getWorld().spawnParticle(Particle.EXPLOSION, tl, 2, 0.5, 0.5, 0.5, 0);
+                    layTrap(target, tl);
+                }
                 hunters.put(npc, new Hunt(wait.target(), wait.expiresAt()));
             }
         }
