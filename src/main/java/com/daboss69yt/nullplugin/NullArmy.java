@@ -155,6 +155,11 @@ public final class NullArmy {
     private static final long DASH_COOLDOWN_MS = 6_000L;
     private final Map<NPC, Long> lastPearl = new HashMap<>();
     private final Map<NPC, Long> lastDash = new HashMap<>();
+    /** Escapees being chased right now, with when the chase ends. */
+    private final Map<UUID, Long> pursuits = new HashMap<>();
+    /** Cobwebs the squad laid in front of a runner, with when they were laid. */
+    private final Map<Block, Long> snares = new HashMap<>();
+    private long lastSnare;
     /** The Null the owner is looking through, and the owner's game mode to restore. */
     private NPC viewing;
     private GameMode viewRestore = GameMode.SURVIVAL;
@@ -1284,6 +1289,52 @@ public final class NullArmy {
         return opened.size() + " portals opened behind you. The squad stepped out of all of them together and holds this ground.";
     }
 
+    /** An escapee is being chased: the whole squad is faster and thinks ahead. */
+    public void beginPursuit(Player target, int minutes) {
+        pursuits.put(target.getUniqueId(), System.currentTimeMillis() + minutes * 60_000L);
+        commanderPursue(target, minutes);
+    }
+
+    private boolean pursuing(UUID id) {
+        Long until = pursuits.get(id);
+        if (until == null) return false;
+        if (System.currentTimeMillis() >= until) {
+            pursuits.remove(id);
+            return false;
+        }
+        return true;
+    }
+
+    /** Cobwebs across the runner's path, three to six blocks ahead, every two seconds. */
+    private void layTrap(Player target, Location tl) {
+        long now = System.currentTimeMillis();
+        Vector v = target.getVelocity().setY(0);
+        if (now - lastSnare < 2000L || v.lengthSquared() < 0.01) return;
+        lastSnare = now;
+        v.normalize();
+        Vector perp = new Vector(-v.getZ(), 0, v.getX());
+        World w = tl.getWorld();
+        for (int step = 3; step <= 6; step++) {
+            for (int side = -1; side <= 1; side++) {
+                Location spot = tl.clone().add(v.clone().multiply(step)).add(perp.clone().multiply(side));
+                Block b = w.getBlockAt(spot.getBlockX(), spot.getBlockY(), spot.getBlockZ());
+                if (b.getType() == Material.AIR) {
+                    b.setType(Material.COBWEB, false);
+                    snares.put(b, now);
+                }
+            }
+        }
+    }
+
+    private void cleanSnares() {
+        long now = System.currentTimeMillis();
+        for (Map.Entry<Block, Long> e : new ArrayList<>(snares.entrySet())) {
+            if (now - e.getValue() < 20_000L) continue;
+            if (e.getKey().getType() == Material.COBWEB) e.getKey().setType(Material.AIR, false);
+            snares.remove(e.getKey());
+        }
+    }
+
     /** The Commander joins a pursuit. He chases the target with his pearls and dashes until the time runs out. */
     public boolean commanderPursue(Player target, int minutes) {
         if (leader == null || !leader.isSpawned()) return false;
@@ -1640,6 +1691,7 @@ public final class NullArmy {
         cycle++;
         checkView(owner);
         tickWaits();
+        cleanSnares();
         expireHunters();
         checkAlarm(owner);
         checkEmergency(owner);
@@ -1871,7 +1923,8 @@ public final class NullArmy {
             fighter.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 100, rank == 'R' ? 1 : 0, false, false));
         }
         // Hunters run: the Null's walk is quicker while it chases. The Commander is quickest.
-        npc.getNavigator().getDefaultParameters().speedModifier(ranks.getOrDefault(npc, 'D') == 'A' || isCommander(npc) ? 1.7f : 1.4f);
+        boolean chasing = pursuing(target.getUniqueId());
+        npc.getNavigator().getDefaultParameters().speedModifier(ranks.getOrDefault(npc, 'D') == 'A' || isCommander(npc) ? 1.7f : chasing ? 1.9f : 1.4f);
         if (!consent.canTarget(target)) {
             dropNpc(npc); // consent revoked: stop immediately
             return;
@@ -1906,6 +1959,11 @@ public final class NullArmy {
             Location flank = here.distance(tl) > 6 ? tl.clone().add(Math.cos(ang) * 3, 0, Math.sin(ang) * 3) : tl;
             char role = ranks.getOrDefault(npc, 'D');
             if (role == 'R' || role == 'A') flank = tl; // the leader and officers push straight in
+            // A runner is cut off, not chased: the squad aims where they will be, and lays cobwebs in their path.
+            if (chasing) {
+                flank = tl.clone().add(target.getVelocity().setY(0).multiply(12));
+                layTrap(target, tl);
+            }
             // Counter-play: a player healing on gapples or regeneration gets pressed, not given time.
             if (healing(target)) flank = tl;
             // Adapt to the player: shield users get hit from behind, archers get rushed.

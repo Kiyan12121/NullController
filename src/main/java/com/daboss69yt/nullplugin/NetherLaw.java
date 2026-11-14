@@ -638,7 +638,7 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         warn(p, ChatColor.DARK_RED + "ESCAPE", "The whole squad is on you.");
         notifyOwner(ChatColor.DARK_RED + "[Prison] " + p.getName() + " escaped. Six Nulls and the Commander are hunting.");
         army.spawnHunters(owner(), p, p.getLocation(), 6, (int) huntMinutes());
-        army.commanderPursue(p, (int) huntMinutes());
+        army.beginPursuit(p, (int) huntMinutes());
         save();
     }
 
