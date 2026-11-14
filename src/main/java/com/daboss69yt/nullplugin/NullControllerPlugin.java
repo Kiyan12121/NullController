@@ -139,21 +139,41 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         commanderChat.setTotems(totems);
         commanderChat.startDailyReport();
         getServer().getPluginManager().registerEvents(commanderChat, this);
-        if (getServer().getPluginManager().getPlugin("voicechat") != null) {
-            var svc = getServer().getServicesManager().load(de.maxhenkel.voicechat.api.BukkitVoicechatService.class);
-            if (svc != null) {
-                VoiceListener listener = new VoiceListener(this, commanderChat);
-                commanderChat.setVoice(listener);
-                svc.registerPlugin(listener);
-                getLogger().info("Simple Voice Chat found: the Commander can hear you.");
-            }
-        }
+        registerVoice(0);
         getCommand("nullnether").setExecutor(netherLaw);
         getCommand("nullnether").setTabCompleter(netherLaw);
         getServer().getPluginManager().registerEvents(this, this);
         getCommand("nullcmd").setTabCompleter(this);
         getServer().getScheduler().runTaskTimer(this, this::sweepCity, 100L, 40L);
         getLogger().info("NullController 3.0.0 online. Consent roster loaded.");
+    }
+
+    private boolean voiceRegistered;
+
+    /**
+     * Simple Voice Chat publishes its service after NullController has already enabled, so the lookup
+     * can come back empty on the first try. Retry on the scheduler until it appears, then give up loudly.
+     */
+    private void registerVoice(int attempt) {
+        if (voiceRegistered) return;
+        if (getServer().getPluginManager().getPlugin("voicechat") == null) {
+            getLogger().info("Simple Voice Chat is not installed: the Commander cannot hear you.");
+            return;
+        }
+        var svc = getServer().getServicesManager().load(de.maxhenkel.voicechat.api.BukkitVoicechatService.class);
+        if (svc != null) {
+            VoiceListener listener = new VoiceListener(this, commanderChat);
+            commanderChat.setVoice(listener);
+            svc.registerPlugin(listener);
+            voiceRegistered = true;
+            getLogger().info("Simple Voice Chat found: the Commander can hear you.");
+            return;
+        }
+        if (attempt >= 40) {
+            getLogger().warning("Simple Voice Chat service never appeared; the Commander cannot hear you.");
+            return;
+        }
+        getServer().getScheduler().runTaskLater(this, () -> registerVoice(attempt + 1), 20L);
     }
 
     @Override
