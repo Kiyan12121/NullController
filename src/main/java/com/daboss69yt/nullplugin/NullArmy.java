@@ -767,9 +767,9 @@ public final class NullArmy {
         String url = plugin.getConfig().getString("null-skin-url", "");
         if (url != null && !url.isBlank()) {
             setSkinUrl(npc, url);
-            // Skin lookups fail when many Nulls spawn at once (rate limits), leaving some on the default
-            // skin. Re-apply a few times so every Null ends up with the black skin. Re-applying is harmless.
-            for (long delay : new long[]{60L, 200L, 600L}) {
+            // Each skin change makes Citizens rebuild the NPC, so repeating it many times made Nulls flicker
+            // and stop responding. One retry later covers a rate-limited lookup without rebuilding them again.
+            for (long delay : new long[]{600L}) {
                 Bukkit.getScheduler().runTaskLater(plugin, () -> {
                     if (npc.isSpawned()) setSkinUrl(npc, url);
                 }, delay);
