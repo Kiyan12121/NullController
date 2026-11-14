@@ -410,7 +410,13 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             case "autospy" -> owner.sendMessage(ChatColor.DARK_PURPLE + "Auto spy " + toggleKey(args, "auto-spy", true) + ".");
             case "orbital" -> targetedOrder(owner, args, army::orbitalNuke);
             case "scout" -> army.scoutReport(owner);
-            case "portal" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.buildPortal(owner));
+            case "portal" -> {
+                if (args.length > 1 && args[1].equalsIgnoreCase("base")) {
+                    owner.sendMessage(ChatColor.DARK_PURPLE + army.buildPortal(owner) + " " + commanderChat.armBase(owner));
+                } else {
+                    owner.sendMessage(ChatColor.DARK_PURPLE + army.buildPortal(owner));
+                }
+            }
             case "weapon" -> {
                 org.bukkit.inventory.ItemStack made = args.length < 2 ? null : Arsenal.make(args[1].toLowerCase());
                 if (made == null) {

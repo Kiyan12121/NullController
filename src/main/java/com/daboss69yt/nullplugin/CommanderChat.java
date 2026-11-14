@@ -5,6 +5,8 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -81,26 +83,118 @@ public final class CommanderChat implements Listener {
     }
 
     /** When the owner steps into the portal opened for them, they land beside the roster player instead. */
+    /** Portal trips in progress. nether: into the Nether to a player there. via: overworld player, Nether first.
+     *  return: in the Nether, the way back to the overworld player. base: straight to the Nether base. */
+    private final Map<UUID, String> bringMode = new HashMap<>();
+
+    private void arm(Player owner, UUID target, String mode) {
+        UUID id = owner.getUniqueId();
+        if (target != null) bringTo.put(id, target); else bringTo.remove(id);
+        bringMode.put(id, mode);
+        bringUntil.put(id, System.currentTimeMillis() + 10 * 60_000L);
+    }
+
+    private void disarm(UUID id) {
+        bringTo.remove(id);
+        bringMode.remove(id);
+        bringUntil.remove(id);
+    }
+
+    /** Arms the base trip: the next overworld portal the owner takes lands in the Nether base. */
+    public String armBase(Player owner) {
+        arm(owner, null, "base");
+        return "Step through the next portal and you'll land in the base.";
+    }
+
+    /** The configured location, format world,x,y,z. Null if unset or the world is missing. */
+    private Location configured(String key) {
+        String raw = plugin.getConfig().getString(key, "");
+        if (raw == null || raw.isBlank()) return null;
+        String[] p = raw.split(",");
+        World w = p.length >= 4 ? Bukkit.getWorld(p[0].trim()) : null;
+        if (w == null) return null;
+        try {
+            return new Location(w, Integer.parseInt(p[1].trim()), Integer.parseInt(p[2].trim()), Integer.parseInt(p[3].trim()));
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
     @EventHandler(priority = EventPriority.HIGH)
     public void onPortal(org.bukkit.event.player.PlayerPortalEvent e) {
         Player owner = e.getPlayer();
-        UUID targetId = bringTo.get(owner.getUniqueId());
-        if (targetId == null || e.getFrom().getWorld() == null) return;
-        Long until = bringUntil.get(owner.getUniqueId());
+        UUID id = owner.getUniqueId();
+        String mode = bringMode.get(id);
+        if (mode == null || e.getFrom().getWorld() == null) return;
+        Long until = bringUntil.get(id);
         if (until == null || System.currentTimeMillis() > until) {
-            bringTo.remove(owner.getUniqueId());
+            disarm(id);
             return;
         }
-        if (e.getFrom().getWorld().getEnvironment() != org.bukkit.World.Environment.NORMAL) return;
-        Player target = Bukkit.getPlayer(targetId);
-        bringTo.remove(owner.getUniqueId());
-        bringUntil.remove(owner.getUniqueId());
-        if (target == null || target.getWorld().getEnvironment() != org.bukkit.World.Environment.NETHER
-                || !consent.canTarget(target)) {
-            owner.sendMessage(ChatColor.GRAY + "The player you wanted has left the Nether.");
-            return;
+        World.Environment from = e.getFrom().getWorld().getEnvironment();
+        UUID targetId = bringTo.get(id);
+        Player target = targetId == null ? null : Bukkit.getPlayer(targetId);
+        switch (mode) {
+            case "base" -> {
+                if (from != World.Environment.NORMAL) return;
+                e.setCancelled(true);
+                disarm(id);
+                Location base = configured("nether-base");
+                if (base == null) {
+                    owner.sendMessage(ChatColor.RED + "No Nether base is set. Use /nullrod base set.");
+                    return;
+                }
+                owner.teleport(base.clone().add(0.5, 1, 2.5));
+                owner.sendMessage(ChatColor.DARK_PURPLE + "You're at the base. " + army.portalAcross(owner, base.clone().add(0, 0, 4), false));
+            }
+            case "via" -> {
+                if (from != World.Environment.NORMAL) return;
+                e.setCancelled(true);
+                if (target == null || target.getWorld().getEnvironment() != World.Environment.NORMAL || !consent.canTarget(target)) {
+                    disarm(id);
+                    owner.sendMessage(ChatColor.GRAY + "The player you wanted has moved on.");
+                    return;
+                }
+                World nether = Portals.otherWorld(target.getWorld());
+                if (nether == null) {
+                    disarm(id);
+                    owner.sendMessage(ChatColor.RED + "No Nether to go through.");
+                    return;
+                }
+                // Nether coordinates are the overworld ones divided by eight.
+                Location t = target.getLocation();
+                Location spot = new Location(nether, t.getBlockX() / 8, t.getBlockY(), t.getBlockZ() / 8);
+                owner.teleport(spot.clone().add(0.5, 1, 2.5));
+                owner.sendMessage(ChatColor.DARK_PURPLE + "In the Nether. " + army.portalAcross(owner, spot.clone().add(0, 0, 4), false)
+                        + " It leads to " + target.getName() + ".");
+                arm(owner, target.getUniqueId(), "return");
+            }
+            case "return" -> {
+                if (from != World.Environment.NETHER) return;
+                e.setCancelled(true);
+                disarm(id);
+                if (target == null || target.getWorld().getEnvironment() != World.Environment.NORMAL || !consent.canTarget(target)) {
+                    owner.sendMessage(ChatColor.GRAY + "The player you wanted has moved on.");
+                    return;
+                }
+                placeBeside(owner, target);
+            }
+            case "nether" -> {
+                if (from != World.Environment.NORMAL) return;
+                disarm(id);
+                if (target == null || target.getWorld().getEnvironment() != World.Environment.NETHER || !consent.canTarget(target)) {
+                    owner.sendMessage(ChatColor.GRAY + "The player you wanted has left the Nether.");
+                    return;
+                }
+                e.setCancelled(true);
+                placeBeside(owner, target);
+            }
+            default -> disarm(id);
         }
-        e.setCancelled(true);
+    }
+
+    /** Puts the owner beside a roster player, facing them, with a portal behind them to walk back through. */
+    private void placeBeside(Player owner, Player target) {
         org.bukkit.Location t = target.getLocation();
         org.bukkit.util.Vector facing = t.getDirection().setY(0);
         if (facing.lengthSquared() < 0.0001) facing = new org.bukkit.util.Vector(1, 0, 0);
@@ -109,7 +203,6 @@ public final class CommanderChat implements Listener {
         dest.setYaw(t.getYaw() + 180);
         dest.setPitch(0);
         owner.teleport(dest);
-        // A portal across the path, three blocks behind the owner, so they can walk back.
         org.bukkit.Location behind = dest.clone().add(facing.clone().multiply(3));
         String made = army.portalAcross(owner, behind, Math.abs(facing.getX()) > Math.abs(facing.getZ()));
         owner.sendMessage(ChatColor.DARK_PURPLE + "You're beside " + target.getName() + ", facing them. " + made);
@@ -382,13 +475,16 @@ public final class CommanderChat implements Listener {
                     owner.sendMessage(ChatColor.GRAY + "I can't find that player online.");
                 } else if (!consent.canTarget(target)) {
                     owner.sendMessage(ChatColor.RED + "Roster only. " + target.getName() + " is not on it.");
+                } else if (target.getWorld().getEnvironment() == org.bukkit.World.Environment.NORMAL
+                        && owner.getWorld().getEnvironment() == org.bukkit.World.Environment.NORMAL) {
+                    // Both in the overworld: portal to the Nether first, then a portal back out beside them.
+                    owner.sendMessage(ChatColor.DARK_PURPLE + army.buildPortal(owner) + " Step through: it leads to " + target.getName() + ".");
+                    arm(owner, target.getUniqueId(), "via");
                 } else {
-                    boolean inNether = target.getWorld().getEnvironment() == org.bukkit.World.Environment.NETHER;
                     String result = army.bringPortal(owner, target);
                     owner.sendMessage(ChatColor.DARK_PURPLE + result);
-                    if (inNether && result.contains("open at")) {
-                        bringTo.put(owner.getUniqueId(), target.getUniqueId());
-                        bringUntil.put(owner.getUniqueId(), System.currentTimeMillis() + 10 * 60_000L);
+                    if (target.getWorld().getEnvironment() == org.bukkit.World.Environment.NETHER && result.contains("open at")) {
+                        arm(owner, target.getUniqueId(), "nether");
                     }
                 }
             }
