@@ -6,8 +6,12 @@ import com.google.gson.JsonParser;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -20,6 +24,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.Deque;
@@ -42,7 +47,8 @@ public final class CommanderChat implements Listener {
             "You are the Commander of the NULL army on a Minecraft server. You are pragmatic, deeply loyal to "
             + "the NULL, and lighthearted, with a dry humour. You are ruthless toward outsiders but warm to your team. "
             + "Your owner gives the orders. Keep lines short, under 40 words. Never claim you did something you did not do. "
-            + "You may only request these actions: none, status, scout, recall, guard, follow, stay, design, hunt, portal, home, weapon. "
+            + "You may only request these actions: none, status, scout, recall, guard, follow, stay, design, hunt, portal, home, buff, give, weapon. "
+            + "buff potion-buffs the owner (for 'pot me up' or 'buff me'). give hands the owner items: set \"key\" to a Minecraft item name such as golden_apple, and \"amount\" up to 64. "
             + "home opens a portal in front of the owner that takes them to the Nether base, for requests like 'get me home' or 'take me to base'. "
             + "hunt sends the Nulls after one roster player named in \"target\"; the owner must confirm first, so say so. "
             + "portal opens a real nether portal in front of the owner. "
@@ -192,6 +198,39 @@ public final class CommanderChat implements Listener {
             }
             default -> disarm(id);
         }
+    }
+
+    /** Potion buffs for the owner: regeneration, absorption, speed, strength and resistance. */
+    private void buff(Player owner) {
+        owner.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 600, 1));
+        owner.addPotionEffect(new PotionEffect(PotionEffectType.ABSORPTION, 2400, 2));
+        owner.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 2400, 1));
+        owner.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 2400, 0));
+        owner.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 1200, 0));
+        owner.sendMessage(ChatColor.DARK_PURPLE + "You're potted up: regeneration, absorption, speed, strength and resistance.");
+    }
+
+    /** Words that never go in an owner's hand from the Commander: command blocks, spawners, barriers, and the like. */
+    private static final List<String> DENIED_ITEMS = List.of("COMMAND", "SPAWNER", "BARRIER", "BEDROCK", "STRUCTURE", "JIGSAW", "DEBUG", "SPAWN_EGG");
+
+    /** Hands the owner up to 64 of an item named in "key". Anything left over drops at their feet. */
+    private void give(Player owner, JsonObject out) {
+        String key = out == null || !out.has("key") ? "" : out.get("key").getAsString().trim();
+        Material m = key.isEmpty() ? null : Material.matchMaterial(key.toUpperCase().replace(' ', '_'));
+        if (m == null || !m.isItem() || DENIED_ITEMS.stream().anyMatch(d -> m.name().contains(d))) {
+            owner.sendMessage(ChatColor.GRAY + "I can't find that item.");
+            return;
+        }
+        int amount = 1;
+        try {
+            if (out.has("amount")) amount = out.get("amount").getAsInt();
+        } catch (RuntimeException ignored) {
+            amount = 1;
+        }
+        amount = Math.max(1, Math.min(64, amount));
+        Map<Integer, ItemStack> left = owner.getInventory().addItem(new ItemStack(m, amount));
+        for (ItemStack rest : left.values()) owner.getWorld().dropItemNaturally(owner.getLocation(), rest);
+        owner.sendMessage(ChatColor.DARK_PURPLE + "Here: " + amount + " " + m.name().toLowerCase().replace('_', ' ') + ".");
     }
 
     /** Puts the owner beside a roster player, facing them, with a portal behind them to walk back through. */
@@ -432,6 +471,8 @@ public final class CommanderChat implements Listener {
             }
             case "portal" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.buildPortal(owner));
             case "home" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.buildPortal(owner) + " " + armBase(owner));
+            case "buff" -> buff(owner);
+            case "give" -> give(owner, out);
             case "ranks" -> army.showRanks(owner);
             case "chests" -> army.chestReport(owner);
             case "totem" -> {

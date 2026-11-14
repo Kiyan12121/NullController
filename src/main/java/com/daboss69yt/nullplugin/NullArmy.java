@@ -849,20 +849,14 @@ public final class NullArmy {
         };
         Equipment eq = npc.getOrAddTrait(Equipment.class);
         eq.set(Equipment.EquipmentSlot.HELMET, rankPiece(Material.NETHERITE_HELMET, protection, pattern, trimMaterial));
+        // Every Null wears a real netherite chestplate: elytra gives no protection in a fight.
+        // The commander carries the totem, generals a shield.
         if (npc == leader) {
             eq.set(Equipment.EquipmentSlot.OFF_HAND, new ItemStack(Material.TOTEM_OF_UNDYING));
-            ItemStack elytra = new ItemStack(Material.ELYTRA);
-            elytra.addUnsafeEnchantment(Enchantment.UNBREAKING, 3);
-            eq.set(Equipment.EquipmentSlot.CHESTPLATE, elytra);
         } else if (rank == 'A' || rank == 'I') {
-            // Generals and commanders fly with elytra and carry a shield, as on the wiki.
-            ItemStack elytra = new ItemStack(Material.ELYTRA);
-            elytra.addUnsafeEnchantment(Enchantment.UNBREAKING, 3);
-            eq.set(Equipment.EquipmentSlot.CHESTPLATE, elytra);
             eq.set(Equipment.EquipmentSlot.OFF_HAND, new ItemStack(Material.SHIELD));
-        } else {
-            eq.set(Equipment.EquipmentSlot.CHESTPLATE, rankPiece(Material.NETHERITE_CHESTPLATE, protection, pattern, trimMaterial));
         }
+        eq.set(Equipment.EquipmentSlot.CHESTPLATE, rankPiece(Material.NETHERITE_CHESTPLATE, protection, pattern, trimMaterial));
         eq.set(Equipment.EquipmentSlot.LEGGINGS, rankPiece(Material.NETHERITE_LEGGINGS, protection, pattern, trimMaterial));
         eq.set(Equipment.EquipmentSlot.BOOTS, rankPiece(Material.NETHERITE_BOOTS, protection, pattern, trimMaterial));
     }
@@ -1522,14 +1516,15 @@ public final class NullArmy {
 
     /** The Commander's voice: a tagged line to the owner, with a pitched-down voice sound at his position. */
     public void commanderSay(Player owner, String line) {
+        // Only the commander speaks: the army's title, never a general or soldier.
         NPC commander = null;
         for (NPC npc : nulls) {
-            if (ranks.getOrDefault(npc, 'D') == 'A' && npc.isSpawned()) {
+            if (isCommander(npc) && npc.isSpawned()) {
                 commander = npc;
                 break;
             }
         }
-        String tag = commander == null ? "____" : commander.getName();
+        String tag = LEADER_NAME;
         owner.sendMessage(ChatColor.DARK_GRAY + "<" + ChatColor.WHITE + tag + ChatColor.DARK_GRAY + "> " + ChatColor.GRAY + line);
         if (commander != null && commander.getEntity() != null) {
             owner.playSound(commander.getEntity().getLocation(), org.bukkit.Sound.ENTITY_ENDERMAN_AMBIENT, 0.6f, 1.6f);
