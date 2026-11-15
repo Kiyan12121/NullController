@@ -2496,7 +2496,7 @@ public final class NullArmy {
     private void wardWatch(Player owner) {
         long now = System.currentTimeMillis();
         for (Entity e : owner.getWorld().getNearbyEntities(owner.getLocation(), 5, 5, 5)) {
-            if (!(e instanceof Player p) || p.equals(owner) || consent.isTeam(p) || consent.canTarget(p)) continue;
+            if (!(e instanceof Player p) || p.equals(owner) || consent.isTeam(p) || consent.canTarget(p) || isNullBody(p)) continue;
             if (now - wardWarned.getOrDefault(p.getUniqueId(), 0L) < 30_000L) continue;
             wardWarned.put(p.getUniqueId(), now);
             commanderSay(owner, p.getName() + " is within five blocks of you. Not on the roster, so I won't touch them. Add them to your team if you trust them.");
@@ -2534,7 +2534,7 @@ public final class NullArmy {
             if (e instanceof Player p) {
                 // Team and the owner are never hit. Anyone who hit the owner is hit back, wherever they are.
                 // Anyone else who comes within six blocks of the owner is stopped: nobody gets close.
-                if (consent.isOwner(p) || consent.isTeam(p)) continue;
+                if (consent.isOwner(p) || consent.isTeam(p) || isNullBody(p)) continue; // Nulls are players too: never hit each other
                 if (!(recentAttacker(p) || d <= 6)) continue;
                 cand = p;
             } else if (e instanceof Monster m && d <= 6 && !NETHER_PEACE.contains(m.getType())) {
