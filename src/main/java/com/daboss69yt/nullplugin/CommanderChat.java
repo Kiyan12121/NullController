@@ -208,6 +208,11 @@ public final class CommanderChat implements Listener {
     }
 
     /** Potion buffs for the owner: regeneration, absorption, speed, strength and resistance. */
+    /** The control panel's Potion Buff button. */
+    public void buffFromPanel(Player owner) {
+        buff(owner);
+    }
+
     private void buff(Player owner) {
         owner.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 600, 1));
         owner.addPotionEffect(new PotionEffect(PotionEffectType.ABSORPTION, 2400, 2));

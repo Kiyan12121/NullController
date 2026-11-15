@@ -54,6 +54,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     private static final String MENU_TITLE = ChatColor.DARK_PURPLE + "" + ChatColor.BOLD + "The Null: Control";
     private static final String MENU_TITLE_RODS = ChatColor.GOLD + "" + ChatColor.BOLD + "The Null: Rods & Base";
     private static final String MENU_TITLE_SQUAD = ChatColor.AQUA + "" + ChatColor.BOLD + "The Null: Squad";
+    private static final String MENU_TITLE_CMDR = ChatColor.RED + "" + ChatColor.BOLD + "The Null: Commander";
 
     private ConsentManager consent;
     private NullArmy army;
@@ -467,6 +468,18 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     private void dispatch(Player owner, String[] args) {
         switch (args[0].toLowerCase()) {
             case "summon" -> army.summon(owner, args.length > 1 ? parseInt(args[1], 5) : 5);
+            case "duel" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.duel(owner, args.length > 1 ? parseInt(args[1], 3) : 3));
+            case "trial" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.trialLoot(owner));
+            case "loot" -> army.deliverLoot(owner);
+            case "buff" -> commanderChat.buffFromPanel(owner);
+            case "sendbase" -> {
+                Location base = army.offlineSite();
+                if (base == null) owner.sendMessage(ChatColor.GRAY + "No Nether base set yet.");
+                else {
+                    army.sendTo(base);
+                    owner.sendMessage(ChatColor.DARK_PURPLE + "The Nulls are heading to the base.");
+                }
+            }
             case "dismiss" -> army.dismissAll(owner);
             case "recall" -> army.recall(owner);
             case "guard" -> army.setMode(NullArmy.Mode.GUARD, owner);
@@ -994,7 +1007,8 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         MenuHolder holder = new MenuHolder();
         boolean rods = page.equals("rods");
         boolean squad = page.equals("squad");
-        String title = rods ? MENU_TITLE_RODS : squad ? MENU_TITLE_SQUAD : MENU_TITLE;
+        boolean cmdr = page.equals("commander");
+        String title = rods ? MENU_TITLE_RODS : squad ? MENU_TITLE_SQUAD : cmdr ? MENU_TITLE_CMDR : MENU_TITLE;
         Inventory inv = getServer().createInventory(holder, 54, title);
         holder.bind(inv);
         ItemStack filler = new ItemStack(Material.PURPLE_STAINED_GLASS_PANE);
@@ -1030,6 +1044,24 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             button(inv, 48, Material.BARRIER, "Clear Solo Orders", "Every Null back on the army order", "cmd", "nullcmd", "solo", "clear", "all");
             button(inv, 49, Material.BOOK, "Squad List", "Numbers and jobs in chat", "cmd", "nullcmd", "squad");
             button(inv, 53, Material.RED_CONCRETE, "Close", "Close the panel", "close");
+            return inv;
+        }
+
+        if (cmdr) {
+            button(inv, 0, Material.ARROW, "Back", "Return to the main panel", "menu", "main");
+            header(inv, 9, "PRACTICE & LOOT");
+            button(inv, 10, Material.DIAMOND_SWORD, "Practice Duel", "You vs the Commander for 3 minutes, stops at 3 hearts", "cmd", "nullcmd", "duel", "3");
+            button(inv, 11, Material.TRIAL_KEY, "Trial Chamber", "Nulls fight the spawners, open the vaults and bring the loot", "cmd", "nullcmd", "trial");
+            button(inv, 12, Material.CHEST, "Collect Loot", "Hand over whatever the Nulls have brought back", "cmd", "nullcmd", "loot");
+            header(inv, 18, "NULLS");
+            button(inv, 19, Material.RECOVERY_COMPASS, "Send Nulls to Base", "The whole army walks to the Nether base", "cmd", "nullcmd", "sendbase");
+            button(inv, 20, Material.POTION, "Potion Buff", "Regeneration, speed, strength and resistance", "cmd", "nullcmd", "buff");
+            header(inv, 27, "NEW RODS");
+            button(inv, 28, Material.ENDER_PEARL, "Blink Rod", "Steps you to the hook spot", "cmd", "nullrod", "blink");
+            button(inv, 29, Material.GLISTERING_MELON_SLICE, "Heal Rod", "Regeneration for Nulls near the hook", "cmd", "nullrod", "heal");
+            button(inv, 30, Material.BLUE_ICE, "Frost Rod", "Slows and mining-fatigues the nearest roster player", "cmd", "nullrod", "frost");
+            button(inv, 31, Material.BELL, "Recall Rod", "The whole army walks to the hook", "cmd", "nullrod", "recall");
+            button(inv, 32, Material.OBSIDIAN, "Nether Trap Rod", "A portal opens here and Nulls wait for you in the Nether", "cmd", "nullrod", "nethertrap");
             return inv;
         }
 
@@ -1106,14 +1138,14 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         button(inv, 42, Material.BEACON, "Beacon Spire", "Territory marker spire", "build", "spire");
         button(inv, 43, Material.OBSIDIAN, "Prison", "Walled cell block at this spot, Nether only", "build", "prison");
         button(inv, 44, Material.BARRIER, "Cancel Build", "Stops the current build", "build", "cancel");
-        header(inv, 45, "MORE");
+        button(inv, 45, Material.DIAMOND_SWORD, "Commander", "Practice duel, trial chamber, loot and the new rods", "menu", "commander");
         button(inv, 46, Material.NETHERITE_HELMET, "Rods & Base", "Strikes, base machines and events", "menu", "rods");
         button(inv, 47, Material.BLAZE_ROD, "Portal to Base", "A portal that lands you at the Nether base", "cmd", "nullcmd", "portal", "base");
         button(inv, 48, Material.PLAYER_HEAD, "Squad", "Look through a Null or give one its own order", "menu", "squad");
-        button(inv, 49, Material.POTION, "Potion Buff", "Regeneration, speed, strength and resistance", "cmd", "nullcmd", "help");
+        button(inv, 49, Material.POTION, "Potion Buff", "Regeneration, speed, strength and resistance", "cmd", "nullcmd", "buff");
         button(inv, 50, Material.NETHERITE_INGOT, "Nether Law", "Strikes, prisoners and the prison", "cmd", "nullnether", "status");
         button(inv, 51, Material.OBSERVER, "Alerts", "The last 30 alarms and finds", "cmd", "nullalerts");
-        button(inv, 52, Material.TOTEM_OF_UNDYING, "Ask the Commander", "Type: null <what you want>", "cmd", "nullcmd", "help");
+        button(inv, 52, Material.TOTEM_OF_UNDYING, "Ask the Commander", "Type: null <what you want> in chat", "say", "Type null <what you want> in chat to talk to the Commander.");
         button(inv, 53, Material.RED_CONCRETE, "Close", "Close the panel", "close");
         return inv;
     }
@@ -1164,6 +1196,8 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             p.openInventory(buildMenu(action[1]));
         } else if (action[0].equals("close")) {
             p.closeInventory();
+        } else if (action[0].equals("say")) {
+            p.sendMessage(ChatColor.DARK_PURPLE + action[1]);
         } else {
             dispatch(p, action);
             if (action.length > 1 && action[0].equals("cmd") && action[1].equals("nullcmd")
