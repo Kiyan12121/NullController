@@ -38,7 +38,7 @@ import java.util.Set;
 public final class CommanderChat implements Listener {
     private static final String ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
     private static final Set<String> ACTIONS = Set.of("none", "status", "scout", "recall", "guard", "follow", "stay", "design",
-            "hunt", "fetch", "return", "run", "rod", "send_base", "duel", "trial", "loot", "portal", "weapon", "bring", "mine", "lumber", "farm", "patrol", "stashroom",
+            "hunt", "fetch", "return", "run", "rod", "send_base", "prison", "duel", "trial", "loot", "portal", "weapon", "bring", "mine", "lumber", "farm", "patrol", "stashroom",
             "ambush", "stabshot", "orbital", "mobcannon", "ranks", "forge", "explore", "totem", "pearl", "chests",
             "squad", "solo", "solo_clear", "view", "view_attack", "view_stop");
     private static final int HISTORY_TURNS = 10;
@@ -57,7 +57,7 @@ public final class CommanderChat implements Listener {
             + "bring opens a portal to a roster player who is in the Nether, named in \"target\". "
             + "fetch makes the Nulls bring a roster player named in \"target\" to the owner through a real portal, with a sign; the owner confirms first. "
             + "return sends a fetched roster player named in \"target\" back to where they were; the owner confirms first. "
-            + "run runs any one of the owner's own NullController commands, with the words in \"target\" (for example 'summon 10', 'rod blink', 'build watchtower', 'status'); destructive or roster-hitting ones wait for the owner's confirm. Never ask for raw server commands. rod gives the owner a rod: set \"key\" to the rod kind, such as blink, heal, frost, recall, nethertrap, ambush, nuke. send_base sends the Nulls to the Nether base. fetch and bring move roster players, never the Nulls. duel is a practice fight between the owner and the Commander, using his attacks, pearls and rockets; it stops at three hearts or when the timer runs out. Set \"n\" to the minutes. trial sends up to four Nulls to the nearest trial chamber to empty its chests, and loot brings the loot back to the owner. The Nulls never open vaults and never break trial spawners. Think before you answer: pick the one action that matches what the owner wants, and ask one short question instead of guessing when it is unclear. "
+            + "run runs any one of the owner's own NullController commands, with the words in \"target\" (for example 'summon 10', 'rod blink', 'build watchtower', 'status'); destructive or roster-hitting ones wait for the owner's confirm. Never ask for raw server commands. rod gives the owner a rod: set \"key\" to the rod kind, such as blink, heal, frost, recall, nethertrap, ambush, nuke. prison opens a portal in front of the owner that takes them to the prison, for requests like take me to the prison. send_base sends the Nulls to the Nether base. fetch and bring move roster players, never the Nulls. duel is a practice fight between the owner and the Commander, using his attacks, pearls and rockets; it stops at three hearts or when the timer runs out. Set \"n\" to the minutes. trial sends up to four Nulls to the nearest trial chamber to empty its chests, and loot brings the loot back to the owner. The Nulls never open vaults and never break trial spawners. Think before you answer: pick the one action that matches what the owner wants, and ask one short question instead of guessing when it is unclear. "
             + "Use the recent alarms and roster in the army state to choose tactics, and say briefly what you intend. "
             + "mine, lumber, farm, patrol, forge and explore set the army to work. ranks reports each rank. chests reports the nearest chests. totem hands the owner a totem. pearl fires a pearl at the spot the owner is looking at. stashroom builds the stash room. "
             + "squad lists the Nulls by number. solo with n and order gives one Null its own job (guard, follow, hunt, stay, mine, lumber, farm or auto); solo_clear clears them. view with n looks through Null n; view_attack strikes what it sees; view_stop comes back. "
@@ -114,6 +114,12 @@ public final class CommanderChat implements Listener {
         bringUntil.remove(id);
     }
 
+    /** Arms the prison trip: the next overworld portal the owner takes lands them at the prison. */
+    public String armPrison(Player owner) {
+        arm(owner, null, "prison");
+        return "Step through the next portal and you will land at the prison.";
+    }
+
     /** Arms the base trip: the next overworld portal the owner takes lands in the Nether base. */
     public String armBase(Player owner) {
         arm(owner, null, "base");
@@ -160,6 +166,18 @@ public final class CommanderChat implements Listener {
                 }
                 owner.teleport(base.clone().add(0.5, 1, 2.5));
                 owner.sendMessage(ChatColor.DARK_PURPLE + "You're at the base. " + army.portalAcross(owner, base.clone().add(0, 0, 4), false));
+            }
+            case "prison" -> {
+                if (from != World.Environment.NORMAL) return;
+                e.setCancelled(true);
+                disarm(id);
+                Location prison = configured("prison");
+                if (prison == null) {
+                    owner.sendMessage(ChatColor.RED + "No prison is set. Use /nullnether prison set.");
+                    return;
+                }
+                owner.teleport(prison.clone().add(0.5, 1, 0.5));
+                owner.sendMessage(ChatColor.DARK_PURPLE + "You are at the prison.");
             }
             case "via" -> {
                 if (from != World.Environment.NORMAL) return;
@@ -534,6 +552,7 @@ public final class CommanderChat implements Listener {
                 String result = plugin.runForCommander(owner, new String[]{"rod", kind});
                 if (result != null) owner.sendMessage(ChatColor.DARK_PURPLE + result);
             }
+            case "prison" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.buildPortal(owner) + " " + armPrison(owner));
             case "send_base" -> {
                 Location base = army.offlineSite();
                 if (base == null) owner.sendMessage(ChatColor.GRAY + "No Nether base set yet.");
