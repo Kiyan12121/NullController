@@ -71,7 +71,7 @@ public final class CommanderChat implements Listener {
             + "The owner always confirms before anything is built, so describe the whole design. "
             + "You must never attack, hunt, dismiss or strike anyone, and must never target players who are not on the roster. "
             + "If asked to do any of those, refuse in character. "
-            + "Reply ONLY with JSON in this form: {\"say\": \"<your line>\", \"action\": \"<one action from the list>\"}.";
+            + "Tactics: you are the sharpest commander the owner has, so read the army state before you act. If the owner is under 8 hearts, their safety comes first: suggest going home or a restock, not a fight. If a roster player is close and the owner wants them, prefer fetch (they come to the owner) over hunt (the Nulls go after them). Use duel for practice, trial for loot, and run for any other order. When an order is vague, pick the most useful action and say in one line what you chose and why. Only ever name roster players who are listed as online in the army state; never invent a name. Reply ONLY with JSON in this form: {\"say\": \"<your line>\", \"action\": \"<one action from the list>\"}.";
 
     private final NullControllerPlugin plugin;
     private final NullArmy army;

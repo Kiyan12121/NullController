@@ -835,7 +835,11 @@ public final class NullArmy {
         for (char c : ranks.values()) counts.merge(c, 1, Integer::sum);
         StringBuilder roster = new StringBuilder();
         for (Player p : org.bukkit.Bukkit.getOnlinePlayers()) {
-            if (consent.canTarget(p)) roster.append(p.getName()).append(' ');
+            if (!consent.canTarget(p)) continue;
+            String where = p.getWorld() == owner.getWorld()
+                    ? (int) p.getLocation().distance(owner.getLocation()) + " blocks away"
+                    : "in " + p.getWorld().getEnvironment().name().toLowerCase();
+            roster.append(p.getName()).append(" (hp ").append(Math.round(p.getHealth())).append(", ").append(where).append(") ");
         }
         return "Nulls: " + nulls.size() + "/" + armyCap()
                 + ". Ranks: ward R=" + counts.getOrDefault('R', 0)
@@ -843,7 +847,7 @@ public final class NullArmy {
                 + ", general I=" + counts.getOrDefault('I', 0)
                 + ", soldier D=" + counts.getOrDefault('D', 0)
                 + ". Army mode: " + mode.name()
-                + ". Owner " + owner.getName() + " is in " + owner.getWorld().getEnvironment().name().toLowerCase()
+                + ". Owner " + owner.getName() + " (hp " + Math.round(owner.getHealth()) + "/20, food " + owner.getFoodLevel() + "/20) is in " + owner.getWorld().getEnvironment().name().toLowerCase()
                 + " at " + coordsOf(owner.getLocation())
                 + ". Roster players online: " + (roster.length() == 0 ? "none" : roster.toString().trim())
                 + ". Recent alarms: " + (plugin.recentAlerts(6).isEmpty() ? "none" : String.join(" | ", plugin.recentAlerts(6)))
