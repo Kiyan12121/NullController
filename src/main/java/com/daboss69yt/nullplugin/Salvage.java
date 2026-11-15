@@ -58,7 +58,7 @@ public final class Salvage implements CommandExecutor {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        Player owner = plugin.ownerFor(sender);
+        Player owner = sender instanceof Player p ? p : null;
         if (owner == null || !consent.isOwner(owner)) {
             sender.sendMessage(ChatColor.RED + "Access denied, or the owner is offline.");
             return true;

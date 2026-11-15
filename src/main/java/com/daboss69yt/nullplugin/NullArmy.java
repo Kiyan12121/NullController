@@ -721,7 +721,7 @@ public final class NullArmy {
             waitFor(npc, target, expires);
             ambushers.add(npc);
         }
-        if (owner != null) owner.sendMessage(ChatColor.DARK_RED + count + " Nulls are waiting for "
+        if (owner != null) owner.sendMessage(ChatColor.DARK_RED + "" + count + " Nulls are waiting for "
                 + target.getName() + (leader != null && leader.isSpawned() ? ", the Commander with them." : "."));
         // The portal closes when the ambush ends.
         new BukkitRunnable() {
@@ -1475,7 +1475,7 @@ public final class NullArmy {
         World w = owner.getWorld();
         org.bukkit.generator.structure.Structure trial = org.bukkit.Registry.STRUCTURE.get(org.bukkit.NamespacedKey.minecraft("trial_chambers"));
         if (trial == null) return "This server doesn't know trial chambers.";
-        org.bukkit.generator.structure.StructureSearchResult found = w.locateNearestStructure(owner.getLocation(), trial, 100, true);
+        var found = w.locateNearestStructure(owner.getLocation(), trial, 100, true);
         if (found == null) return "No trial chamber near you within reach.";
         Location site = found.getLocation();
         List<NPC> team = new ArrayList<>();
@@ -1494,7 +1494,7 @@ public final class NullArmy {
                 for (org.bukkit.block.BlockState bs : chunk.getTileEntities()) {
                     if (bs.getLocation().distance(site) > 48) continue;
                     Material t = bs.getType();
-                    if (t == Material.TRIAL_SPAWNER || t == Material.OMINOUS_TRIAL_SPAWNER) {
+                    if (t == Material.TRIAL_SPAWNER) {
                         spawners.add(bs.getBlock());
                     } else if (t == Material.VAULT) {
                         vaults.add(bs.getBlock());
@@ -1631,7 +1631,8 @@ public final class NullArmy {
 
         /** Rolls the trial chamber reward table at the vault. The vault block itself is left as it is. */
         private void openVault(Location v) {
-            org.bukkit.loot.LootTable table = org.bukkit.Registry.LOOT_TABLES.get(org.bukkit.NamespacedKey.minecraft("chests/trial_chambers/reward"));
+            org.bukkit.loot.LootTables lootTables = org.bukkit.Registry.LOOT_TABLES.get(org.bukkit.NamespacedKey.minecraft("chests/trial_chambers/reward"));
+            org.bukkit.loot.LootTable table = lootTables == null ? null : lootTables.getLootTable();
             if (table != null) {
                 java.util.Collection<ItemStack> rewards = table.populateLoot(java.util.concurrent.ThreadLocalRandom.current(),
                         new org.bukkit.loot.LootContext.Builder(v).build());

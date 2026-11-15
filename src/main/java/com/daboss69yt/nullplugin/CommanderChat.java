@@ -571,11 +571,11 @@ public final class CommanderChat implements Listener {
             case "give" -> give(owner, out);
             case "general" -> {
                 String rk = out == null || !out.has("key") ? "" : out.get("key").getAsString().trim().toUpperCase();
-                String order = out == null || !out.has("target") ? "" : out.get("target").getAsString().trim().toLowerCase();
-                if (rk.isEmpty() || order.isEmpty()) {
+                String rankOrder = out == null || !out.has("target") ? "" : out.get("target").getAsString().trim().toLowerCase();
+                if (rk.isEmpty() || rankOrder.isEmpty()) {
                     owner.sendMessage(ChatColor.GRAY + "Which rank, and what order?");
                 } else {
-                    owner.sendMessage(ChatColor.DARK_PURPLE + army.rankOrder(owner, rk.charAt(0), order));
+                    owner.sendMessage(ChatColor.DARK_PURPLE + army.rankOrder(owner, rk.charAt(0), rankOrder));
                 }
             }
             case "ranks" -> army.showRanks(owner);
