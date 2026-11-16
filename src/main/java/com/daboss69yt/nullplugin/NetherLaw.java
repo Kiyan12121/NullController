@@ -738,7 +738,6 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
 
     // ---------- Commands ----------
 
-    @Override
     /** Console use of the prison: status, release, clear, arrest. Release and clear need no player online. */
     public void consolePrison(CommandSender sender, String[] args) {
         String sub = args.length == 0 ? "status" : args[0].toLowerCase(Locale.ROOT);
@@ -802,7 +801,7 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
                 int moved = moveStashToChest(r);
                 save();
                 if (moved == 0 && r.stash.isEmpty()) sender.sendMessage(ChatColor.GRAY + "Nothing stashed for " + args[1] + ".");
-                else sender.sendMessage(ChatColor.DARK_PURPLE + moved + " items moved to the deposit chest for " + args[1] + "."
+                else sender.sendMessage(ChatColor.DARK_PURPLE + "" + moved + " items moved to the deposit chest for " + args[1] + "."
                         + (r.stash.isEmpty() ? "" : " " + stashCount(r) + " still in the stash."));
             }
             case "clear" -> {
