@@ -867,6 +867,30 @@ public final class NullArmy {
                 + pursuitLine();
     }
 
+    /** Lists where Nulls went down, for the console. */
+    public String dangerReport() {
+        if (dangerSpots.isEmpty()) return "No danger spots marked.";
+        StringBuilder sb = new StringBuilder("Danger spots (" + dangerSpots.size() + "): ");
+        for (Location spot : dangerSpots) sb.append(coordsOf(spot)).append("  ");
+        return sb.toString().trim();
+    }
+
+    public String clearDangers() {
+        int n = dangerSpots.size();
+        dangerSpots.clear();
+        return "Cleared " + n + " danger spots.";
+    }
+
+    /** Calls off every pursuit, and recalls the hunters chasing them. */
+    public String stopPursuits() {
+        Set<UUID> ids = new HashSet<>(pursuits.keySet());
+        pursuits.clear();
+        for (Map.Entry<NPC, Hunt> e : new ArrayList<>(hunters.entrySet())) {
+            if (ids.contains(e.getValue().target())) dropNpc(e.getKey());
+        }
+        return "Called off " + ids.size() + " pursuit(s).";
+    }
+
     /** The escape side of the army state: who is being hunted, how many Nulls are hurt, and the danger spots. */
     private String pursuitLine() {
         StringBuilder chased = new StringBuilder();
@@ -2869,6 +2893,7 @@ public final class NullArmy {
 
     /** Friendly play runs only when the owner is the one person on the server, and nothing is hunting. */
     private boolean friendlyMode(Player owner) {
+        if (!plugin.getConfig().getBoolean("friendly-play", true)) return false;
         if (mode != Mode.FOLLOW && mode != Mode.STAY && mode != Mode.GUARD) return false;
         if (!hunters.isEmpty() || !pursuits.isEmpty() || System.currentTimeMillis() < alarmUntil) return false;
         for (Player p : Bukkit.getOnlinePlayers()) {

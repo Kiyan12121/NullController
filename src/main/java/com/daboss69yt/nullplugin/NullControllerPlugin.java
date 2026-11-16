@@ -326,6 +326,10 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
                 }
             }
             case "pursue" -> {
+                if (args.length > 1 && args[1].equalsIgnoreCase("stop")) {
+                    sender.sendMessage(ChatColor.DARK_PURPLE + army.stopPursuits());
+                    return true;
+                }
                 Player t = args.length < 2 ? null : Bukkit.getPlayerExact(args[1]);
                 if (args.length < 2) sender.sendMessage("Usage: pursue <roster player> [minutes]");
                 else if (t == null) sender.sendMessage("That player is not online.");
@@ -440,9 +444,77 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             case "stashroom" -> sender.sendMessage(army.buildStashRoom());
             case "autowork" -> sender.sendMessage("Auto work " + toggleKey(args, "auto-work", true) + ".");
             case "autospy" -> sender.sendMessage("Auto spy " + toggleKey(args, "auto-spy", true) + ".");
+            case "goto" -> {
+                if (args.length < 5) {
+                    sender.sendMessage(ChatColor.GRAY + "Usage: goto <world> <x> <y> <z>");
+                } else {
+                    Location at = consoleLocation(args[1], args[2], args[3], args[4]);
+                    if (at == null) {
+                        sender.sendMessage(ChatColor.RED + "No such world, or the coordinates aren't numbers.");
+                    } else {
+                        army.sendTo(at);
+                        sender.sendMessage(ChatColor.DARK_PURPLE + "The Nulls are heading to " + at.getBlockX() + ", " + at.getBlockY() + ", " + at.getBlockZ() + ".");
+                    }
+                }
+            }
+            case "config" -> consoleConfig(sender, args);
+            case "friendly" -> sender.sendMessage("Friendly play " + toggleKey(args, "friendly-play", true) + ".");
+            case "clearalerts" -> {
+                synchronized (alerts) {
+                    alerts.clear();
+                }
+                sender.sendMessage("Alerts cleared.");
+            }
+            case "dangers" -> {
+                if (args.length > 1 && args[1].equalsIgnoreCase("clear")) sender.sendMessage(ChatColor.DARK_PURPLE + army.clearDangers());
+                else sender.sendMessage(ChatColor.DARK_PURPLE + army.dangerReport());
+            }
             default -> sender.sendMessage(OFFLINE_HELP);
         }
         return true;
+    }
+
+    /** Config keys the console may change while you are offline. Anything else stays as set in config.yml. */
+    private static final java.util.Map<String, String> CONSOLE_CONFIG = java.util.Map.of(
+            "max-nulls", "int", "ambush-minutes", "int", "leash-distance", "double", "hunt-range", "double",
+            "combat-range", "double", "combat-damage", "double", "nether-ambush", "bool", "auto-strike", "bool");
+
+    private void consoleConfig(CommandSender sender, String[] args) {
+        if (args.length < 2 || args[1].equalsIgnoreCase("show")) {
+            StringBuilder sb = new StringBuilder("Config you can change: ");
+            for (String key : new java.util.TreeSet<>(CONSOLE_CONFIG.keySet())) {
+                sb.append(key).append('=').append(getConfig().get(key)).append("  ");
+            }
+            sender.sendMessage(ChatColor.GRAY + sb.toString().trim());
+            sender.sendMessage(ChatColor.GRAY + "Usage: config <key> <value>");
+            return;
+        }
+        String key = args[1].toLowerCase(Locale.ROOT);
+        String kind = CONSOLE_CONFIG.get(key);
+        if (kind == null) {
+            sender.sendMessage(ChatColor.RED + "That key can't be changed from console.");
+            return;
+        }
+        if (args.length < 3) {
+            sender.sendMessage(ChatColor.GRAY + "Usage: config " + key + " <value>");
+            return;
+        }
+        try {
+            Object value = switch (kind) {
+                case "int" -> Integer.parseInt(args[2]);
+                case "double" -> Double.parseDouble(args[2]);
+                default -> Boolean.parseBoolean(args[2]);
+            };
+            if (value instanceof Number n && n.doubleValue() < 0) {
+                sender.sendMessage(ChatColor.RED + "Must not be negative.");
+                return;
+            }
+            getConfig().set(key, value);
+            saveConfig();
+            sender.sendMessage(ChatColor.DARK_PURPLE + key + " set to " + value + ".");
+        } catch (NumberFormatException ex) {
+            sender.sendMessage(ChatColor.RED + "That value isn't a number.");
+        }
     }
 
     /** on | off | toggle for a boolean config key. Returns the new state as enabled or disabled. */
@@ -460,7 +532,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     }
 
     private static final String OFFLINE_HELP = ChatColor.GRAY + "Owner is offline. Console orders: "
-            + "summon [n], build <kind> (Nether only), chests place <kind> (look at a block), strike <player> (the Breach), orbital <player> (Nuke), stabshot <player>, mobcannon <player> [n], team list|add|remove <player>, dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle, stashroom, autowork on|off|toggle, autospy on|off|toggle, squad, solo <n> <order>, solo clear [n|all], ranks, prisoners, alerts, salvage list|delete <name>|place <name> <world> <x> <y> <z>, hunt <player> [count] [minutes], pounce <player>, pursue <player> [minutes], cancel, fortify, sendbase, reload, base set <world> <x> <y> <z>, patrol add <world> <x> <y> <z>, patrol clear, prison status|set|free|collect|release|clear|arrest <player>";
+            + "summon [n], build <kind> (Nether only), chests place <kind> (look at a block), strike <player> (the Breach), orbital <player> (Nuke), stabshot <player>, mobcannon <player> [n], team list|add|remove <player>, dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle, stashroom, autowork on|off|toggle, autospy on|off|toggle, squad, solo <n> <order>, solo clear [n|all], ranks, prisoners, alerts, salvage list|delete <name>|place <name> <world> <x> <y> <z>, hunt <player> [count] [minutes], pounce <player>, pursue <player> [minutes], cancel, fortify, sendbase, reload, base set <world> <x> <y> <z>, patrol add <world> <x> <y> <z>, patrol clear, prison status|set|free|collect|release|clear|arrest <player>, goto <world> <x> <y> <z>, config show|<key> <value>, friendly on|off|toggle, dangers [clear], clearalerts, pursue stop";
 
     private void offlineMode(CommandSender sender, NullArmy.Mode mode) {
         sender.sendMessage(army.setModeOffline(mode)
