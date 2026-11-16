@@ -104,7 +104,7 @@ public final class NullArmy {
     private static final int ATTACK_COOLDOWN_CYCLES = 2;
     private static final int ROAM_CYCLES = 8;
     private static final int FORGE_AWAKEN_CYCLES = 120;
-    private static final double WOUNDED_HP = 6.0;
+    private static final double WOUNDED_HP = 8.0;
     private static final Set<Material> FARM_CROPS = Set.of(
             Material.WHEAT, Material.CARROTS, Material.POTATOES, Material.BEETROOTS, Material.NETHER_WART);
 
@@ -571,6 +571,19 @@ public final class NullArmy {
                 "Army moving to %.0f, %.0f, %.0f in %s.",
                 target.getX(), target.getY(), target.getZ(),
                 target.getWorld() == null ? "unknown world" : target.getWorld().getName()));
+    }
+
+    /** Console version of patrol add: a waypoint at the given spot. */
+    public String patrolAddAt(Location at) {
+        if (patrolRoute.size() >= MAX_WAYPOINTS) return "Patrol route is full (" + MAX_WAYPOINTS + " points).";
+        patrolRoute.add(at.clone());
+        return "Waypoint " + patrolRoute.size() + " added.";
+    }
+
+    /** Console version of patrol clear. */
+    public String patrolClearRoute() {
+        patrolRoute.clear();
+        return "Patrol route cleared.";
     }
 
     public void patrolAdd(Player owner) {
@@ -1386,12 +1399,19 @@ public final class NullArmy {
     }
 
     /** An escapee is being chased: the whole squad is faster and thinks ahead. */
+    /** One more wave for an escapee still being hunted: hunters on them and webs under them. */
+    public void escapeWave(Player owner, Player target, int count, int minutes) {
+        if (!target.isOnline() || !pursuing(target.getUniqueId())) return;
+        spawnHunters(owner, target, target.getLocation(), count, minutes);
+        layTrap(target, target.getLocation());
+    }
+
     public void beginPursuit(Player target, int minutes) {
         pursuits.put(target.getUniqueId(), System.currentTimeMillis() + minutes * 60_000L);
         commanderPursue(target, minutes);
     }
 
-    private boolean pursuing(UUID id) {
+    public boolean pursuing(UUID id) {
         Long until = pursuits.get(id);
         if (until == null) return false;
         if (System.currentTimeMillis() >= until) {
@@ -1402,7 +1422,7 @@ public final class NullArmy {
     }
 
     /** Cobwebs across the runner's path, three to six blocks ahead, every two seconds. */
-    private void layTrap(Player target, Location tl) {
+    public void layTrap(Player target, Location tl) {
         long now = System.currentTimeMillis();
         Vector v = target.getVelocity().setY(0);
         if (now - lastSnare < 2000L || v.lengthSquared() < 0.01) return;
@@ -2595,6 +2615,8 @@ public final class NullArmy {
             }
         }
         if (best == null) return false;
+        // Hurt Nulls don't walk into a crowd: if four or more mobs are on this one, they hold back.
+        if (ownHp < 14 && monstersNear(best.getLocation(), 5) >= 4) return false;
         if (bestDist <= ATTACK_REACH) {
             attack(npc, best);
         } else {
@@ -2664,6 +2686,7 @@ public final class NullArmy {
         Entity e = npc.getEntity();
         if (e instanceof LivingEntity living) {
             living.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 60, 1, false, false));
+            living.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 60, 1, false, false)); // run from it
         }
     }
 
@@ -2697,7 +2720,33 @@ public final class NullArmy {
         }
     }
 
+    /** Circles the target at melee range instead of standing still to trade hits. */
+    private void strafe(NPC npc, LivingEntity target) {
+        Location here = npc.getStoredLocation();
+        Location tl = target.getLocation();
+        if (here == null || !sameWorld(here, tl) || here.distance(tl) > 6) return;
+        double base = Math.atan2(here.getZ() - tl.getZ(), here.getX() - tl.getX());
+        double side = (cycle % 2 == 0 ? 0.7 : -0.7) * (npc.getId() % 2 == 0 ? 1 : -1);
+        Location spot = tl.clone().add(Math.cos(base + side) * 2.2, 0, Math.sin(base + side) * 2.2);
+        npc.getNavigator().setTarget(spot);
+    }
+
+    /** Monsters within a radius of a point. Used to spot fights that would pull a Null into a crowd. */
+    private static int monstersNear(Location at, double radius) {
+        int n = 0;
+        for (Entity e : at.getWorld().getNearbyEntities(at, radius, radius, radius)) {
+            if (e instanceof Monster) n++;
+        }
+        return n;
+    }
+
     private void attack(NPC npc, LivingEntity target) {
+        if (npc.getEntity() instanceof LivingEntity self) {
+            // Top up before trading blows, not only once the Null is already retreating.
+            if (self.getHealth() < 12) eatApple(npc);
+            if (self.getHealth() < 8) drinkPotion(npc);
+        }
+        if (cycle % 3 == 0) strafe(npc, target);
         Integer last = lastAttack.get(npc);
         int cooldown = isCommander(npc) || ranks.getOrDefault(npc, 'D') == 'A' ? 1 : ATTACK_COOLDOWN_CYCLES;
         if (last != null && cycle - last < cooldown) return;

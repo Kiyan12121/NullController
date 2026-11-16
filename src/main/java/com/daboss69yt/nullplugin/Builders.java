@@ -32,6 +32,27 @@ public final class Builders {
         this.queue = new BuildQueue(plugin);
     }
 
+    /** Console and offline version of cancel: the same, but reports to any sink. */
+    public void cancelOffline(java.util.function.Consumer<String> say) {
+        queue.cancel();
+        army.stopSwinging();
+        say.accept("Build cancelled.");
+    }
+
+    /** Console and offline version of fortify. */
+    public void fortifyOffline(java.util.function.Consumer<String> say) {
+        if (lastPlacements.isEmpty()) {
+            say.accept("Nothing to repair yet. Finish a build first.");
+            return;
+        }
+        List<BuildQueue.Placement> missing = missingBlocks();
+        if (missing.isEmpty()) {
+            say.accept("The " + lastName + " is intact.");
+            return;
+        }
+        startBuild(say, "Fortify " + lastName, missing, false);
+    }
+
     public void cancel(Player owner) {
         queue.cancel();
         army.stopSwinging();

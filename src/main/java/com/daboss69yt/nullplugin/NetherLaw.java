@@ -390,6 +390,27 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
     }
 
     /** Debris goes into the deposit chest when one is set, otherwise to the owner's stash. */
+    /** Moves as much of a prisoner's stash as fits into the deposit chest. Returns the item count moved. */
+    private int moveStashToChest(Record r) {
+        Container c = depositChest();
+        if (c == null) return 0;
+        int moved = 0;
+        for (java.util.Iterator<ItemStack> it = r.stash.iterator(); it.hasNext(); ) {
+            ItemStack s = it.next();
+            int before = s.getAmount();
+            java.util.Map<Integer, ItemStack> left = c.getInventory().addItem(s.clone());
+            int leftover = left.values().stream().mapToInt(ItemStack::getAmount).sum();
+            moved += before - leftover;
+            if (leftover == 0) it.remove();
+            else s.setAmount(leftover);
+        }
+        return moved;
+    }
+
+    private int stashCount(Record r) {
+        return r.stash.stream().mapToInt(ItemStack::getAmount).sum();
+    }
+
     private void storeDebris(Record r) {
         ItemStack debris = new ItemStack(Material.ANCIENT_DEBRIS);
         Container c = depositChest();
@@ -700,12 +721,109 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         strip(p, r); // whatever they're carrying goes to the stash
         p.sendMessage(ChatColor.DARK_RED + "Your gear went to the stash.");
         army.beginPursuit(p, (int) huntMinutes());
+        p.addPotionEffect(new org.bukkit.potion.PotionEffect(org.bukkit.potion.PotionEffectType.SLOWNESS, 15 * 20, 0, false, true));
+        // Waves keep coming while the escapee runs: a fresh squad every 45 seconds, for as long as the pursuit lasts.
+        new org.bukkit.scheduler.BukkitRunnable() {
+            @Override
+            public void run() {
+                if (!p.isOnline() || !army.pursuing(p.getUniqueId()) || inPrison(p.getLocation())) {
+                    cancel();
+                    return;
+                }
+                army.escapeWave(owner(), p, 4, (int) huntMinutes());
+            }
+        }.runTaskTimer(plugin, 45L * 20L, 45L * 20L);
         save();
     }
 
     // ---------- Commands ----------
 
     @Override
+    /** Console use of the prison: status, release, clear, arrest. Release and clear need no player online. */
+    public void consolePrison(CommandSender sender, String[] args) {
+        String sub = args.length == 0 ? "status" : args[0].toLowerCase(Locale.ROOT);
+        if (sub.equals("status")) {
+            status(sender);
+            return;
+        }
+        if (sub.equals("set")) {
+            if (args.length < 5) {
+                sender.sendMessage(ChatColor.GRAY + "Usage: prison set <world> <x> <y> <z>");
+                return;
+            }
+            org.bukkit.World w = Bukkit.getWorld(args[1]);
+            try {
+                if (w == null) throw new IllegalArgumentException();
+                int x = Integer.parseInt(args[2]), y = Integer.parseInt(args[3]), z = Integer.parseInt(args[4]);
+                plugin.getConfig().set("prison", w.getName() + "," + x + "," + y + "," + z);
+                plugin.saveConfig();
+                sender.sendMessage(ChatColor.DARK_PURPLE + "Prison set at " + x + ", " + y + ", " + z + " in " + w.getName() + ".");
+            } catch (IllegalArgumentException ex) {
+                sender.sendMessage(ChatColor.RED + "No such world, or the coordinates aren't numbers.");
+            }
+            return;
+        }
+        if (args.length < 2) {
+            sender.sendMessage(ChatColor.GRAY + "Usage: prison status | release|clear|arrest <player>");
+            return;
+        }
+        UUID id = Bukkit.getOfflinePlayer(args[1]).getUniqueId();
+        if (!consent.isConsented(id)) {
+            sender.sendMessage(ChatColor.RED + args[1] + " is not on the roster.");
+            return;
+        }
+        Record r = record(id, args[1]);
+        switch (sub) {
+            case "release" -> {
+                r.prisoner = false;
+                army.setPrisonGuardNeeded(anyPrisoner());
+                r.strikes = 0;
+                save();
+                sender.sendMessage(ChatColor.DARK_PURPLE + args[1] + " released. Clean slate. Gear is still stashed.");
+            }
+            case "free" -> {
+                r.prisoner = false;
+                army.setPrisonGuardNeeded(anyPrisoner());
+                r.strikes = 0;
+                int moved = moveStashToChest(r);
+                save();
+                if (depositChest() == null) {
+                    sender.sendMessage(ChatColor.DARK_PURPLE + args[1] + " freed. No deposit chest is set, so the gear stays in the stash.");
+                } else {
+                    sender.sendMessage(ChatColor.DARK_PURPLE + args[1] + " freed. " + moved + " items moved to the deposit chest"
+                            + (r.stash.isEmpty() ? "." : "; " + stashCount(r) + " left in the stash, no room in the chest."));
+                }
+            }
+            case "collect" -> {
+                if (depositChest() == null) {
+                    sender.sendMessage(ChatColor.RED + "No deposit chest is set. Use /nullcmd chest set in game first.");
+                    return;
+                }
+                int moved = moveStashToChest(r);
+                save();
+                if (moved == 0 && r.stash.isEmpty()) sender.sendMessage(ChatColor.GRAY + "Nothing stashed for " + args[1] + ".");
+                else sender.sendMessage(ChatColor.DARK_PURPLE + moved + " items moved to the deposit chest for " + args[1] + "."
+                        + (r.stash.isEmpty() ? "" : " " + stashCount(r) + " still in the stash."));
+            }
+            case "clear" -> {
+                r.strikes = 0;
+                r.ledger.clear();
+                save();
+                sender.sendMessage(ChatColor.DARK_PURPLE + args[1] + " cleared.");
+            }
+            case "arrest" -> {
+                Player p = Bukkit.getPlayer(id);
+                if (p == null) {
+                    sender.sendMessage(ChatColor.RED + args[1] + " has to be online to be arrested.");
+                    return;
+                }
+                arrest(p, r);
+                sender.sendMessage(ChatColor.DARK_PURPLE + args[1] + " arrested.");
+            }
+            default -> sender.sendMessage(ChatColor.GRAY + "Usage: prison status | release|clear|arrest <player>");
+        }
+    }
+
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         Player owner = plugin.ownerFor(sender);
         if (owner == null || !consent.isOwner(owner)) {

@@ -241,12 +241,62 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     }
 
     /** Console orders while the owner is offline: only what needs no player. */
+    /** Builds a location from console arguments, or null if the world or numbers are wrong. */
+    private Location consoleLocation(String world, String x, String y, String z) {
+        org.bukkit.World w = Bukkit.getWorld(world);
+        if (w == null) return null;
+        try {
+            return new Location(w, Integer.parseInt(x), Integer.parseInt(y), Integer.parseInt(z));
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    /** Saves a location to the config as world,x,y,z, for keys like nether-base. */
+    private void setConsoleLocation(CommandSender sender, String key, String world, String x, String y, String z) {
+        Location at = consoleLocation(world, x, y, z);
+        if (at == null) {
+            sender.sendMessage(ChatColor.RED + "No such world, or the coordinates aren't numbers.");
+            return;
+        }
+        getConfig().set(key, at.getWorld().getName() + "," + at.getBlockX() + "," + at.getBlockY() + "," + at.getBlockZ());
+        saveConfig();
+        sender.sendMessage(ChatColor.DARK_PURPLE + key + " set to " + at.getBlockX() + ", " + at.getBlockY() + ", " + at.getBlockZ() + " in " + at.getWorld().getName() + ".");
+    }
+
     private boolean offlineOrder(CommandSender sender, String[] args) {
         if (args.length == 0) {
             sender.sendMessage(OFFLINE_HELP);
             return true;
         }
         switch (args[0].toLowerCase()) {
+            case "reload" -> handleReload(sender);
+            case "base" -> {
+                if (args.length < 6 || !args[1].equalsIgnoreCase("set")) sender.sendMessage(ChatColor.GRAY + "Usage: base set <world> <x> <y> <z>");
+                else setConsoleLocation(sender, "nether-base", args[2], args[3], args[4], args[5]);
+            }
+            case "patrol" -> {
+                if (args.length >= 2 && args[1].equalsIgnoreCase("clear")) {
+                    sender.sendMessage(ChatColor.DARK_PURPLE + army.patrolClearRoute());
+                } else if (args.length >= 6 && args[1].equalsIgnoreCase("add")) {
+                    Location at = consoleLocation(args[2], args[3], args[4], args[5]);
+                    sender.sendMessage(at == null ? ChatColor.RED + "No such world, or the coordinates aren't numbers."
+                            : ChatColor.DARK_PURPLE + army.patrolAddAt(at));
+                } else {
+                    sender.sendMessage(ChatColor.GRAY + "Usage: patrol add <world> <x> <y> <z> | patrol clear");
+                }
+            }
+            case "prison" -> netherLaw.consolePrison(sender, java.util.Arrays.copyOfRange(args, 1, args.length));
+            case "cancel" -> builders.cancelOffline(msg -> sender.sendMessage(ChatColor.DARK_PURPLE + msg));
+            case "fortify" -> builders.fortifyOffline(msg -> sender.sendMessage(ChatColor.DARK_PURPLE + msg));
+            case "sendbase" -> {
+                Location base = army.offlineSite();
+                if (base == null) sender.sendMessage(ChatColor.GRAY + "No Nether base set yet.");
+                else {
+                    army.sendTo(base);
+                    sender.sendMessage(ChatColor.DARK_PURPLE + "The Nulls are heading to the base.");
+                }
+            }
             case "squad" -> army.showSquad(sender);
             case "ranks" -> army.showRanks(sender);
             case "prisoners" -> netherLaw.consoleStatus(sender);
@@ -410,7 +460,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     }
 
     private static final String OFFLINE_HELP = ChatColor.GRAY + "Owner is offline. Console orders: "
-            + "summon [n], build <kind> (Nether only), chests place <kind> (look at a block), strike <player> (the Breach), orbital <player> (Nuke), stabshot <player>, mobcannon <player> [n], team list|add|remove <player>, dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle, stashroom, autowork on|off|toggle, autospy on|off|toggle, squad, solo <n> <order>, solo clear [n|all], ranks, prisoners, alerts, salvage list|delete <name>|place <name> <world> <x> <y> <z>, hunt <player> [count] [minutes], pounce <player>, pursue <player> [minutes]";
+            + "summon [n], build <kind> (Nether only), chests place <kind> (look at a block), strike <player> (the Breach), orbital <player> (Nuke), stabshot <player>, mobcannon <player> [n], team list|add|remove <player>, dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle, stashroom, autowork on|off|toggle, autospy on|off|toggle, squad, solo <n> <order>, solo clear [n|all], ranks, prisoners, alerts, salvage list|delete <name>|place <name> <world> <x> <y> <z>, hunt <player> [count] [minutes], pounce <player>, pursue <player> [minutes], cancel, fortify, sendbase, reload, base set <world> <x> <y> <z>, patrol add <world> <x> <y> <z>, patrol clear, prison status|set|free|collect|release|clear|arrest <player>";
 
     private void offlineMode(CommandSender sender, NullArmy.Mode mode) {
         sender.sendMessage(army.setModeOffline(mode)
