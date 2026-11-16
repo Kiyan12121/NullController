@@ -40,7 +40,7 @@ public final class CommanderChat implements Listener {
     private static final Set<String> ACTIONS = Set.of("none", "status", "scout", "recall", "guard", "follow", "stay", "design",
             "hunt", "fetch", "return", "run", "rod", "send_base", "prison", "duel", "trial", "loot", "portal", "weapon", "bring", "mine", "lumber", "farm", "patrol", "stashroom",
             "ambush", "stabshot", "orbital", "mobcannon", "ranks", "forge", "explore", "totem", "pearl", "chests",
-            "squad", "solo", "solo_clear", "view", "view_attack", "view_stop");
+            "squad", "solo", "solo_clear", "view", "view_attack", "view_stop", "home", "buff", "give", "auto", "general");
     private static final int HISTORY_TURNS = 10;
     private static final long COOLDOWN_MS = 3000;
 
@@ -48,7 +48,7 @@ public final class CommanderChat implements Listener {
             "You are the Commander of the NULL army on a Minecraft server. You are pragmatic, deeply loyal to "
             + "the NULL, and lighthearted, with a dry humour. You are ruthless toward outsiders but warm to your team. "
             + "Your owner gives the orders. Keep lines short, under 40 words. Never claim you did something you did not do. "
-            + "You may only request these actions: none, status, scout, recall, guard, follow, stay, design, hunt, portal, home, buff, give, auto, weapon. auto lets the Nulls choose their own jobs. "
+            + "You may request these actions: none, status, scout, recall, guard, follow, stay, design, hunt, fetch, return, run, rod, send_base, prison, duel, trial, loot, portal, home, bring, weapon, buff, give, auto, general, mine, lumber, farm, patrol, forge, explore, stashroom, ambush, stabshot, orbital, mobcannon, ranks, chests, squad, solo, solo_clear, view, view_attack, view_stop, pearl, totem. auto lets the Nulls choose their own jobs. "
             + "general gives orders to the ranks under you: set \"key\" to I for generals or D for soldiers, and \"target\" to guard, follow, stay, recall, dismiss or clear. Name the order in your reply too. "
             + "buff potion-buffs the owner (for 'pot me up' or 'buff me').give hands the owner items: set \"key\" to a Minecraft item name such as golden_apple, and \"amount\" up to 64. "
             + "home opens a portal in front of the owner that takes them to the Nether base, for requests like 'get me home' or 'take me to base'. "
@@ -58,7 +58,8 @@ public final class CommanderChat implements Listener {
             + "fetch makes the Nulls bring a roster player named in \"target\" to the owner through a real portal, with a sign; the owner confirms first. "
             + "return sends a fetched roster player named in \"target\" back to where they were; the owner confirms first. "
             + "run runs any one of the owner's own NullController commands, with the words in \"target\" (for example 'summon 10', 'rod blink', 'build watchtower', 'status'); destructive or roster-hitting ones wait for the owner's confirm. Never ask for raw server commands. rod gives the owner a rod: set \"key\" to the rod kind, such as blink, heal, frost, recall, nethertrap, ambush, nuke. prison opens a portal in front of the owner that takes them to the prison, for requests like take me to the prison. send_base sends the Nulls to the Nether base. fetch and bring move roster players, never the Nulls. duel is a practice fight between the owner and the Commander, using his attacks, pearls and rockets; it stops at three hearts or when the timer runs out. Set \"n\" to the minutes. trial sends up to four Nulls to the nearest trial chamber to empty its chests, and loot brings the loot back to the owner. The Nulls never open vaults and never break trial spawners. Think before you answer: pick the one action that matches what the owner wants, and ask one short question instead of guessing when it is unclear. "
-            + "Use the recent alarms and roster in the army state to choose tactics, and say briefly what you intend. "
+            + "Use the recent alarms, roster, escapees being hunted, hurt Nulls and danger spots in the army state to choose tactics, and say briefly what you intend. "
+            + "If a prisoner has escaped, tell the owner, and never send the owner into that chase alone: the snipers shoot from range and the squad hits back, so let them work. "
             + "mine, lumber, farm, patrol, forge and explore set the army to work. ranks reports each rank. chests reports the nearest chests. totem hands the owner a totem. pearl fires a pearl at the spot the owner is looking at. stashroom builds the stash room. "
             + "squad lists the Nulls by number. solo with n and order gives one Null its own job (guard, follow, hunt, stay, mine, lumber, farm or auto); solo_clear clears them. view with n looks through Null n; view_attack strikes what it sees; view_stop comes back. "
             + "ambush, stabshot, orbital and mobcannon strike a roster player named in \"target\"; the owner confirms first. "
@@ -385,7 +386,7 @@ public final class CommanderChat implements Listener {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             String reply;
             try {
-                reply = call(key, body);
+                reply = callWithRetry(key, body);
             } catch (Exception ex) {
                 reply = salvage(ex.getMessage());
                 if (reply == null) {
@@ -448,6 +449,26 @@ public final class CommanderChat implements Listener {
         }
     }
 
+    /** Groq sometimes wraps its JSON in a code fence or a sentence. Keeps just the outer object. */
+    private static String outerObject(String content) {
+        int open = content.indexOf('{');
+        int close = content.lastIndexOf('}');
+        return open >= 0 && close > open ? content.substring(open, close + 1) : content;
+    }
+
+    /** One retry after a short pause, for a dropped connection, a rate limit (429) or a server error (5xx). */
+    private String callWithRetry(String key, String body) throws Exception {
+        try {
+            return call(key, body);
+        } catch (Exception first) {
+            String m = String.valueOf(first.getMessage());
+            boolean transientFault = m.contains("HTTP 429") || m.contains("HTTP 5") || first instanceof java.io.IOException;
+            if (!transientFault) throw first;
+            Thread.sleep(1500L);
+            return call(key, body);
+        }
+    }
+
     private String call(String key, String body) throws Exception {
         HttpRequest req = HttpRequest.newBuilder(URI.create(ENDPOINT))
                 .timeout(Duration.ofSeconds(20))
@@ -470,7 +491,7 @@ public final class CommanderChat implements Listener {
         int num = -1;
         String order = "";
         try {
-            out = JsonParser.parseString(content).getAsJsonObject();
+            out = JsonParser.parseString(outerObject(content)).getAsJsonObject();
             say = out.has("say") ? out.get("say").getAsString() : "";
             action = out.has("action") ? out.get("action").getAsString().toLowerCase() : "none";
             if (out.has("n") && out.get("n").isJsonPrimitive()) num = out.get("n").getAsInt();

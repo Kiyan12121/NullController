@@ -491,7 +491,8 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             "summon", "dismiss", "recall", "guard", "follow", "hunt", "stay", "auto", "status", "ranks", "squad",
             "takeover", "solo", "view", "help", "goto", "mine", "lumber", "farm", "forge", "chest", "patrol", "build",
             "fortify", "cage", "ambush", "team", "chests", "stashroom", "autowork", "autospy", "orbital", "scout",
-            "portal", "weapon", "arm", "rank", "pearl", "stabshot", "totem", "succession", "rod");
+            "portal", "weapon", "arm", "rank", "pearl", "stabshot", "totem", "succession", "rod",
+            "autowork", "autospy", "sendbase");
     /** Commands that change a lot or hit roster players: the owner confirms these first. */
     private static final java.util.Set<String> COMMANDER_CONFIRM = java.util.Set.of(
             "dismiss", "takeover", "build", "cage", "ambush", "orbital", "stabshot", "succession");
@@ -1040,6 +1041,16 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         if (sender instanceof Player p) return p;
         if (sender instanceof ConsoleCommandSender) return Bukkit.getPlayerExact(ConsentManager.OWNER_NAME);
         return null;
+    }
+
+    @EventHandler
+    public void onOwnerSign(org.bukkit.event.block.SignChangeEvent event) {
+        if (army == null) return;
+        String[] lines = new String[4];
+        for (int i = 0; i < 4; i++) {
+            lines[i] = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(event.line(i));
+        }
+        army.onOwnerSign(event.getPlayer(), lines);
     }
 
     private boolean isOwner(CommandSender sender) {

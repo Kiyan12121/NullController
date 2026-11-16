@@ -11,6 +11,7 @@ import org.bukkit.inventory.meta.trim.TrimMaterial;
 import org.bukkit.inventory.meta.trim.ArmorTrim;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.ArmorMeta;
+import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.Registry;
 import org.bukkit.NamespacedKey;
 import org.bukkit.attribute.Attribute;
@@ -629,6 +630,10 @@ public final class NullArmy {
             NPC npc = createNull(ringSpot(around, i, count), gearForMode(Mode.HUNT), false);
             if (!npc.isSpawned()) npc.spawn(ringSpot(around, i, count));
             waitFor(npc, target, expires);
+            if (i % 3 == 2) {
+                snipers.add(npc);
+                setHeldItem(npc, sniperBow());
+            }
         }
         return true;
     }
@@ -718,13 +723,7 @@ public final class NullArmy {
         if (owner != null) owner.sendMessage(ChatColor.DARK_RED + (nether ? "Ambush set" : "Portal open") + " at " + coordsOf(centre)
                 + ". Nulls step out for " + target.getName() + ".");
         long expires = System.currentTimeMillis() + minutes * 60_000L;
-        // The Commander leads from the front; the rest wait beside the exit, hidden, and break cover when the target comes close.
-        if (leader != null && leader.isSpawned()) {
-            Location front = new Location(w, bx + 0.5, by, bz + 1.5);
-            teleport(leader, front);
-            waitFor(leader, target, expires);
-            ambushers.add(leader);
-        }
+        // The Commander stays with the owner. The rest wait beside the exit, hidden, and break cover when the target comes close.
         for (int i = 0; i < count; i++) {
             double side = (i % 2 == 0 ? -2.2 : 2.2);
             double depth = 2.5 + (i / 2) * 1.5;
@@ -735,7 +734,7 @@ public final class NullArmy {
             ambushers.add(npc);
         }
         if (owner != null) owner.sendMessage(ChatColor.DARK_RED + "" + count + " Nulls are waiting for "
-                + target.getName() + (leader != null && leader.isSpawned() ? ", the Commander with them." : "."));
+                + target.getName() + ".");
         // The portal closes when the ambush ends.
         new BukkitRunnable() {
             @Override
@@ -864,7 +863,23 @@ public final class NullArmy {
                 + " at " + coordsOf(owner.getLocation())
                 + ". Roster players online: " + (roster.length() == 0 ? "none" : roster.toString().trim())
                 + ". Recent alarms: " + (plugin.recentAlerts(6).isEmpty() ? "none" : String.join(" | ", plugin.recentAlerts(6)))
-                + ". Hunts active: " + (hunters.isEmpty() ? "none" : hunters.size() + " Nulls out after roster players") + ".";
+                + ". Hunts active: " + (hunters.isEmpty() ? "none" : hunters.size() + " Nulls out after roster players") + "."
+                + pursuitLine();
+    }
+
+    /** The escape side of the army state: who is being hunted, how many Nulls are hurt, and the danger spots. */
+    private String pursuitLine() {
+        StringBuilder chased = new StringBuilder();
+        for (UUID id : pursuits.keySet()) {
+            Player p = org.bukkit.Bukkit.getPlayer(id);
+            if (p != null && pursuing(id)) chased.append(p.getName()).append(" ");
+        }
+        int hurt = 0;
+        for (NPC npc : nulls) {
+            if (npc.isSpawned() && isWounded(npc)) hurt++;
+        }
+        return " Escapees being hunted: " + (chased.length() == 0 ? "none" : chased.toString().trim())
+                + ". Nulls hurt: " + hurt + ". Danger spots where Nulls went down: " + dangerSpots.size() + ".";
     }
 
     public void status(Player owner) {
@@ -1296,6 +1311,7 @@ public final class NullArmy {
 
     /** Hides a Null and holds it until its target comes within reach. */
     private void waitFor(NPC npc, Player target, long expires) {
+        if (isCommander(npc)) return; // the Commander always stays with the owner
         hide(npc);
         waits.put(npc, new Wait(target.getUniqueId(), expires));
     }
@@ -1477,6 +1493,15 @@ public final class NullArmy {
                 if (!(cmd.getEntity() instanceof LivingEntity body)) return;
                 Location here = cmd.getStoredLocation();
                 Location tl = owner.getLocation();
+                if (here != null && here.getWorld() == tl.getWorld() && body.getHealth() < 8) {
+                    // The Commander backs off to heal below four hearts, then comes back in. A duel is a fight, not a suicide.
+                    eatApple(cmd);
+                    drinkPotion(cmd);
+                    Vector away = here.toVector().subtract(tl.toVector());
+                    if (away.lengthSquared() < 0.01) away = new Vector(1, 0, 0);
+                    cmd.getNavigator().setTarget(here.clone().add(away.normalize().multiply(8)));
+                    return;
+                }
                 if (here != null && here.getWorld() == tl.getWorld() && here.distance(tl) > 3.2) {
                     if (!commanderTools(cmd, here, tl)) cmd.getNavigator().setTarget(owner, true);
                 } else {
@@ -1839,9 +1864,7 @@ public final class NullArmy {
 
     /** The Commander joins a pursuit. He chases the target with his pearls and dashes until the time runs out. */
     public boolean commanderPursue(Player target, int minutes) {
-        if (leader == null || !leader.isSpawned()) return false;
-        hunters.put(leader, new Hunt(target.getUniqueId(), System.currentTimeMillis() + minutes * 60_000L));
-        return true;
+        return false; // the Commander never leaves the owner, so he doesn't join pursuits
     }
 
     /**
@@ -2056,6 +2079,34 @@ public final class NullArmy {
     }
 
     /** Walks a focused Null to its target and strikes it, until it dies, leaves, or the time runs out. */
+    /**
+     * Hits back at whatever is on the Null within four blocks: a hostile mob, or a player on the roster
+     * (the escapee included). Orders wait until the fight is over. Returns true if it fought.
+     */
+    private boolean hitBack(NPC npc) {
+        Location here = npc.getStoredLocation();
+        if (here == null || here.getWorld() == null || !npc.isSpawned()) return false;
+        LivingEntity threat = null;
+        double bestDist = 4;
+        for (Entity e : here.getWorld().getNearbyEntities(here, 4, 4, 4)) {
+            if (!(e instanceof LivingEntity living) || e.equals(npc.getEntity())) continue;
+            if (e instanceof Player p) {
+                if (!consent.canTarget(p)) continue;
+            } else if (!(e instanceof Monster) || NETHER_PEACE.contains(e.getType())) {
+                continue;
+            }
+            double d = here.distance(e.getLocation());
+            if (d < bestDist) {
+                bestDist = d;
+                threat = living;
+            }
+        }
+        if (threat == null) return false;
+        if (bestDist <= ATTACK_REACH) attack(npc, threat);
+        else npc.getNavigator().setTarget(threat, true);
+        return true;
+    }
+
     private void focusTick(NPC npc, Focus f) {
         Entity e = Bukkit.getEntity(f.target());
         if (!(e instanceof LivingEntity target) || target.isDead() || System.currentTimeMillis() >= f.expiresAt()
@@ -2064,6 +2115,7 @@ public final class NullArmy {
             npc.getNavigator().cancelNavigation();
             return;
         }
+        if (hitBack(npc)) return;
         if (npc.getEntity() instanceof LivingEntity self && self.getWorld().equals(target.getWorld())
                 && self.getLocation().distance(target.getLocation()) <= 3.2) {
             attack(npc, target);
@@ -2212,8 +2264,16 @@ public final class NullArmy {
 
         refreshLeader();
         tickFood();
+        tickUpkeep();
         for (NPC npc : new ArrayList<>(nulls)) {
             if (!npc.isSpawned() || arriving.contains(npc)) continue;
+            if (isCommander(npc)) {
+                // Whatever sent him out, the Commander is pulled back to the owner every tick.
+                hunters.remove(npc);
+                focus.remove(npc);
+                waits.remove(npc);
+                ambushers.remove(npc);
+            }
             if (spies.containsKey(npc)) continue;
             if (waits.containsKey(npc)) continue;
             Focus focused = focus.get(npc);
@@ -2227,10 +2287,16 @@ public final class NullArmy {
                 continue;
             }
             if (isWounded(npc)) {
+                if (System.currentTimeMillis() - mobWoundAt.getOrDefault(npc, 0L) > 30_000L) {
+                    mobWoundAt.put(npc, System.currentTimeMillis());
+                    mobLosses.merge(npc, 1, Integer::sum);
+                }
                 fieldHeal(npc);
                 followOwner(npc, owner, nulls.indexOf(npc), leash);
                 continue;
             }
+            if (!isCommander(npc) && ranks.getOrDefault(npc, 'D') == 'D' && !soloModes.containsKey(npc)
+                    && friendlyTick(npc, owner, nulls.indexOf(npc))) continue;
             boolean solo = soloModes.containsKey(npc);
             if (!solo && (isCommander(npc) || ranks.getOrDefault(npc, 'D') == 'A')) {
                 // The commander sticks with the owner and only goes out when a hunt is ordered.
@@ -2394,7 +2460,8 @@ public final class NullArmy {
                 double d = here.distance(p.getLocation());
                 if (d > range) continue;
                 // Near and weak first, but well-armoured players count as the bigger threat.
-                double score = d + p.getHealth() * 0.75 - armourOf(p) * 0.5 - threat.getOrDefault(p.getUniqueId(), 0.0) * 0.5;
+                double score = d + p.getHealth() * 0.75 - armourOf(p) * 0.5 - threat.getOrDefault(p.getUniqueId(), 0.0) * 0.5
+                        + (nearDanger(p.getLocation()) ? 8 : 0);
                 if (score < bestScore) {
                     bestScore = score;
                     bestDist = d;
@@ -2411,6 +2478,81 @@ public final class NullArmy {
         } else {
             followOwner(npc, owner, index, leash);
         }
+    }
+
+    // ---------- Hunters vs. escapees who build up, dig down or run ----------
+
+    /** Every third hunter carries a bow: a sniper stays back and its shot never misses. */
+    private final Set<NPC> snipers = new HashSet<>();
+
+    private ItemStack sniperBow() {
+        ItemStack bow = new ItemStack(Material.BOW);
+        bow.addUnsafeEnchantment(Enchantment.POWER, 5);
+        bow.addUnsafeEnchantment(Enchantment.INFINITY, 1);
+        return bow;
+    }
+
+    /**
+     * A sniper's shot never misses: it lands from four to thirty blocks away, so a target that builds
+     * up or sits behind cover still gets hit. Returns false if the shot isn't in range.
+     */
+    private boolean sniperShot(NPC npc, Player target, Location here) {
+        Location tl = target.getLocation();
+        if (!sameWorld(here, tl)) return false;
+        double d = here.distance(tl);
+        if (d <= 4 || d > 30) return false;
+        long now = System.currentTimeMillis();
+        if (now - lastShot.getOrDefault(npc, 0L) < 2000L) return true;
+        lastShot.put(npc, now);
+        Location from = npc.getEntity() instanceof LivingEntity shooter ? shooter.getEyeLocation() : here;
+        Location to = target.getEyeLocation();
+        for (int i = 1; i <= 12; i++) {
+            Location p = from.clone().add(to.toVector().subtract(from.toVector()).multiply(i / 12.0));
+            target.getWorld().spawnParticle(Particle.CRIT, p, 1, 0, 0, 0, 0);
+        }
+        target.damage(6.0, npc.getEntity());
+        swing(npc);
+        return true;
+    }
+
+    private final Map<NPC, Location> stillAt = new HashMap<>();
+    private final Map<NPC, Long> stillSince = new HashMap<>();
+
+    /** True when a hunter has stood on the same spot for four seconds while the target is still out of reach. */
+    private boolean stalled(NPC npc, Location here) {
+        long now = System.currentTimeMillis();
+        Location last = stillAt.get(npc);
+        if (last == null || !sameWorld(last, here) || last.distance(here) > 1.0) {
+            stillAt.put(npc, here.clone());
+            stillSince.put(npc, now);
+            return false;
+        }
+        return now - stillSince.getOrDefault(npc, now) >= 4000L;
+    }
+
+    /**
+     * Where a stuck hunter can step next to the target: an open pocket if there is one (the target dug down),
+     * otherwise a bridge built out from the target's own level (the target built up). The hunters build too.
+     */
+    private Location counterSpot(Player target) {
+        Location at = target.getLocation();
+        World w = at.getWorld();
+        if (w == null) return null;
+        int[][] offsets = {{2, 0}, {-2, 0}, {0, 2}, {0, -2}, {2, 2}, {-2, -2}, {2, -2}, {-2, 2}};
+        for (int[] o : offsets) {
+            Block feet = w.getBlockAt(at.getBlockX() + o[0], at.getBlockY(), at.getBlockZ() + o[1]);
+            if (feet.getType().isAir() && feet.getRelative(0, 1, 0).getType().isAir()
+                    && feet.getRelative(0, -1, 0).getType().isSolid()) {
+                return feet.getLocation().add(0.5, 0, 0.5);
+            }
+        }
+        // No open pocket: bridge out two blocks east from the target's level, clearing headroom.
+        Block feet = w.getBlockAt(at.getBlockX() + 2, at.getBlockY(), at.getBlockZ());
+        Block floor = feet.getRelative(0, -1, 0);
+        if (!floor.getType().isSolid()) floor.setType(Material.STONE, false);
+        feet.setType(Material.AIR, false);
+        feet.getRelative(0, 1, 0).setType(Material.AIR, false);
+        return feet.getLocation().add(0.5, 0, 0.5);
     }
 
     private void huntTick(NPC npc, Hunt hunt) {
@@ -2439,6 +2581,7 @@ public final class NullArmy {
             npc.getNavigator().setTarget(prePositionAnchor());
             return;
         }
+        if (hitBack(npc)) return;
         if (here == null || !sameWorld(here, tl) || here.distance(tl) > TELEPORT_OVER) {
             appearNear(npc, target);
         } else if (isWounded(npc)) {
@@ -2449,6 +2592,13 @@ public final class NullArmy {
             Vector off = here.toVector().subtract(tl.toVector());
             if (off.lengthSquared() < 0.01) off = new Vector(1, 0, 0);
             npc.getNavigator().setTarget(here.clone().add(off.normalize().multiply(10)));
+        } else if (snipers.contains(npc) && sniperShot(npc, target, here)) {
+            // A sniper holds its ground and shoots. Built up or dug in, the target still gets hit.
+        } else if (here.distance(tl) > ATTACK_REACH + 1 && stalled(npc, here)) {
+            // Stuck under a pillar, at the bottom of a shaft or behind a wall: step in beside the target.
+            Location spot = counterSpot(target);
+            if (spot != null) teleport(npc, spot);
+            stillAt.remove(npc);
         } else if ((isCommander(npc) || ranks.getOrDefault(npc, 'D') == 'A') && commanderTools(npc, here, tl)) {
             // The Commander used a pearl or a rocket dash; the next cycle picks up the chase again.
         } else if (ranks.getOrDefault(npc, 'D') == 'A' && npc.getEntity() instanceof LivingEntity archer && archerFire(npc, archer, here, target)) {
@@ -2601,6 +2751,7 @@ public final class NullArmy {
             if (!(e instanceof Monster m)) continue;
             if (NETHER_PEACE.contains(m.getType())) continue;
             if (ownHp < 10 && m.getHealth() > 6) continue;
+            if (ownHp < 14 && nearDanger(m.getLocation())) continue; // remembers where a Null went down
             double d = here.distance(m.getLocation());
             if (d > range) continue;
             int rank = threatRank(m);
@@ -2644,6 +2795,144 @@ public final class NullArmy {
     private void refreshLeader() {
         if (leader != null && nulls.contains(leader) && LEADER_NAME.equals(leader.getName())) return;
         leader = nulls.stream().filter(n -> LEADER_NAME.equals(n.getName())).findFirst().orElse(null);
+    }
+
+    // ---------- Memory, upkeep and friendly play ----------
+
+    private final Map<NPC, Integer> playerLosses = new HashMap<>();
+    private final Map<NPC, Integer> mobLosses = new HashMap<>();
+    private final Map<NPC, Long> mobWoundAt = new HashMap<>();
+    private final Map<NPC, Boolean> axeLoadout = new HashMap<>();
+    private final Map<NPC, Long> upkeepAt = new HashMap<>();
+    private final Map<NPC, Long> playAt = new HashMap<>();
+    private static final String[] FRIENDLY_LINES = {
+            "Hi Kiyan!", "All quiet, boss.", "Nice build, boss.", "Want a flower?",
+            "On it, boss.", "Lovely day for it.", "Need anything?", "Ha! Watch this."};
+    private static final String[] GREETINGS = {"Hey boss!", "Hiya, boss!", "Hello Kiyan!"};
+    private static final String[] YES_NO = {"Yes, boss!", "Not sure, boss."};
+
+    /** True if a spot where a Null went down is within six blocks of the point. */
+    private boolean nearDanger(Location l) {
+        for (Location spot : dangerSpots) {
+            if (sameWorld(spot, l) && spot.distance(l) <= 6) return true;
+        }
+        return false;
+    }
+
+    /** Out of combat, once a minute: repairs armour and picks the weapon for the Null's record. */
+    private void tickUpkeep() {
+        long now = System.currentTimeMillis();
+        for (NPC npc : nulls) {
+            if (!npc.isSpawned() || isCommander(npc) || hunters.containsKey(npc) || focus.containsKey(npc)) continue;
+            if (now - upkeepAt.getOrDefault(npc, 0L) < 60_000L) continue;
+            upkeepAt.put(npc, now);
+            repairArmour(npc);
+            tuneLoadout(npc);
+        }
+    }
+
+    /** Armour worn down past 40% is mended with an iron ingot from the Null's pack. */
+    private void repairArmour(NPC npc) {
+        Inventory pack = packs.get(npc);
+        if (pack == null || !pack.contains(Material.IRON_INGOT)) return;
+        Equipment eq = npc.getOrAddTrait(Equipment.class);
+        for (Equipment.EquipmentSlot slot : new Equipment.EquipmentSlot[]{
+                Equipment.EquipmentSlot.HELMET, Equipment.EquipmentSlot.CHESTPLATE,
+                Equipment.EquipmentSlot.LEGGINGS, Equipment.EquipmentSlot.BOOTS}) {
+            ItemStack piece = eq.get(slot);
+            if (piece == null) continue;
+            ItemMeta meta = piece.getItemMeta();
+            int max = piece.getType().getMaxDurability();
+            if (!(meta instanceof Damageable worn) || max <= 0 || worn.getDamage() < max * 0.4) continue;
+            if (!pack.contains(Material.IRON_INGOT)) return;
+            pack.removeItem(new ItemStack(Material.IRON_INGOT, 1));
+            worn.setDamage(0);
+            piece.setItemMeta(worn);
+            eq.set(slot, piece);
+        }
+    }
+
+    /** A Null that keeps losing to players switches to an axe, which breaks shields. Otherwise it keeps its sword. */
+    private void tuneLoadout(NPC npc) {
+        if (kindOf(mode) != null) return; // a work mode holds its own tool
+        boolean axe = playerLosses.getOrDefault(npc, 0) > mobLosses.getOrDefault(npc, 0) + 1;
+        axeLoadout.put(npc, axe);
+        if (axe) {
+            ItemStack weapon = new ItemStack(Material.NETHERITE_AXE);
+            weapon.addUnsafeEnchantment(Enchantment.SHARPNESS, 4);
+            weapon.addUnsafeEnchantment(Enchantment.UNBREAKING, 3);
+            setHeldItem(npc, weapon);
+        } else {
+            setHeldItem(npc, rankSword(ranks.getOrDefault(npc, 'D')));
+        }
+    }
+
+    /** Friendly play runs only when the owner is the one person on the server, and nothing is hunting. */
+    private boolean friendlyMode(Player owner) {
+        if (mode != Mode.FOLLOW && mode != Mode.STAY && mode != Mode.GUARD) return false;
+        if (!hunters.isEmpty() || !pursuits.isEmpty() || System.currentTimeMillis() < alarmUntil) return false;
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            if (p.equals(owner) || consent.isOwner(p) || consent.isTeam(p) || isNullBody(p)) continue;
+            return false;
+        }
+        return true;
+    }
+
+    /** One idle Null's turn in friendly mode: stays close, then does one small thing every few seconds. */
+    private boolean friendlyTick(NPC npc, Player owner, int index) {
+        if (!friendlyMode(owner)) return false;
+        Location here = npc.getStoredLocation();
+        if (here == null || !sameWorld(here, owner.getLocation())) return false;
+        followOwner(npc, owner, index, 3);
+        long now = System.currentTimeMillis();
+        if (now < playAt.getOrDefault(npc, 0L)) return true;
+        playAt.put(npc, now + 5_000L + rng.nextInt(6_000));
+        // Each Null has a quirk, so they don't all play the same way.
+        switch ((rng.nextInt(4) + npc.getId()) % 4) {
+            case 0 -> sayTo(npc, owner, FRIENDLY_LINES[rng.nextInt(FRIENDLY_LINES.length)]);
+            case 1 -> dance(npc);
+            case 2 -> {
+                if (rng.nextInt(5) == 0) owner.getWorld().dropItemNaturally(owner.getLocation(), new ItemStack(Material.POPPY));
+                else swing(npc);
+            }
+            default -> swing(npc);
+        }
+        return true;
+    }
+
+    /** Writes a line on a sign beside the owner, signed by the Null. */
+    private void sayTo(NPC npc, Player owner, String line) {
+        placeSign(owner, new String[]{"<" + npc.getName() + ">", line});
+    }
+
+    private void dance(NPC npc) {
+        if (npc.getEntity() instanceof LivingEntity living) living.setVelocity(new Vector(0, 0.35, 0));
+        swing(npc);
+    }
+
+    /** The owner writes on a sign: the nearest friendly Null reads it and answers on its own sign. */
+    public void onOwnerSign(Player owner, String[] lines) {
+        if (!consent.isOwner(owner) || !friendlyMode(owner)) return;
+        Location at = owner.getLocation();
+        NPC closest = null;
+        double best = 12;
+        for (NPC npc : nulls) {
+            Location here = npc.getStoredLocation();
+            if (!npc.isSpawned() || here == null || !sameWorld(here, at)) continue;
+            double d = here.distance(at);
+            if (d < best) {
+                best = d;
+                closest = npc;
+            }
+        }
+        if (closest == null) return;
+        String text = String.join(" ", lines).toLowerCase();
+        String reply;
+        if (text.matches(".*\\b(hi|hello|hey)\\b.*")) reply = GREETINGS[rng.nextInt(GREETINGS.length)];
+        else if (text.contains("?")) reply = YES_NO[rng.nextInt(YES_NO.length)];
+        else reply = FRIENDLY_LINES[rng.nextInt(FRIENDLY_LINES.length)];
+        sayTo(closest, owner, reply);
+        dance(closest);
     }
 
     private final Map<NPC, Long> lastMeal = new HashMap<>();
@@ -2754,6 +3043,7 @@ public final class NullArmy {
         double damage = plugin.getConfig().getDouble("combat-damage", 8) * rankScale(npc);
         if (target instanceof Player p) {
             if (p.isBlocking()) damage *= 1.5; // a Null hit breaks through a raised shield
+            if (p.isBlocking() && axeLoadout.getOrDefault(npc, false)) damage *= 1.25; // axes break shields
             damage *= 1.0 + Math.min(0.5, threat.getOrDefault(p.getUniqueId(), 0.0) / 20.0); // learned from past fights
         }
         target.damage(damage, npc.getEntity());
@@ -3922,6 +4212,7 @@ public final class NullArmy {
 
     private void recordWound(NPC npc, Location here, UUID target) {
         threat.merge(target, 0.5, Double::sum);
+        playerLosses.merge(npc, 1, Integer::sum);
         if (dangerSpots.size() >= 20) dangerSpots.remove(0);
         dangerSpots.add(here.clone());
         long now = System.currentTimeMillis();
