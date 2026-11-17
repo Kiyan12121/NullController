@@ -2107,6 +2107,23 @@ public final class NullArmy {
      * Hits back at whatever is on the Null within four blocks: a hostile mob, or a player on the roster
      * (the escapee included). Orders wait until the fight is over. Returns true if it fought.
      */
+    private final Map<NPC, Long> assistAt = new HashMap<>();
+
+    /** A hurt Null calls the healthy Nulls near it onto the same threat, so they cover each other. */
+    private void callAllies(NPC caller, LivingEntity threat) {
+        Location here = caller.getStoredLocation();
+        if (here == null) return;
+        long now = System.currentTimeMillis();
+        for (NPC ally : nulls) {
+            if (ally == caller || !ally.isSpawned() || isCommander(ally) || isWounded(ally)) continue;
+            if (now - assistAt.getOrDefault(ally, 0L) < 3000L) continue;
+            Location at = ally.getStoredLocation();
+            if (at == null || !sameWorld(at, here) || at.distance(here) > 10) continue;
+            assistAt.put(ally, now);
+            ally.getNavigator().setTarget(threat, true);
+        }
+    }
+
     private boolean hitBack(NPC npc) {
         Location here = npc.getStoredLocation();
         if (here == null || here.getWorld() == null || !npc.isSpawned()) return false;
@@ -2126,6 +2143,7 @@ public final class NullArmy {
             }
         }
         if (threat == null) return false;
+        if (npc.getEntity() instanceof LivingEntity self && self.getHealth() < 10) callAllies(npc, threat);
         if (bestDist <= ATTACK_REACH) attack(npc, threat);
         else npc.getNavigator().setTarget(threat, true);
         return true;
