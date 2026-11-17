@@ -277,6 +277,17 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         }
         switch (args[0].toLowerCase()) {
             case "reload" -> handleReload(sender);
+            case "groq" -> consoleGroq(sender, args);
+            case "sealnether" -> {
+                if (args.length < 2 || !(args[1].equalsIgnoreCase("on") || args[1].equalsIgnoreCase("off"))) {
+                    sender.sendMessage(ChatColor.GRAY + "Usage: sealnether on|off");
+                } else {
+                    boolean on = args[1].equalsIgnoreCase("on");
+                    getConfig().set("seal-nether-on-pursuit", on);
+                    saveConfig();
+                    sender.sendMessage(ChatColor.DARK_PURPLE + "Nether seal while hunted: " + (on ? "on" : "off") + ".");
+                }
+            }
             case "base" -> {
                 if (args.length >= 2 && args[1].equalsIgnoreCase("show")) {
                     String saved = getConfig().getString("nether-base", "");
@@ -489,6 +500,46 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         return true;
     }
 
+    /**
+     * Console control of the Commander's Groq channel: status, key, clear, model. The key is never sent back.
+     * The server writes console commands to its log, so the key ends up there too; rotate it if that matters.
+     */
+    private void consoleGroq(CommandSender sender, String[] args) {
+        String sub = args.length < 2 ? "status" : args[1].toLowerCase(Locale.ROOT);
+        switch (sub) {
+            case "status" -> {
+                String key = getConfig().getString("groq-api-key", "");
+                sender.sendMessage(ChatColor.GRAY + "Groq key: " + (key == null || key.isBlank() ? "not set" : "set")
+                        + ". Model: " + getConfig().getString("groq-model", "llama-3.3-70b-versatile") + ".");
+            }
+            case "key" -> {
+                if (args.length < 3) {
+                    sender.sendMessage(ChatColor.GRAY + "Usage: groq key <key>");
+                    return;
+                }
+                getConfig().set("groq-api-key", args[2].trim());
+                saveConfig();
+                sender.sendMessage(ChatColor.DARK_PURPLE + "Groq key saved. The Commander uses it from the next message. "
+                        + "The command is in the server log, so rotate the key if that log is shared.");
+            }
+            case "clear" -> {
+                getConfig().set("groq-api-key", "");
+                saveConfig();
+                sender.sendMessage(ChatColor.DARK_PURPLE + "Groq key cleared. The Commander is silent until a new one is set.");
+            }
+            case "model" -> {
+                if (args.length < 3) {
+                    sender.sendMessage(ChatColor.GRAY + "Usage: groq model <name>");
+                    return;
+                }
+                getConfig().set("groq-model", args[2].trim());
+                saveConfig();
+                sender.sendMessage(ChatColor.DARK_PURPLE + "Groq model set to " + args[2].trim() + ".");
+            }
+            default -> sender.sendMessage(ChatColor.GRAY + "Usage: groq status | key <key> | clear | model <name>");
+        }
+    }
+
     /** Config keys the console may change while you are offline. Anything else stays as set in config.yml. */
     private static final java.util.Map<String, String> CONSOLE_CONFIG = java.util.Map.of(
             "max-nulls", "int", "ambush-minutes", "int", "leash-distance", "double", "hunt-range", "double",
@@ -548,7 +599,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     }
 
     private static final String OFFLINE_HELP = ChatColor.GRAY + "Owner is offline. Console orders: "
-            + "summon [n], build <kind> (Nether only), chests place <kind> (look at a block), strike <player> (the Breach), orbital <player> (Nuke), stabshot <player>, mobcannon <player> [n], team list|add|remove <player>, dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle, stashroom, autowork on|off|toggle, autospy on|off|toggle, squad, solo <n> <order>, solo clear [n|all], ranks, prisoners, alerts, salvage list|delete <name>|place <name> <world> <x> <y> <z>, hunt <player> [count] [minutes], pounce <player>, pursue <player> [minutes], cancel, fortify, sendbase, reload, base set <world> <x> <y> <z> | base show, patrol add <world> <x> <y> <z>, patrol clear, prison status|set|free|collect|release|clear|arrest <player>, goto <world> <x> <y> <z>, config show|<key> <value>, friendly on|off|toggle, dangers [clear], clearalerts, pursue stop";
+            + "summon [n], build <kind> (Nether only), chests place <kind> (look at a block), strike <player> (the Breach), orbital <player> (Nuke), stabshot <player>, mobcannon <player> [n], team list|add|remove <player>, dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle, stashroom, autowork on|off|toggle, autospy on|off|toggle, squad, solo <n> <order>, solo clear [n|all], ranks, prisoners, alerts, salvage list|delete <name>|place <name> <world> <x> <y> <z>, hunt <player> [count] [minutes], pounce <player>, pursue <player> [minutes], cancel, fortify, sendbase, reload, base set <world> <x> <y> <z> | base show, patrol add <world> <x> <y> <z>, patrol clear, prison status|set|free|collect|release|clear|arrest <player>, goto <world> <x> <y> <z>, config show|<key> <value>, groq status|key <key>|clear|model <name>, sealnether on|off, friendly on|off|toggle, dangers [clear], clearalerts, pursue stop";
 
     private void offlineMode(CommandSender sender, NullArmy.Mode mode) {
         sender.sendMessage(army.setModeOffline(mode)
