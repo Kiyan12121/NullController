@@ -61,7 +61,7 @@ import java.util.UUID;
  */
 public final class NetherLaw implements Listener, CommandExecutor, TabCompleter {
 
-    private static final List<String> SUBS = List.of("status", "prison", "arrest", "release", "clear", "collect");
+    private static final List<String> SUBS = List.of("status", "prison", "arrest", "release", "clear", "collect", "give");
     private static final List<String> DEFAULT_BLOCKED = List.of(
             "home", "homes", "sethome", "tp", "tpa", "tpahere", "tpaccept", "tpo", "tpohere",
             "spawn", "warp", "back", "ec", "enderchest");
@@ -847,6 +847,22 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
                     sender.sendMessage(ChatColor.DARK_PURPLE + args[1] + " freed. " + moved + " items moved to the deposit chest"
                             + (r.stash.isEmpty() ? "." : "; " + stashCount(r) + " left in the stash, no room in the chest."));
                 }
+            }
+            case "give" -> {
+                Player p = Bukkit.getPlayer(id);
+                if (p == null) {
+                    sender.sendMessage(ChatColor.RED + args[1] + " has to be online to be given their stash.");
+                    return;
+                }
+                int given = 0;
+                for (ItemStack s : r.stash) {
+                    java.util.Map<Integer, ItemStack> left = p.getInventory().addItem(s.clone());
+                    for (ItemStack rest : left.values()) p.getWorld().dropItemNaturally(p.getLocation(), rest);
+                    given += s.getAmount();
+                }
+                r.stash.clear();
+                save();
+                sender.sendMessage(ChatColor.DARK_PURPLE + "" + given + " items given back to " + args[1] + ". Anything that didn't fit is on the ground at their feet.");
             }
             case "collect" -> {
                 if (depositChest() == null) {
