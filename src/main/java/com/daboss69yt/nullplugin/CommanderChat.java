@@ -40,7 +40,7 @@ public final class CommanderChat implements Listener {
     private static final Set<String> ACTIONS = Set.of("none", "status", "scout", "recall", "guard", "follow", "stay", "design",
             "hunt", "fetch", "return", "run", "rod", "send_base", "prison", "duel", "trial", "loot", "portal", "weapon", "bring", "mine", "lumber", "farm", "patrol", "stashroom",
             "ambush", "stabshot", "orbital", "mobcannon", "ranks", "forge", "explore", "totem", "pearl", "chests",
-            "squad", "solo", "solo_clear", "view", "view_attack", "view_stop", "home", "buff", "give", "auto", "general");
+            "squad", "solo", "solo_clear", "view", "view_attack", "view_stop", "home", "buff", "give", "auto", "general", "alerts", "standdown", "help");
     private static final int HISTORY_TURNS = 10;
     private static final long COOLDOWN_MS = 3000;
 
@@ -59,6 +59,7 @@ public final class CommanderChat implements Listener {
             + "return sends a fetched roster player named in \"target\" back to where they were; the owner confirms first. "
             + "run runs any one of the owner's own NullController commands, with the words in \"target\" (for example 'summon 10', 'rod blink', 'build watchtower', 'status'); destructive or roster-hitting ones wait for the owner's confirm. Never ask for raw server commands. rod gives the owner a rod: set \"key\" to the rod kind, such as blink, heal, frost, recall, nethertrap, ambush, nuke. prison opens a portal in front of the owner that takes them to the prison, for requests like take me to the prison. send_base sends the Nulls to the Nether base. fetch and bring move roster players, never the Nulls. duel is a practice fight between the owner and the Commander, using his attacks, pearls and rockets; it stops at three hearts or when the timer runs out. Set \"n\" to the minutes. trial sends up to four Nulls to the nearest trial chamber to empty its chests, and loot brings the loot back to the owner. The Nulls never open vaults and never break trial spawners. Think before you answer: pick the one action that matches what the owner wants, and ask one short question instead of guessing when it is unclear. "
             + "Use the recent alarms, roster, escapees being hunted, hurt Nulls and danger spots in the army state to choose tactics, and say briefly what you intend. "
+            + "alerts reads the owner the recent alarms. standdown recalls the Nulls and calls off every pursuit: use it when the owner says stand down or pull back. help lists what you can do. "
             + "If a prisoner has escaped, tell the owner, and never send the owner into that chase alone: the snipers shoot from range and the squad hits back, so let them work. "
             + "mine, lumber, farm, patrol, forge and explore set the army to work. ranks reports each rank. chests reports the nearest chests. totem hands the owner a totem. pearl fires a pearl at the spot the owner is looking at. stashroom builds the stash room. "
             + "squad lists the Nulls by number. solo with n and order gives one Null its own job (guard, follow, hunt, stay, mine, lumber, farm or auto); solo_clear clears them. view with n looks through Null n; view_attack strikes what it sees; view_stop comes back. "
@@ -632,6 +633,15 @@ public final class CommanderChat implements Listener {
                 }
             }
             case "ranks" -> army.showRanks(owner);
+            case "alerts" -> {
+                var recent = plugin.recentAlerts(8);
+                owner.sendMessage(ChatColor.DARK_PURPLE + (recent.isEmpty() ? "No alarms lately." : "Recent alarms: " + String.join(" | ", recent)));
+            }
+            case "standdown" -> {
+                army.recall(owner);
+                owner.sendMessage(ChatColor.DARK_PURPLE + "Standing down. " + army.stopPursuits());
+            }
+            case "help" -> owner.sendMessage(ChatColor.GRAY + "I can hunt, fetch, return, bring, trial, loot, duel, prison, home, buff, give, rods, weapons, ambush, build, patrol, mine, lumber, farm, guard, follow, stay, squad and view. Tell me what you need."),
             case "squad" -> army.showSquad(owner);
             case "solo" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.setSolo(num, order));
             case "solo_clear" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.clearSolo(num > 0 ? String.valueOf(num) : "all"));

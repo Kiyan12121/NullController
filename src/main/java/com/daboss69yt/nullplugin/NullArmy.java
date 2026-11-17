@@ -2911,6 +2911,9 @@ public final class NullArmy {
     }
 
     /** Friendly play runs only when the owner is the one person on the server, and nothing is hunting. */
+    /** Nulls that have already greeted the owner in this friendly session. */
+    private final Set<NPC> greeted = new HashSet<>();
+
     private boolean friendlyMode(Player owner) {
         if (!plugin.getConfig().getBoolean("friendly-play", true)) return false;
         if (mode != Mode.FOLLOW && mode != Mode.STAY && mode != Mode.GUARD) return false;
@@ -2924,9 +2927,13 @@ public final class NullArmy {
 
     /** One idle Null's turn in friendly mode: stays close, then does one small thing every few seconds. */
     private boolean friendlyTick(NPC npc, Player owner, int index) {
-        if (!friendlyMode(owner)) return false;
+        if (!friendlyMode(owner)) {
+            greeted.clear();
+            return false;
+        }
         Location here = npc.getStoredLocation();
         if (here == null || !sameWorld(here, owner.getLocation())) return false;
+        if (greeted.add(npc)) dance(npc); // one greeting each, when the owner comes back alone
         followOwner(npc, owner, index, 3);
         long now = System.currentTimeMillis();
         if (now < playAt.getOrDefault(npc, 0L)) return true;
