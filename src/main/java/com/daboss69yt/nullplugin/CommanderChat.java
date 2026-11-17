@@ -102,6 +102,21 @@ public final class CommanderChat implements Listener {
      *  return: in the Nether, the way back to the overworld player. base: straight to the Nether base. */
     private final Map<UUID, String> bringMode = new HashMap<>();
 
+    /** Finds an online player by name, forgiving case and partial names, since the Commander often shortens them. */
+    public static Player findOnline(String name) {
+        if (name == null || name.isBlank()) return null;
+        String want = name.trim().toLowerCase(java.util.Locale.ROOT);
+        Player startsWith = null;
+        Player contains = null;
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            String have = p.getName().toLowerCase(java.util.Locale.ROOT);
+            if (have.equals(want)) return p;
+            if (startsWith == null && have.startsWith(want)) startsWith = p;
+            else if (contains == null && have.contains(want)) contains = p;
+        }
+        return startsWith != null ? startsWith : contains;
+    }
+
     /** Opens the way to a roster player: a portal to the Nether if they are there, or a two-step route if both are in the overworld. */
     public void bringPlayer(Player owner, Player target) {
         if (!consent.canTarget(target)) {
@@ -531,7 +546,7 @@ public final class CommanderChat implements Listener {
             case "stay" -> army.setMode(NullArmy.Mode.STAY, owner);
             case "hunt" -> {
                 String name = out == null || !out.has("target") ? "" : out.get("target").getAsString();
-                Player target = name.isEmpty() ? null : Bukkit.getPlayerExact(name);
+                Player target = name.isEmpty() ? null : findOnline(name);
                 if (target == null) {
                     owner.sendMessage(ChatColor.GRAY + "I can't find that player online.");
                 } else if (!consent.canTarget(target)) {
@@ -543,7 +558,7 @@ public final class CommanderChat implements Listener {
             }
             case "fetch" -> {
                 String name = out == null || !out.has("target") ? "" : out.get("target").getAsString();
-                Player target = name.isEmpty() ? null : Bukkit.getPlayerExact(name);
+                Player target = name.isEmpty() ? null : findOnline(name);
                 if (target == null) {
                     owner.sendMessage(ChatColor.GRAY + "I can't find that player online.");
                 } else if (!consent.canTarget(target)) {
@@ -555,7 +570,7 @@ public final class CommanderChat implements Listener {
             }
             case "return" -> {
                 String name = out == null || !out.has("target") ? "" : out.get("target").getAsString();
-                Player target = name.isEmpty() ? null : Bukkit.getPlayerExact(name);
+                Player target = name.isEmpty() ? null : findOnline(name);
                 if (target == null) {
                     owner.sendMessage(ChatColor.GRAY + "I can't find that player online.");
                 } else if (!consent.canTarget(target)) {
@@ -642,7 +657,7 @@ public final class CommanderChat implements Listener {
             case "stashroom" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.buildStashRoom(owner));
             case "ambush", "stabshot", "orbital", "mobcannon" -> {
                 String name = out == null || !out.has("target") ? "" : out.get("target").getAsString();
-                Player target = name.isEmpty() ? null : Bukkit.getPlayerExact(name);
+                Player target = name.isEmpty() ? null : findOnline(name);
                 if (target == null) {
                     owner.sendMessage(ChatColor.GRAY + "I can't find that player online.");
                 } else if (!consent.canTarget(target)) {
@@ -662,7 +677,7 @@ public final class CommanderChat implements Listener {
             }
             case "bring" -> {
                 String name = out == null || !out.has("target") ? "" : out.get("target").getAsString();
-                Player target = name.isEmpty() ? null : Bukkit.getPlayerExact(name);
+                Player target = name.isEmpty() ? null : findOnline(name);
                 if (target == null) {
                     owner.sendMessage(ChatColor.GRAY + "I can't find that player online.");
                 } else if (!consent.canTarget(target)) {
