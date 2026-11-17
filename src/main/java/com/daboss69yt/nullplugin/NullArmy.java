@@ -966,20 +966,50 @@ public final class NullArmy {
         return npc;
     }
 
-    /** Black skin from the configured URL when set, otherwise the skin name from config. Needs the NPC spawned. */
+    // The black skin is fetched from the URL once, then its texture is reused for every other Null.
+    // Citizens logs and downloads a skin on each fetch, so fetching per Null flooded the console.
+    private String skinTexture;
+    private String skinSignature;
+    private long skinFetchAt = Long.MIN_VALUE / 2;
+    private static final long SKIN_FETCH_COOLDOWN_MS = 60_000L;
+
+    /** Black skin for a Null. Reuses the cached texture; fetches from the URL at most once a minute. */
     private void applySkin(NPC npc) {
         String url = plugin.getConfig().getString("null-skin-url", "");
-        if (url != null && !url.isBlank()) {
-            setSkinUrl(npc, url);
-            // Each skin change makes Citizens rebuild the NPC, so repeating it many times made Nulls flicker
-            // and stop responding. One retry later covers a rate-limited lookup without rebuilding them again.
-            for (long delay : new long[]{600L}) {
-                Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                    if (npc.isSpawned()) setSkinUrl(npc, url);
-                }, delay);
-            }
-        } else {
+        if (url == null || url.isBlank()) {
             npc.getOrAddTrait(SkinTrait.class).setSkinName(plugin.getConfig().getString("null-skin", "NULL"));
+            return;
+        }
+        if (skinTexture != null) {
+            npc.getOrAddTrait(SkinTrait.class).setSkinPersistent("null-black", skinSignature, skinTexture);
+            return;
+        }
+        if (System.currentTimeMillis() - skinFetchAt >= SKIN_FETCH_COOLDOWN_MS) {
+            skinFetchAt = System.currentTimeMillis();
+            setSkinUrl(npc, url);
+            // Once the texture has arrived, keep it and hand it to every Null that spawned meanwhile.
+            Bukkit.getScheduler().runTaskLater(plugin, this::captureSkinTexture, 300L);
+        }
+    }
+
+    /** Copies the fetched texture off a spawned Null and applies it to the others that still lack it. */
+    private void captureSkinTexture() {
+        NPC source = null;
+        for (NPC npc : nulls) {
+            if (!npc.isSpawned()) continue;
+            SkinTrait trait = npc.getOrAddTrait(SkinTrait.class);
+            if (trait.getTexture() != null && trait.getSignature() != null) {
+                skinTexture = trait.getTexture();
+                skinSignature = trait.getSignature();
+                source = npc;
+                break;
+            }
+        }
+        if (skinTexture == null) return; // not back yet; the next Null to spawn after the cooldown tries again
+        for (NPC npc : nulls) {
+            if (npc == source || !npc.isSpawned()) continue;
+            SkinTrait trait = npc.getOrAddTrait(SkinTrait.class);
+            if (trait.getTexture() == null) trait.setSkinPersistent("null-black", skinSignature, skinTexture);
         }
     }
 
