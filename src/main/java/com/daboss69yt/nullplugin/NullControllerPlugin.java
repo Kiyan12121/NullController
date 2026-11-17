@@ -563,8 +563,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             "summon", "dismiss", "recall", "guard", "follow", "hunt", "stay", "auto", "status", "ranks", "squad",
             "takeover", "solo", "view", "help", "goto", "mine", "lumber", "farm", "forge", "chest", "patrol", "build",
             "fortify", "cage", "ambush", "team", "chests", "stashroom", "autowork", "autospy", "orbital", "scout",
-            "portal", "weapon", "arm", "rank", "pearl", "stabshot", "totem", "succession", "rod",
-            "autowork", "autospy", "sendbase");
+            "portal", "weapon", "arm", "rank", "pearl", "stabshot", "totem", "succession", "rod", "sendbase");
     /** Commands that change a lot or hit roster players: the owner confirms these first. */
     private static final java.util.Set<String> COMMANDER_CONFIRM = java.util.Set.of(
             "dismiss", "takeover", "build", "cage", "ambush", "orbital", "stabshot", "succession");
