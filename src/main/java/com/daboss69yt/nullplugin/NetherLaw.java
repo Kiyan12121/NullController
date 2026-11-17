@@ -513,7 +513,13 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
 
     /** Seals the Nether to anyone the Nulls are chasing, so a runner can't escape into it. Config: seal-nether-on-pursuit. */
     private boolean sealedOnPursuit(Player p) {
-        return plugin.getConfig().getBoolean("seal-nether-on-pursuit", true) && army.pursuing(p.getUniqueId());
+        return plugin.getConfig().getBoolean("seal-nether-on-pursuit", true) && army.isHunted(p.getUniqueId());
+    }
+
+    /** Stops the runner and tells the owner, so a blocked attempt is never silent. */
+    private void sealed(Player p) {
+        p.sendMessage(ChatColor.DARK_RED + "The Nether is sealed to you while the Nulls are hunting.");
+        notifyOwner(ChatColor.DARK_RED + "[Nether] " + p.getName() + " tried to enter the Nether while hunted. Sealed.");
     }
 
     @EventHandler
@@ -521,7 +527,7 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         Player p = event.getPlayer();
         if (!sealedOnPursuit(p) || p.getWorld().getEnvironment() != World.Environment.NORMAL) return;
         event.setCancelled(true);
-        p.sendMessage(ChatColor.DARK_RED + "The Nether is sealed to you while the Nulls are hunting.");
+        sealed(p);
     }
 
     /** Pearls and other teleports into the Nether are stopped the same way. */
@@ -532,7 +538,7 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         if (event.getTo().getWorld().getEnvironment() != World.Environment.NETHER) return;
         if (event.getFrom().getWorld() != null && event.getFrom().getWorld().getEnvironment() == World.Environment.NETHER) return;
         event.setCancelled(true);
-        p.sendMessage(ChatColor.DARK_RED + "The Nether is sealed to you while the Nulls are hunting.");
+        sealed(p);
     }
 
     /** A prisoner can't glide: no elytra flight, in the prison or out of it. */

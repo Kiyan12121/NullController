@@ -1546,6 +1546,15 @@ public final class NullArmy {
         commanderPursue(target, minutes);
     }
 
+    /** True while Nulls are chasing this player, by a pursuit or by a hunt sent after them. */
+    public boolean isHunted(UUID id) {
+        if (pursuing(id)) return true;
+        long now = System.currentTimeMillis();
+        for (Hunt h : hunters.values()) if (id.equals(h.target()) && h.expiresAt() > now) return true;
+        for (Wait w : waits.values()) if (id.equals(w.target()) && w.expiresAt() > now) return true;
+        return false;
+    }
+
     public boolean pursuing(UUID id) {
         Long until = pursuits.get(id);
         if (until == null) return false;
