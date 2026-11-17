@@ -29,6 +29,12 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.Deque;
 import java.util.Set;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.bukkit.NamespacedKey;
+import org.bukkit.Registry;
+import org.bukkit.enchantments.Enchantment;
 
 /**
  * Talk to the Commander: the owner types "null <message>" or "commander <message>" in chat. The message is kept private and the
@@ -50,7 +56,7 @@ public final class CommanderChat implements Listener {
             + "Your owner gives the orders. Keep lines short, under 40 words. Never claim you did something you did not do. "
             + "You may request these actions: none, status, scout, recall, guard, follow, stay, design, hunt, fetch, return, run, rod, send_base, prison, duel, trial, loot, portal, home, bring, weapon, buff, give, auto, general, mine, lumber, farm, patrol, forge, explore, stashroom, ambush, stabshot, orbital, mobcannon, ranks, chests, squad, solo, solo_clear, view, view_attack, view_stop, pearl, totem. auto lets the Nulls choose their own jobs. "
             + "general gives orders to the ranks under you: set \"key\" to I for generals or D for soldiers, and \"target\" to guard, follow, stay, recall, dismiss or clear. Name the order in your reply too. "
-            + "buff potion-buffs the owner (for 'pot me up' or 'buff me').give hands the owner items: set \"key\" to a Minecraft item name such as golden_apple, and \"amount\" up to 64. "
+            + "buff potion-buffs the owner (for 'pot me up' or 'buff me').give hands the owner items: set \"key\" to what they asked for in plain words, such as \"netherite helmet\", \"golden apple\" or \"full netherite armour\" (all four pieces); set \"amount\" up to 64; and put any enchantment in \"enchant\", such as \"protection 4\" or \"sharpness 5\". "
             + "home opens a portal in front of the owner that takes them to the Nether base, for requests like 'get me home' or 'take me to base'. "
             + "hunt sends the Nulls after one roster player named in \"target\"; the owner must confirm first, so say so. "
             + "portal opens a real nether portal in front of the owner. "
@@ -292,24 +298,152 @@ public final class CommanderChat implements Listener {
     /** Words that never go in an owner's hand from the Commander: command blocks, spawners, barriers, and the like. */
     private static final List<String> DENIED_ITEMS = List.of("COMMAND", "SPAWNER", "BARRIER", "BEDROCK", "STRUCTURE", "JIGSAW", "DEBUG", "SPAWN_EGG");
 
-    /** Hands the owner up to 64 of an item named in "key". Anything left over drops at their feet. */
+    /** Enchantment words the owner might say, mapped to the Minecraft enchantment key. */
+    private static final Map<String, String> ENCHANT_ALIASES = new java.util.LinkedHashMap<>();
+    private static final Pattern ENCHANT_PATTERN;
+    static {
+        String[][] pairs = {
+            {"fire protection", "fire_protection"}, {"fire prot", "fire_protection"},
+            {"blast protection", "blast_protection"}, {"blast prot", "blast_protection"},
+            {"projectile protection", "projectile_protection"}, {"proj protection", "projectile_protection"},
+            {"proj prot", "projectile_protection"}, {"feather falling", "feather_falling"},
+            {"depth strider", "depth_strider"}, {"aqua affinity", "aqua_affinity"}, {"aqua", "aqua_affinity"},
+            {"bane of arthropods", "bane_of_arthropods"}, {"bane", "bane_of_arthropods"},
+            {"fire aspect", "fire_aspect"}, {"silk touch", "silk_touch"}, {"silk", "silk_touch"},
+            {"sweeping edge", "sweeping_edge"}, {"sweeping", "sweeping_edge"},
+            {"protection", "protection"}, {"prot", "protection"}, {"sharpness", "sharpness"}, {"sharp", "sharpness"},
+            {"unbreaking", "unbreaking"}, {"unbreak", "unbreaking"}, {"efficiency", "efficiency"}, {"eff", "efficiency"},
+            {"fortune", "fortune"}, {"looting", "looting"}, {"mending", "mending"}, {"power", "power"},
+            {"infinity", "infinity"}, {"inf", "infinity"}, {"thorns", "thorns"}, {"ff", "feather_falling"},
+            {"respiration", "respiration"}, {"resp", "respiration"}, {"knockback", "knockback"},
+            {"smite", "smite"}, {"flame", "flame"}, {"punch", "punch"}
+        };
+        for (String[] p : pairs) ENCHANT_ALIASES.put(p[0], p[1]);
+        List<String> keys = new java.util.ArrayList<>(ENCHANT_ALIASES.keySet());
+        keys.sort(java.util.Comparator.comparingInt(String::length).reversed()); // longest first
+        ENCHANT_PATTERN = Pattern.compile("\\b(" + String.join("|", keys) + ")\\s*(?:level\\s*)?(\\d{1,3}|[ivx]{1,4})\\b");
+    }
+    private static final Map<String, Integer> ROMAN = Map.ofEntries(Map.entry("i", 1), Map.entry("ii", 2),
+            Map.entry("iii", 3), Map.entry("iv", 4), Map.entry("v", 5), Map.entry("vi", 6), Map.entry("vii", 7),
+            Map.entry("viii", 8), Map.entry("ix", 9), Map.entry("x", 10));
+    private static final Map<String, String> TIERS = Map.ofEntries(
+            Map.entry("netherite", "NETHERITE"), Map.entry("diamond", "DIAMOND"), Map.entry("iron", "IRON"),
+            Map.entry("gold", "GOLDEN"), Map.entry("golden", "GOLDEN"), Map.entry("chainmail", "CHAINMAIL"),
+            Map.entry("chain", "CHAINMAIL"), Map.entry("leather", "LEATHER"), Map.entry("wood", "WOODEN"),
+            Map.entry("wooden", "WOODEN"), Map.entry("stone", "STONE"));
+    private static final Map<String, String> PIECES = Map.ofEntries(
+            Map.entry("helmet", "HELMET"), Map.entry("head", "HELMET"), Map.entry("cap", "HELMET"),
+            Map.entry("chestplate", "CHESTPLATE"), Map.entry("chest", "CHESTPLATE"), Map.entry("tunic", "CHESTPLATE"),
+            Map.entry("leggings", "LEGGINGS"), Map.entry("legs", "LEGGINGS"), Map.entry("pants", "LEGGINGS"),
+            Map.entry("boots", "BOOTS"), Map.entry("boot", "BOOTS"), Map.entry("feet", "BOOTS"),
+            Map.entry("sword", "SWORD"), Map.entry("axe", "AXE"), Map.entry("pickaxe", "PICKAXE"),
+            Map.entry("pick", "PICKAXE"), Map.entry("shovel", "SHOVEL"), Map.entry("hoe", "HOE"));
+
+    private static int levelOf(String raw) {
+        if (raw.matches("\\d{1,3}")) return Integer.parseInt(raw);
+        return ROMAN.getOrDefault(raw, 0);
+    }
+
+    /** Hands the owner items named in "key", optionally enchanted ("enchant", or words in the key such as prot 4). */
     private void give(Player owner, JsonObject out) {
         String key = out == null || !out.has("key") ? "" : out.get("key").getAsString().trim();
-        Material m = key.isEmpty() ? null : Material.matchMaterial(key.toUpperCase().replace(' ', '_'));
-        if (m == null || !m.isItem() || DENIED_ITEMS.stream().anyMatch(d -> m.name().contains(d))) {
-            owner.sendMessage(ChatColor.GRAY + "I can't find that item.");
-            return;
-        }
+        String enchantWords = out != null && out.has("enchant") ? out.get("enchant").getAsString().trim() : "";
         int amount = 1;
         try {
-            if (out.has("amount")) amount = out.get("amount").getAsInt();
+            if (out != null && out.has("amount")) amount = out.get("amount").getAsInt();
         } catch (RuntimeException ignored) {
             amount = 1;
         }
         amount = Math.max(1, Math.min(64, amount));
-        Map<Integer, ItemStack> left = owner.getInventory().addItem(new ItemStack(m, amount));
-        for (ItemStack rest : left.values()) owner.getWorld().dropItemNaturally(owner.getLocation(), rest);
-        owner.sendMessage(ChatColor.DARK_PURPLE + "Here: " + amount + " " + m.name().toLowerCase().replace('_', ' ') + ".");
+
+        // Pull enchantments out first, so "netherite helmet with prot 4" leaves "netherite helmet".
+        String text = (key + " " + enchantWords).toLowerCase(Locale.ROOT).replace('-', ' ').replace('_', ' ').trim();
+        Map<String, Integer> wanted = new java.util.LinkedHashMap<>();
+        Matcher m = ENCHANT_PATTERN.matcher(text);
+        StringBuilder rest = new StringBuilder();
+        int last = 0;
+        while (m.find()) {
+            int level = levelOf(m.group(2));
+            if (level > 0) wanted.put(ENCHANT_ALIASES.get(m.group(1)), Math.min(level, 255));
+            rest.append(text, last, m.start()).append(' ');
+            last = m.end();
+        }
+        rest.append(text.substring(last));
+        String plain = rest.toString().replaceAll("\\b(with|a|an|the|some|my|me|of|give|please|i|want|need|get)\\b", " ")
+                .replaceAll("\\s+", " ").trim();
+
+        boolean armourSet = plain.matches(".*\\b(armou?r|suit|kit|set)\\b.*");
+        String stripped = plain.replaceAll("\\b(armou?r|suit|kit|set|full|all|whole|complete)\\b", " ")
+                .replaceAll("\\s+", " ").trim();
+        String tier = null;
+        String piece = null;
+        for (String w : stripped.split(" ")) {
+            if (tier == null && TIERS.containsKey(w)) tier = TIERS.get(w);
+            else if (piece == null && PIECES.containsKey(w)) piece = PIECES.get(w);
+        }
+
+        List<Material> pieces = new java.util.ArrayList<>();
+        if (armourSet) {
+            String t = tier != null ? tier : "NETHERITE";
+            for (String p : List.of("HELMET", "CHESTPLATE", "LEGGINGS", "BOOTS")) {
+                Material mm = Material.matchMaterial(t + "_" + p);
+                if (mm != null) pieces.add(mm);
+            }
+            if (pieces.size() < 4) {
+                owner.sendMessage(ChatColor.GRAY + "There's no full " + t.toLowerCase(Locale.ROOT) + " armour set.");
+                return;
+            }
+        } else {
+            List<String> candidates = new java.util.ArrayList<>();
+            if (!stripped.isEmpty()) candidates.add(stripped.replace(' ', '_').toUpperCase(Locale.ROOT));
+            if (tier != null && piece != null) candidates.add(tier + "_" + piece);
+            if (piece != null) candidates.add(piece);
+            for (String c : candidates) {
+                Material mm = Material.matchMaterial(c);
+                if (mm != null && mm.isItem()) {
+                    pieces.add(mm);
+                    break;
+                }
+            }
+            if (pieces.isEmpty()) {
+                owner.sendMessage(ChatColor.GRAY + "I can't find that item.");
+                return;
+            }
+        }
+        for (Material mm : pieces) {
+            if (!mm.isItem() || DENIED_ITEMS.stream().anyMatch(d -> mm.name().contains(d))) {
+                owner.sendMessage(ChatColor.GRAY + "I can't give that.");
+                return;
+            }
+        }
+
+        int count = armourSet ? 1 : amount;
+        List<String> skipped = new java.util.ArrayList<>();
+        for (Material mm : pieces) {
+            ItemStack stack = new ItemStack(mm, count);
+            for (Map.Entry<String, Integer> en : wanted.entrySet()) {
+                Enchantment e = Registry.ENCHANTMENT.get(NamespacedKey.minecraft(en.getKey()));
+                if (e == null) continue;
+                if (e.canEnchantItem(stack)) stack.addUnsafeEnchantment(e, en.getValue());
+                else if (!skipped.contains(en.getKey() + " on " + mm.name().toLowerCase(Locale.ROOT))) {
+                    skipped.add(en.getKey() + " on " + mm.name().toLowerCase(Locale.ROOT));
+                }
+            }
+            Map<Integer, ItemStack> left = owner.getInventory().addItem(stack);
+            for (ItemStack r : left.values()) owner.getWorld().dropItemNaturally(owner.getLocation(), r);
+        }
+
+        String label = armourSet
+                ? "full " + (tier == null ? "netherite" : tier.toLowerCase(Locale.ROOT)) + " armour"
+                : count + " " + pieces.get(0).name().toLowerCase(Locale.ROOT).replace('_', ' ');
+        StringBuilder ench = new StringBuilder();
+        for (Map.Entry<String, Integer> en : wanted.entrySet()) {
+            ench.append(ench.length() == 0 ? " with " : ", ").append(en.getKey().replace('_', ' ')).append(' ').append(en.getValue());
+        }
+        owner.sendMessage(ChatColor.DARK_PURPLE + "Here: " + label + ench + ".");
+        if (!skipped.isEmpty()) {
+            owner.sendMessage(ChatColor.GRAY + "Left off (doesn't fit): " + String.join(", ", skipped) + ".");
+        }
     }
 
     /** Puts the owner beside a roster player, facing them, with a portal behind them to walk back through. */
