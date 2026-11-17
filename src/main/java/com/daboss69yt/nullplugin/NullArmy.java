@@ -4456,6 +4456,10 @@ public final class NullArmy {
 
     /** Where offline builds go: the Nether landing spot, since the Nulls build in the Nether only. Null until a Nether run has started. */
     public Location offlineSite() {
+        // The base the owner set with /nullrod base set comes first; it survives restarts.
+        Location saved = configLoc("nether-base");
+        if (saved != null && saved.getWorld() != null
+                && saved.getWorld().getEnvironment() == World.Environment.NETHER) return saved;
         return netherSpot == null ? null : netherSpot.clone();
     }
 

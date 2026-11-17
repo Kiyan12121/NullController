@@ -115,6 +115,10 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
         if (kind.equals("base")) {
             if (args.length >= 2 && args[1].equalsIgnoreCase("set")) {
                 var l = owner.getLocation();
+                if (l.getWorld() == null || l.getWorld().getEnvironment() != World.Environment.NETHER) {
+                    owner.sendMessage(ChatColor.RED + "Stand in the Nether at the base, then run this again.");
+                    return true;
+                }
                 plugin.getConfig().set("nether-base", l.getWorld().getName() + "," + l.getBlockX() + ","
                         + l.getBlockY() + "," + l.getBlockZ());
                 plugin.saveConfig();
