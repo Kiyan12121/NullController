@@ -280,6 +280,39 @@ public final class NullArmy {
         }
     }
 
+    /** One Null per post listed under guard-posts in config.yml (world,x,y,z). Always on, owner online or not. */
+    private final Map<String, NPC> stationGuards = new HashMap<>();
+
+    private void tickStationGuards() {
+        for (String raw : plugin.getConfig().getStringList("guard-posts")) {
+            String[] p = raw.split(",");
+            if (p.length != 4) continue;
+            World w = org.bukkit.Bukkit.getWorld(p[0].trim());
+            if (w == null) continue;
+            Location spot;
+            try {
+                spot = new Location(w, Double.parseDouble(p[1]) + 0.5, Double.parseDouble(p[2]) + 1,
+                        Double.parseDouble(p[3]) + 0.5);
+            } catch (NumberFormatException ex) {
+                continue;
+            }
+            NPC npc = stationGuards.get(raw);
+            if (npc == null || !npc.isSpawned()) {
+                if (npc != null) npc.destroy();
+                npc = createNull(spot.clone(), gearForMode(Mode.GUARD), false);
+                nulls.remove(npc); // not part of the normal army loops
+                stationGuards.put(raw, npc);
+                continue;
+            }
+            Location here = npc.getStoredLocation();
+            if (here == null || !sameWorld(here, spot) || here.distance(spot) > TELEPORT_OVER) {
+                teleport(npc, spot.clone());
+            } else if (here.distance(spot) > 3) {
+                npc.getNavigator().setTarget(spot.clone());
+            }
+        }
+    }
+
     /**
      * The ender pearl cannon: a free Null throws a pearl at the aim spot. The pearl teleports the
      * Null where it lands, a long-range move faster than walking. Refuses if a non-roster player
@@ -2319,6 +2352,7 @@ public final class NullArmy {
 
     private void tick() {
         tickPrisonGuard();
+        tickStationGuards();
         Player owner = findOwner();
         if (owner == null) {
             expireHunters();

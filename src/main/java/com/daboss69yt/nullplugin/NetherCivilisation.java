@@ -102,7 +102,45 @@ public final class NetherCivilisation {
         all.addAll(miningGallery(cell(base, -2, -1)));
         all.addAll(furnitureHall(cell(base, 0, 2)));
         all.addAll(arrivalHall(cell(base, 0, -2)));
+        all.addAll(meetingRoom(cell(base, 2, 1)));
         return all;
+    }
+
+    /**
+     * Where a Null stands guard: the citadel, the arrival hall, the stash room, the meeting room and the
+     * prison gate. Written to config.yml as guard-posts when the civilisation is queued.
+     */
+    public static List<Location> guardSpots(Location base) {
+        List<Location> spots = new ArrayList<>();
+        spots.add(cell(base, 0, 0));
+        spots.add(cell(base, 0, -2));
+        spots.add(cell(base, 2, 0));
+        spots.add(cell(base, 2, 1));
+        spots.add(cell(base, -1, -1).add(0, 0, 19));
+        return spots;
+    }
+
+    /** Meeting room: one long table with seats down both sides, a lectern at the head and a wall of books. */
+    static List<Placement> meetingRoom(Location base) {
+        Grid g = new Grid(base);
+        g.room(0, 0, 15, 13, 6, Material.POLISHED_BLACKSTONE_BRICKS, Material.NETHER_BRICKS, Material.NETHER_BRICK_SLAB);
+        for (int x = -5; x <= 5; x++) {
+            g.put(x, 2, 0, Material.CRIMSON_SLAB);
+            if (x % 2 == 0) g.put(x, 1, 0, Material.CRIMSON_FENCE);
+        }
+        for (int x = -5; x <= 5; x += 2) {
+            g.put(x, 1, -1, Material.CRIMSON_STAIRS);
+            g.put(x, 1, 1, Material.CRIMSON_STAIRS);
+        }
+        g.put(0, 1, -3, Material.LECTERN);
+        for (int x = -4; x <= 4; x++) {
+            if (x == 0) continue;
+            g.put(x, 1, -5, Material.BOOKSHELF);
+            g.put(x, 2, -5, Material.BOOKSHELF);
+        }
+        g.put(-5, 1, 5, Material.CHEST);
+        g.put(5, 1, 5, Material.CHEST);
+        return g.out;
     }
 
     /** Where the arrival hall's centre sits, for the base's portal to land on. Its floor is at the base's level. */

@@ -188,6 +188,10 @@ public final class Structures {
                     out.add(at(w, bx, by, bz, col[0] + 1, 1, z0, Material.WHITE_WOOL));
                     out.add(at(w, bx, by, bz, (col[0] + col[1]) / 2, 1, zMid + 1, Material.LANTERN));
                     out.add(at(w, bx, by, bz, col[1], 1, zMid + 2, Material.BARREL));
+                    // More detail per cell: a chest for belongings, a cauldron to wash in, a plant by the bed
+                    out.add(at(w, bx, by, bz, col[0], 1, zMid + 2, Material.CHEST));
+                    out.add(at(w, bx, by, bz, col[1], 1, z0, Material.CAULDRON));
+                    out.add(at(w, bx, by, bz, col[0] + 3, 1, z0, Material.FLOWER_POT));
                 }
             }
         }
@@ -195,6 +199,15 @@ public final class Structures {
         // Corridor pressure plates along the middle: a step on one is an alarm for the Nulls
         for (int z = -halfZ + 2; z <= 12; z += 2)
             out.add(at(w, bx, by, bz, 0, 1, z, Material.POLISHED_BLACKSTONE_PRESSURE_PLATE));
+
+        // Processing desk in the south strip, just inside the gate: a lectern for the warden, storage for
+        // belongings, and a bunk for the guards on duty.
+        out.add(at(w, bx, by, bz, -6, 1, 19, Material.LECTERN));
+        for (int x = -10; x <= -7; x++) out.add(at(w, bx, by, bz, x, 1, 20, Material.CHEST));
+        for (int x = 7; x <= 10; x++) out.add(at(w, bx, by, bz, x, 1, 20, Material.BARREL));
+        out.add(at(w, bx, by, bz, -9, 1, 18, Material.LANTERN));
+        out.add(at(w, bx, by, bz, 9, 1, 18, Material.LANTERN));
+        for (int x = 3; x <= 5; x++) out.add(at(w, bx, by, bz, x, 1, 19, Material.RED_WOOL));
 
         // Visit frame at the south end of the corridor: an obsidian portal frame, no door.
         // A player lights it with flint and steel, and it opens into the Nether to visit.

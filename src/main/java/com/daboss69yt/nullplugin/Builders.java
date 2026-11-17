@@ -333,6 +333,11 @@ public final class Builders {
             Location arr = NetherCivilisation.arrivalSpot(base);
             plugin.getConfig().set("nether-arrival", arr.getWorld().getName() + "," + arr.getBlockX() + ","
                     + arr.getBlockY() + "," + arr.getBlockZ());
+            List<String> posts = new java.util.ArrayList<>();
+            for (Location spot : NetherCivilisation.guardSpots(base)) {
+                posts.add(spot.getWorld().getName() + "," + spot.getBlockX() + "," + spot.getBlockY() + "," + spot.getBlockZ());
+            }
+            plugin.getConfig().set("guard-posts", posts);
             plugin.saveConfig();
         }
         Plan plan = planAt(base, new int[]{1, 0}, type);
