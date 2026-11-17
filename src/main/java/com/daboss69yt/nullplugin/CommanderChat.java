@@ -103,6 +103,21 @@ public final class CommanderChat implements Listener {
      *  return: in the Nether, the way back to the overworld player. base: straight to the Nether base. */
     private final Map<UUID, String> bringMode = new HashMap<>();
 
+    /** Only the first sentence, capped at 120 characters, goes out over voice chat. The full text stays in chat. */
+    static String spokenLine(String say) {
+        String line = say.trim();
+        int end = -1;
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+            if (c == '.' || c == '!' || c == '?') {
+                end = i + 1;
+                break;
+            }
+        }
+        if (end > 0) line = line.substring(0, end);
+        return line.length() > 120 ? line.substring(0, 120) : line;
+    }
+
     /** Finds an online player by name, forgiving case and partial names, since the Commander often shortens them. */
     public static Player findOnline(String name) {
         if (name == null || name.isBlank()) return null;
@@ -536,7 +551,7 @@ public final class CommanderChat implements Listener {
         remember(text, say);
         if (!say.isBlank()) {
             army.commanderSay(owner, say);
-            if (voice != null) voice.speak(owner.getUniqueId(), say);
+            if (voice != null) voice.speak(owner.getUniqueId(), spokenLine(say));
         }
         switch (action) {
             case "status" -> army.status(owner);
