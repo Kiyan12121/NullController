@@ -512,8 +512,27 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
     }
 
     /** Seals the Nether to anyone the Nulls are chasing, so a runner can't escape into it. Config: seal-nether-on-pursuit. */
+    /** Hunted runners die on arrival in the Nether (nether-entry-kill). When that is off, the seal blocks them instead. */
+    private boolean killOnEntry() {
+        return plugin.getConfig().getBoolean("nether-entry-kill", true);
+    }
+
     private boolean sealedOnPursuit(Player p) {
-        return plugin.getConfig().getBoolean("seal-nether-on-pursuit", true) && army.isHunted(p.getUniqueId());
+        return !killOnEntry() && plugin.getConfig().getBoolean("seal-nether-on-pursuit", true)
+                && army.isHunted(p.getUniqueId());
+    }
+
+    /** A hunted runner who gets into the Nether dies there. The chase brought them in, so they don't leave alive. */
+    @EventHandler
+    public void onHuntedArrival(PlayerChangedWorldEvent event) {
+        Player p = event.getPlayer();
+        if (!killOnEntry() || p.getWorld().getEnvironment() != World.Environment.NETHER) return;
+        if (!army.isHunted(p.getUniqueId())) return;
+        notifyOwner(ChatColor.DARK_RED + "[Nether] " + p.getName() + " entered the Nether while hunted. The Nulls took them.");
+        p.sendMessage(ChatColor.DARK_RED + "The Nether takes you. Hunted runners don't leave it alive.");
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (p.isOnline() && !p.isDead()) p.setHealth(0.0);
+        });
     }
 
     /** Stops the runner and tells the owner, so a blocked attempt is never silent. */
