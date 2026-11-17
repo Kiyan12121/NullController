@@ -770,8 +770,10 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         if (now - r.lastEscape < 60_000L) return;
         r.lastEscape = now;
         warn(p, ChatColor.DARK_RED + "ESCAPE", "The whole squad is on you.");
-        notifyOwner(ChatColor.DARK_RED + "[Prison] " + p.getName() + " escaped. Six Nulls and the Commander are hunting.");
-        army.spawnHunters(owner(), p, p.getLocation(), 6, (int) huntMinutes());
+        boolean sent = army.spawnHunters(owner(), p, p.getLocation(), 6, (int) huntMinutes(), true);
+        notifyOwner(sent
+                ? ChatColor.DARK_RED + "[Prison] " + p.getName() + " escaped. Six Nulls and the Commander are hunting."
+                : ChatColor.DARK_RED + "[Prison] " + p.getName() + " escaped, but no Nulls could spawn. The army is at the hard cap.");
         p.setGliding(false); // no flight in the middle of the chase
         strip(p, r); // whatever they're carrying goes to the stash
         p.sendMessage(ChatColor.DARK_RED + "Your gear went to the stash.");

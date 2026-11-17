@@ -653,8 +653,16 @@ public final class NullArmy {
 
     /** Spawns a timed hunting group against one roster player. The caller checks consent first. Owner may be null. */
     public boolean spawnHunters(Player owner, Player target, Location center, int count, int minutes) {
-        // Hunts may go a squad over the army cap, so a chase is never refused for lack of room.
-        if (nulls.size() + count > armyCap() + squadCap()) {
+        return spawnHunters(owner, target, center, count, minutes, false);
+    }
+
+    /**
+     * Urgent hunts (escapes) may use the hard cap, so a runner always gets chased. Other hunts stop at
+     * the army cap plus one squad.
+     */
+    public boolean spawnHunters(Player owner, Player target, Location center, int count, int minutes, boolean urgent) {
+        int limit = urgent ? HARD_CAP : armyCap() + squadCap();
+        if (nulls.size() + count > limit) {
             if (owner != null) owner.sendMessage(ChatColor.RED + "Not enough room under the army cap (" + armyCap() + ").");
             return false;
         }
@@ -1528,7 +1536,7 @@ public final class NullArmy {
     public void escapeWave(Player owner, Player target, int count, int minutes) {
         if (!target.isOnline() || !pursuing(target.getUniqueId())) return;
         if (huntersOn(target.getUniqueId()) + count > squadCap()) return;
-        spawnHunters(owner, target, target.getLocation(), count, minutes);
+        spawnHunters(owner, target, target.getLocation(), count, minutes, true);
         layTrap(target, target.getLocation());
     }
 
