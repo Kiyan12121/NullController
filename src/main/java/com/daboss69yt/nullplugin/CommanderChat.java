@@ -47,7 +47,7 @@ public final class CommanderChat implements Listener {
             "hunt", "fetch", "return", "run", "rod", "send_base", "prison", "duel", "trial", "loot", "portal", "weapon", "bring", "mine", "lumber", "farm", "patrol", "stashroom",
             "ambush", "stabshot", "orbital", "mobcannon", "ranks", "forge", "explore", "totem", "pearl", "chests",
             "squad", "solo", "solo_clear", "view", "view_attack", "view_stop", "home", "buff", "give", "auto", "general", "alerts", "standdown", "help");
-    private static final int HISTORY_TURNS = 10;
+    private static final int HISTORY_TURNS = 16;
     private static final long COOLDOWN_MS = 3000;
 
     private static final String PERSONA =

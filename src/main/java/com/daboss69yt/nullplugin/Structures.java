@@ -209,6 +209,14 @@ public final class Structures {
         out.add(at(w, bx, by, bz, 9, 1, 18, Material.LANTERN));
         for (int x = 3; x <= 5; x++) out.add(at(w, bx, by, bz, x, 1, 19, Material.RED_WOOL));
 
+        // Interrogation room at the north end of the corridor: a lectern, a table, a notes chest and lanterns.
+        out.add(at(w, bx, by, bz, 1, 1, -19, Material.LECTERN));
+        out.add(at(w, bx, by, bz, -2, 1, -20, Material.CRIMSON_FENCE));
+        out.add(at(w, bx, by, bz, -2, 2, -20, Material.CRIMSON_SLAB));
+        out.add(at(w, bx, by, bz, 2, 1, -20, Material.CHEST));
+        out.add(at(w, bx, by, bz, -3, 1, -19, Material.LANTERN));
+        out.add(at(w, bx, by, bz, 3, 1, -19, Material.LANTERN));
+
         // Visit frame at the south end of the corridor: an obsidian portal frame, no door.
         // A player lights it with flint and steel, and it opens into the Nether to visit.
         int fz = 17;

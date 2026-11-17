@@ -897,7 +897,23 @@ public final class NullArmy {
                 + ". Roster players online: " + (roster.length() == 0 ? "none" : roster.toString().trim())
                 + ". Recent alarms: " + (plugin.recentAlerts(6).isEmpty() ? "none" : String.join(" | ", plugin.recentAlerts(6)))
                 + ". Hunts active: " + (hunters.isEmpty() ? "none" : hunters.size() + " Nulls out after roster players") + "."
-                + pursuitLine();
+                + pursuitLine() + " " + situationLine(owner);
+    }
+
+    /** The base, the guards, the time and what the owner is holding, for the Commander to reason from. */
+    private String situationLine(Player owner) {
+        String base = plugin.getConfig().getString("nether-base", "");
+        String arrival = plugin.getConfig().getString("nether-arrival", "");
+        int posts = plugin.getConfig().getStringList("guard-posts").size();
+        int onDuty = 0;
+        for (NPC g : stationGuards.values()) if (g.isSpawned()) onDuty++;
+        long t = owner.getWorld().getTime() % 24000L;
+        String time = t >= 13000L && t < 23000L ? "night" : "day";
+        String held = owner.getInventory().getItemInMainHand().getType().name().toLowerCase(java.util.Locale.ROOT).replace('_', ' ');
+        return "Base: " + (base == null || base.isBlank() ? "not set" : "set at " + base.replace(",", ", "))
+                + ". Arrival hall: " + (arrival == null || arrival.isBlank() ? "not built" : "built")
+                + ". Station guards on duty: " + onDuty + "/" + posts
+                + ". It is " + time + " for the owner. Owner is holding " + held + ".";
     }
 
     /** Lists where Nulls went down, for the console. */
