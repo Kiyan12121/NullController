@@ -753,6 +753,12 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         save();
         if (p != null) {
             strip(p, r);
+            // Take them to the prison straight away, so arriving elsewhere isn't read as an escape.
+            if (!inPrison(p.getLocation())) {
+                Location cell = prison.clone().add(0.5, 1, 0.5);
+                p.teleport(cell);
+                p.sendMessage(ChatColor.DARK_RED + "You've been taken to the prison.");
+            }
             warn(p, ChatColor.DARK_RED + "PRISONER", "Go to the prison at " + coords(prison) + " and mine.");
         }
         notifyOwner(ChatColor.DARK_PURPLE + "[Prison] " + (p == null ? "A roster player" : p.getName())
