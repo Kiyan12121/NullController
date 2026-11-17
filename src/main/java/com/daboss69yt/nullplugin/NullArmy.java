@@ -1470,12 +1470,14 @@ public final class NullArmy {
 
     /** An escapee is being chased: the whole squad is faster and thinks ahead. */
     /** One more wave for an escapee still being hunted: hunters on them and webs under them. */
-    /** Most Nulls one escapee can have on their heels at once. Waves stop adding to a full squad. */
-    private static final int MAX_SQUAD_PER_RUNNER = 12;
+    /** Most Nulls one escapee can have on their heels at once (config squad-cap, default 12). */
+    private int squadCap() {
+        return Math.max(1, plugin.getConfig().getInt("squad-cap", 12));
+    }
 
     public void escapeWave(Player owner, Player target, int count, int minutes) {
         if (!target.isOnline() || !pursuing(target.getUniqueId())) return;
-        if (huntersOn(target.getUniqueId()) + count > MAX_SQUAD_PER_RUNNER) return;
+        if (huntersOn(target.getUniqueId()) + count > squadCap()) return;
         spawnHunters(owner, target, target.getLocation(), count, minutes);
         layTrap(target, target.getLocation());
     }

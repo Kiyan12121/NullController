@@ -272,8 +272,14 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
         switch (args[0].toLowerCase()) {
             case "reload" -> handleReload(sender);
             case "base" -> {
-                if (args.length < 6 || !args[1].equalsIgnoreCase("set")) sender.sendMessage(ChatColor.GRAY + "Usage: base set <world> <x> <y> <z>");
-                else setConsoleLocation(sender, "nether-base", args[2], args[3], args[4], args[5]);
+                if (args.length >= 2 && args[1].equalsIgnoreCase("show")) {
+                    String saved = getConfig().getString("nether-base", "");
+                    sender.sendMessage(saved == null || saved.isBlank()
+                            ? ChatColor.GRAY + "No Nether base saved yet."
+                            : ChatColor.DARK_PURPLE + "Nether base: " + saved.replace(",", ", "));
+                } else if (args.length < 6 || !args[1].equalsIgnoreCase("set")) {
+                    sender.sendMessage(ChatColor.GRAY + "Usage: base set <world> <x> <y> <z> | base show");
+                } else setConsoleLocation(sender, "nether-base", args[2], args[3], args[4], args[5]);
             }
             case "patrol" -> {
                 if (args.length >= 2 && args[1].equalsIgnoreCase("clear")) {
@@ -477,7 +483,8 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     /** Config keys the console may change while you are offline. Anything else stays as set in config.yml. */
     private static final java.util.Map<String, String> CONSOLE_CONFIG = java.util.Map.of(
             "max-nulls", "int", "ambush-minutes", "int", "leash-distance", "double", "hunt-range", "double",
-            "combat-range", "double", "combat-damage", "double", "nether-ambush", "bool", "auto-strike", "bool");
+            "combat-range", "double", "combat-damage", "double", "nether-ambush", "bool", "auto-strike", "bool",
+            "offline-army", "int", "squad-cap", "int");
 
     private void consoleConfig(CommandSender sender, String[] args) {
         if (args.length < 2 || args[1].equalsIgnoreCase("show")) {
@@ -532,7 +539,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     }
 
     private static final String OFFLINE_HELP = ChatColor.GRAY + "Owner is offline. Console orders: "
-            + "summon [n], build <kind> (Nether only), chests place <kind> (look at a block), strike <player> (the Breach), orbital <player> (Nuke), stabshot <player>, mobcannon <player> [n], team list|add|remove <player>, dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle, stashroom, autowork on|off|toggle, autospy on|off|toggle, squad, solo <n> <order>, solo clear [n|all], ranks, prisoners, alerts, salvage list|delete <name>|place <name> <world> <x> <y> <z>, hunt <player> [count] [minutes], pounce <player>, pursue <player> [minutes], cancel, fortify, sendbase, reload, base set <world> <x> <y> <z>, patrol add <world> <x> <y> <z>, patrol clear, prison status|set|free|collect|release|clear|arrest <player>, goto <world> <x> <y> <z>, config show|<key> <value>, friendly on|off|toggle, dangers [clear], clearalerts, pursue stop";
+            + "summon [n], build <kind> (Nether only), chests place <kind> (look at a block), strike <player> (the Breach), orbital <player> (Nuke), stabshot <player>, mobcannon <player> [n], team list|add|remove <player>, dismiss, guard, stay, mine, lumber, farm, explore, nether, spy <player>|stop, status, ambush on|off|toggle, stashroom, autowork on|off|toggle, autospy on|off|toggle, squad, solo <n> <order>, solo clear [n|all], ranks, prisoners, alerts, salvage list|delete <name>|place <name> <world> <x> <y> <z>, hunt <player> [count] [minutes], pounce <player>, pursue <player> [minutes], cancel, fortify, sendbase, reload, base set <world> <x> <y> <z> | base show, patrol add <world> <x> <y> <z>, patrol clear, prison status|set|free|collect|release|clear|arrest <player>, goto <world> <x> <y> <z>, config show|<key> <value>, friendly on|off|toggle, dangers [clear], clearalerts, pursue stop";
 
     private void offlineMode(CommandSender sender, NullArmy.Mode mode) {
         sender.sendMessage(army.setModeOffline(mode)
