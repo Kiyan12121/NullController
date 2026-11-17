@@ -2847,6 +2847,7 @@ public final class NullArmy {
     private final Map<NPC, Boolean> axeLoadout = new HashMap<>();
     private final Map<NPC, Long> upkeepAt = new HashMap<>();
     private final Map<NPC, Long> playAt = new HashMap<>();
+    private long lastSignReply;
     private static final String[] FRIENDLY_LINES = {
             "Hi Kiyan!", "All quiet, boss.", "Nice build, boss.", "Want a flower?",
             "On it, boss.", "Lovely day for it.", "Need anything?", "Ha! Watch this."};
@@ -2929,17 +2930,10 @@ public final class NullArmy {
         followOwner(npc, owner, index, 3);
         long now = System.currentTimeMillis();
         if (now < playAt.getOrDefault(npc, 0L)) return true;
-        playAt.put(npc, now + 5_000L + rng.nextInt(6_000));
-        // Each Null has a quirk, so they don't all play the same way.
-        switch ((rng.nextInt(4) + npc.getId()) % 4) {
-            case 0 -> sayTo(npc, owner, FRIENDLY_LINES[rng.nextInt(FRIENDLY_LINES.length)]);
-            case 1 -> dance(npc);
-            case 2 -> {
-                if (rng.nextInt(5) == 0) owner.getWorld().dropItemNaturally(owner.getLocation(), new ItemStack(Material.POPPY));
-                else swing(npc);
-            }
-            default -> swing(npc);
-        }
+        playAt.put(npc, now + 30_000L + rng.nextInt(30_000));
+        // Idle play is movement only: the occasional dance, otherwise a swing. No gifts, no chatter.
+        if ((rng.nextInt(4) + npc.getId()) % 4 == 0) dance(npc);
+        else swing(npc);
         return true;
     }
 
@@ -2956,6 +2950,8 @@ public final class NullArmy {
     /** The owner writes on a sign: the nearest friendly Null reads it and answers on its own sign. */
     public void onOwnerSign(Player owner, String[] lines) {
         if (!consent.isOwner(owner) || !friendlyMode(owner)) return;
+        if (System.currentTimeMillis() - lastSignReply < 15_000L) return; // one reply per quarter minute, no spam
+        lastSignReply = System.currentTimeMillis();
         Location at = owner.getLocation();
         NPC closest = null;
         double best = 12;
