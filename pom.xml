@@ -6,7 +6,7 @@
 
     <groupId>com.daboss69yt</groupId>
     <artifactId>NullController</artifactId>
-    <version>6.1.17</version>
+    <version>6.1.18</version>
     <packaging>jar</packaging>
 
     <properties>

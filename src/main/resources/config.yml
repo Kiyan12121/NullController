@@ -34,6 +34,9 @@ forge-block: ""
 
 # Nether ambush: two hunters for roster players entering the Nether. Toggle with /nullcmd ambush on|off.
 nether-ambush: false
+
+# While the Nulls are hunting someone, they can't go into the Nether by portal or pearl.
+seal-nether-on-pursuit: true
 ambush-minutes: 3
 
 # Invasion: /nullcmd invade <player>

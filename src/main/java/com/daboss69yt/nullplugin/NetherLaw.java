@@ -511,6 +511,30 @@ public final class NetherLaw implements Listener, CommandExecutor, TabCompleter 
         escape(p, r);
     }
 
+    /** Seals the Nether to anyone the Nulls are chasing, so a runner can't escape into it. Config: seal-nether-on-pursuit. */
+    private boolean sealedOnPursuit(Player p) {
+        return plugin.getConfig().getBoolean("seal-nether-on-pursuit", true) && army.pursuing(p.getUniqueId());
+    }
+
+    @EventHandler
+    public void onPursuedPortal(PlayerPortalEvent event) {
+        Player p = event.getPlayer();
+        if (!sealedOnPursuit(p) || p.getWorld().getEnvironment() != World.Environment.NORMAL) return;
+        event.setCancelled(true);
+        p.sendMessage(ChatColor.DARK_RED + "The Nether is sealed to you while the Nulls are hunting.");
+    }
+
+    /** Pearls and other teleports into the Nether are stopped the same way. */
+    @EventHandler
+    public void onPursuedTeleport(PlayerTeleportEvent event) {
+        Player p = event.getPlayer();
+        if (!sealedOnPursuit(p) || event.getTo() == null || event.getTo().getWorld() == null) return;
+        if (event.getTo().getWorld().getEnvironment() != World.Environment.NETHER) return;
+        if (event.getFrom().getWorld() != null && event.getFrom().getWorld().getEnvironment() == World.Environment.NETHER) return;
+        event.setCancelled(true);
+        p.sendMessage(ChatColor.DARK_RED + "The Nether is sealed to you while the Nulls are hunting.");
+    }
+
     /** A prisoner can't glide: no elytra flight, in the prison or out of it. */
     @EventHandler
     public void onPrisonerGlide(EntityToggleGlideEvent event) {

@@ -653,7 +653,8 @@ public final class NullArmy {
 
     /** Spawns a timed hunting group against one roster player. The caller checks consent first. Owner may be null. */
     public boolean spawnHunters(Player owner, Player target, Location center, int count, int minutes) {
-        if (nulls.size() + count > armyCap()) {
+        // Hunts may go a squad over the army cap, so a chase is never refused for lack of room.
+        if (nulls.size() + count > armyCap() + squadCap()) {
             if (owner != null) owner.sendMessage(ChatColor.RED + "Not enough room under the army cap (" + armyCap() + ").");
             return false;
         }
