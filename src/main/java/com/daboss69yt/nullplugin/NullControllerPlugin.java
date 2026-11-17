@@ -637,6 +637,13 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             case "autospy" -> owner.sendMessage(ChatColor.DARK_PURPLE + "Auto spy " + toggleKey(args, "auto-spy", true) + ".");
             case "orbital" -> targetedOrder(owner, args, army::orbitalNuke);
             case "scout" -> army.scoutReport(owner);
+            case "go" -> {
+                Player t = args.length < 2 ? null : Bukkit.getPlayerExact(args[1]);
+                if (args.length < 2) owner.sendMessage(ChatColor.GRAY + "Usage: /nullcmd go <roster player>");
+                else if (t == null) owner.sendMessage(ChatColor.GRAY + "That player is not online.");
+                else if (commanderChat == null) owner.sendMessage(ChatColor.GRAY + "The portal system is not ready yet.");
+                else commanderChat.bringPlayer(owner, t);
+            }
             case "portal" -> {
                 if (args.length > 1 && args[1].equalsIgnoreCase("base")) {
                     owner.sendMessage(ChatColor.DARK_PURPLE + army.buildPortal(owner) + " " + commanderChat.armBase(owner));

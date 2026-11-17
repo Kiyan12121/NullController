@@ -102,6 +102,23 @@ public final class CommanderChat implements Listener {
      *  return: in the Nether, the way back to the overworld player. base: straight to the Nether base. */
     private final Map<UUID, String> bringMode = new HashMap<>();
 
+    /** Opens the way to a roster player: a portal to the Nether if they are there, or a two-step route if both are in the overworld. */
+    public void bringPlayer(Player owner, Player target) {
+        if (!consent.canTarget(target)) {
+            owner.sendMessage(ChatColor.RED + "Roster only. " + target.getName() + " is not on it.");
+        } else if (target.getWorld().getEnvironment() == org.bukkit.World.Environment.NORMAL
+                && owner.getWorld().getEnvironment() == org.bukkit.World.Environment.NORMAL) {
+            owner.sendMessage(ChatColor.DARK_PURPLE + army.buildPortal(owner) + " Step through: it leads to " + target.getName() + ".");
+            arm(owner, target.getUniqueId(), "via");
+        } else {
+            String result = army.bringPortal(owner, target);
+            owner.sendMessage(ChatColor.DARK_PURPLE + result);
+            if (target.getWorld().getEnvironment() == org.bukkit.World.Environment.NETHER && result.contains("open at")) {
+                arm(owner, target.getUniqueId(), "nether");
+            }
+        }
+    }
+
     private void arm(Player owner, UUID target, String mode) {
         UUID id = owner.getUniqueId();
         if (target != null) bringTo.put(id, target); else bringTo.remove(id);
