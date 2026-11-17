@@ -1470,10 +1470,23 @@ public final class NullArmy {
 
     /** An escapee is being chased: the whole squad is faster and thinks ahead. */
     /** One more wave for an escapee still being hunted: hunters on them and webs under them. */
+    /** Most Nulls one escapee can have on their heels at once. Waves stop adding to a full squad. */
+    private static final int MAX_SQUAD_PER_RUNNER = 12;
+
     public void escapeWave(Player owner, Player target, int count, int minutes) {
         if (!target.isOnline() || !pursuing(target.getUniqueId())) return;
+        if (huntersOn(target.getUniqueId()) + count > MAX_SQUAD_PER_RUNNER) return;
         spawnHunters(owner, target, target.getLocation(), count, minutes);
         layTrap(target, target.getLocation());
+    }
+
+    /** Nulls currently hunting or waiting to hunt this player. Each Null is counted once. */
+    private int huntersOn(UUID id) {
+        long now = System.currentTimeMillis();
+        Set<NPC> chasing = new HashSet<>();
+        hunters.forEach((npc, h) -> { if (id.equals(h.target()) && h.expiresAt() > now) chasing.add(npc); });
+        waits.forEach((npc, w) -> { if (id.equals(w.target()) && w.expiresAt() > now) chasing.add(npc); });
+        return chasing.size();
     }
 
     public void beginPursuit(Player target, int minutes) {
