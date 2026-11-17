@@ -101,7 +101,31 @@ public final class NetherCivilisation {
         all.addAll(planningRoom(cell(base, -2, 0)));
         all.addAll(miningGallery(cell(base, -2, -1)));
         all.addAll(furnitureHall(cell(base, 0, 2)));
+        all.addAll(arrivalHall(cell(base, 0, -2)));
         return all;
+    }
+
+    /** Where the arrival hall's centre sits, for the base's portal to land on. Its floor is at the base's level. */
+    public static Location arrivalSpot(Location base) {
+        return cell(base, 0, -2);
+    }
+
+    /**
+     * Arrival hall: the room the base portal lands you in. A Nether portal sits in the north wall and
+     * takes you back out. Soul lanterns light it and a supply chest is by the door.
+     */
+    static List<Placement> arrivalHall(Location base) {
+        Grid g = new Grid(base);
+        g.room(0, 0, 9, 9, 5, Material.POLISHED_BLACKSTONE_BRICKS, Material.NETHER_BRICKS, Material.NETHER_BRICK_SLAB);
+        // Portal frame on the north wall (z = -3): obsidian, with a 2 by 3 Nether portal inside.
+        for (int y = 0; y <= 4; y++) {
+            for (int x = -2; x <= 1; x++) {
+                boolean inside = y >= 1 && y <= 3 && (x == -1 || x == 0);
+                g.put(x, y, -3, inside ? Material.NETHER_PORTAL : Material.OBSIDIAN);
+            }
+        }
+        g.put(3, 1, 3, Material.CHEST);
+        return g.out;
     }
 
     /** The base location moved to the centre of cell (cx, cz). */

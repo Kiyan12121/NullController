@@ -214,6 +214,12 @@ public final class CommanderChat implements Listener {
                 if (from != World.Environment.NORMAL) return;
                 e.setCancelled(true);
                 disarm(id);
+                Location arrival = configured("nether-arrival");
+                if (arrival != null) {
+                    owner.teleport(arrival.clone().add(0.5, 1, 0.5));
+                    owner.sendMessage(ChatColor.DARK_PURPLE + "You're in the arrival hall. The portal on the north wall takes you back.");
+                    return;
+                }
                 Location base = configured("nether-base");
                 if (base == null) {
                     owner.sendMessage(ChatColor.RED + "No Nether base is set. Use /nullrod base set.");

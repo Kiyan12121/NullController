@@ -328,6 +328,13 @@ public final class Builders {
         }
         Location base = level.clone();
         base.setY(Math.floor(base.getY()) - 1);
+        if (type.equals("civilisation")) {
+            // Remember where the arrival hall is, so the base portal lands the owner in it.
+            Location arr = NetherCivilisation.arrivalSpot(base);
+            plugin.getConfig().set("nether-arrival", arr.getWorld().getName() + "," + arr.getBlockX() + ","
+                    + arr.getBlockY() + "," + arr.getBlockZ());
+            plugin.saveConfig();
+        }
         Plan plan = planAt(base, new int[]{1, 0}, type);
         if (plan == null) {
             say.accept("Unknown build: " + type + ". Options: civilisation, citadel, bridge, watchtower, barracks, forgegate, spire, collector, smelter, door, melonfarm.");
