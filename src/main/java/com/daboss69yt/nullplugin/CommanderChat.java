@@ -641,7 +641,7 @@ public final class CommanderChat implements Listener {
                 army.recall(owner);
                 owner.sendMessage(ChatColor.DARK_PURPLE + "Standing down. " + army.stopPursuits());
             }
-            case "help" -> owner.sendMessage(ChatColor.GRAY + "I can hunt, fetch, return, bring, trial, loot, duel, prison, home, buff, give, rods, weapons, ambush, build, patrol, mine, lumber, farm, guard, follow, stay, squad and view. Tell me what you need."),
+            case "help" -> owner.sendMessage(ChatColor.GRAY + "I can hunt, fetch, return, bring, trial, loot, duel, prison, home, buff, give, rods, weapons, ambush, build, patrol, mine, lumber, farm, guard, follow, stay, squad and view. Tell me what you need.");
             case "squad" -> army.showSquad(owner);
             case "solo" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.setSolo(num, order));
             case "solo_clear" -> owner.sendMessage(ChatColor.DARK_PURPLE + army.clearSolo(num > 0 ? String.valueOf(num) : "all"));
