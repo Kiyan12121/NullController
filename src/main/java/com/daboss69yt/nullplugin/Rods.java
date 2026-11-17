@@ -124,6 +124,7 @@ public final class Rods implements Listener, CommandExecutor, TabCompleter {
                 plugin.saveConfig();
                 owner.sendMessage(ChatColor.DARK_PURPLE + "Nether base set at " + l.getBlockX() + ", "
                         + l.getBlockY() + ", " + l.getBlockZ() + ".");
+                plugin.onNetherBaseSet(l, msg -> owner.sendMessage(ChatColor.DARK_PURPLE + msg));
             } else {
                 owner.sendMessage(ChatColor.GRAY + "Usage: /nullrod base set");
             }

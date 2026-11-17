@@ -49,7 +49,7 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
             "hunt", "stay", "auto", "goto", "status", "ranks", "mine", "lumber", "farm", "forge", "chest", "patrol", "stashroom", "autowork", "autospy",
             "build", "fortify", "cage", "invade", "ambush", "totem", "succession", "event", "remote", "team", "orbital", "stabshot", "chests", "pearl", "scout", "rank", "portal", "weapon", "arm", "squad", "solo", "view", "takeover", "help");
     private static final List<String> BUILDS = List.of("citadel", "bridge", "watchtower", "barracks",
-            "forgegate", "spire", "city", "metropolis", "collector", "smelter", "door", "melonfarm", "prison", "cancel", "undo", "preview");
+            "forgegate", "spire", "civilisation", "city", "metropolis", "collector", "smelter", "door", "melonfarm", "prison", "cancel", "undo", "preview");
     private static final List<String> EVENTS = List.of("forge", "capital", "end", "clash");
     private static final String REMOTE_NAME = ChatColor.DARK_PURPLE + "Null Remote";
 
@@ -62,6 +62,12 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
     private NullArmy army;
     private CommanderChat commanderChat;
     private Builders builders;
+
+    /** Called when the owner sets the Nether base: raises the settlement there, unless auto-civilisation is off. */
+    public void onNetherBaseSet(org.bukkit.Location base, java.util.function.Consumer<String> say) {
+        if (builders == null || base == null || !getConfig().getBoolean("auto-civilisation", true)) return;
+        builders.buildOffline(base, "civilisation", say);
+    }
     private TotemManager totems;
     private NetherLaw netherLaw;
     private final List<String> alerts = new ArrayList<>();
@@ -279,7 +285,10 @@ public final class NullControllerPlugin extends JavaPlugin implements Listener, 
                             : ChatColor.DARK_PURPLE + "Nether base: " + saved.replace(",", ", "));
                 } else if (args.length < 6 || !args[1].equalsIgnoreCase("set")) {
                     sender.sendMessage(ChatColor.GRAY + "Usage: base set <world> <x> <y> <z> | base show");
-                } else setConsoleLocation(sender, "nether-base", args[2], args[3], args[4], args[5]);
+                } else {
+                    setConsoleLocation(sender, "nether-base", args[2], args[3], args[4], args[5]);
+                    onNetherBaseSet(army.offlineSite(), msg -> sender.sendMessage(ChatColor.DARK_PURPLE + msg));
+                }
             }
             case "patrol" -> {
                 if (args.length >= 2 && args[1].equalsIgnoreCase("clear")) {

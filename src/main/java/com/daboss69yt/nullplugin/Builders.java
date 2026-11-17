@@ -249,6 +249,7 @@ public final class Builders {
             case "barracks" -> new Plan("Barracks", Structures.barracks(base));
             case "forgegate" -> new Plan("Forge Gate", Structures.forgeGate(base));
             case "spire" -> new Plan("Beacon Spire", Structures.beaconSpire(base));
+            case "civilisation" -> new Plan("Nether Civilisation", NetherCivilisation.plan(base));
             case "city" -> new Plan("Null Civilisation", City.plan(base));
             case "metropolis" -> new Plan("Metropolis", Metropolis.plan(base));
             case "collector" -> new Plan("Item Line", Machines.itemLine(base));
@@ -321,11 +322,15 @@ public final class Builders {
             say.accept("No level ground near the site. Try again after the Nulls have moved.");
             return false;
         }
+        if (type.equals("civilisation") && level.getY() + 50 > 120) {
+            say.accept("The base is too close to the Nether roof for a civilisation. Set the base lower down.");
+            return false;
+        }
         Location base = level.clone();
         base.setY(Math.floor(base.getY()) - 1);
         Plan plan = planAt(base, new int[]{1, 0}, type);
         if (plan == null) {
-            say.accept("Unknown build: " + type + ". Options: citadel, bridge, watchtower, barracks, forgegate, spire, collector, smelter, door, melonfarm.");
+            say.accept("Unknown build: " + type + ". Options: civilisation, citadel, bridge, watchtower, barracks, forgegate, spire, collector, smelter, door, melonfarm.");
             return false;
         }
         startBuild(say, plan.name(), plan.placements(), true);
@@ -340,6 +345,9 @@ public final class Builders {
     /** The Civilisation gets a faster budget so it finishes in minutes, not hours. */
     private int buildRate(String name) {
         if (name.equals("Null Civilisation")) {
+            return Math.max(perTick(), plugin.getConfig().getInt("city-blocks-per-tick", 12));
+        }
+        if (name.equals("Nether Civilisation")) {
             return Math.max(perTick(), plugin.getConfig().getInt("city-blocks-per-tick", 12));
         }
         if (name.equals("Metropolis")) {
